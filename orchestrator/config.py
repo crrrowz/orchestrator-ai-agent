@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pydantic import SecretStr
@@ -14,9 +14,10 @@ from openhands.sdk.skills import Skill, load_project_skills
 # Load environment variables from .env if present
 load_dotenv()
 
-# Package root and persistent diagnostics directory
+# Package root and persistent diagnostics / workspace directories
 ORCHESTRATOR_ROOT: Path = Path(__file__).resolve().parent.parent
 DEFAULT_DIAGNOSTICS_DIR: Path = ORCHESTRATOR_ROOT / "diagnostics"
+DEFAULT_WORKSPACE_DIR: Path = ORCHESTRATOR_ROOT / "workspace"
 
 
 class AgentRoleConfig(BaseModel):
@@ -30,7 +31,9 @@ class AgentRoleConfig(BaseModel):
 
 class OrchestratorConfig(BaseModel):
     """Global configuration for orchestrator execution."""
-    workspace_path: Path = Field(default_factory=lambda: Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve())
+    workspace_path: Path = Field(
+        default_factory=lambda: Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+    )
     max_iterations: int = Field(default=int(os.environ.get("MAX_ITERATIONS", "4")))
     auto_commit: bool = Field(default=os.environ.get("AUTO_COMMIT", "true").lower() == "true")
     max_budget_usd: float = Field(default=float(os.environ.get("MAX_BUDGET_USD", "0.50")))
@@ -39,6 +42,18 @@ class OrchestratorConfig(BaseModel):
     approval_gates: List[str] = Field(default_factory=lambda: [g.strip() for g in os.environ.get("APPROVAL_GATES", "").split(",") if g.strip()])
     interactive: bool = Field(default_factory=lambda: os.environ.get("INTERACTIVE", "false").lower() == "true")
     verbosity: str = Field(default_factory=lambda: os.environ.get("VERBOSITY", "normal"))
+    enable_memory: bool = Field(default=os.environ.get("ENABLE_MEMORY", "true").lower() == "true")
+    max_retained_reports: int = Field(default=int(os.environ.get("MAX_RETAINED_REPORTS", "20")))
+    allowed_commands: Set[str] = Field(
+        default_factory=lambda: set(
+            c.strip().lower()
+            for c in os.environ.get(
+                "ALLOWED_COMMANDS",
+                "pytest,python,py,pip,uv,git,ruff,mypy,graft,ls,dir,cat,type,echo,pwd,tree,find,cd,where"
+            ).split(",")
+            if c.strip()
+        )
+    )
     
     # Provider keys
     anthropic_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY"))

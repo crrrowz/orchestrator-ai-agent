@@ -2,8 +2,21 @@
 
 import sys
 import threading
+from contextvars import ContextVar
 from queue import Queue, Empty
-from typing import Optional, Callable, Literal
+from typing import Optional, Callable, Literal, Set
+
+_active_channel_var: ContextVar[Optional["HumanInterventionChannel"]] = ContextVar("active_channel", default=None)
+
+
+def get_active_channel() -> Optional["HumanInterventionChannel"]:
+    """Retrieve the currently active HumanInterventionChannel for the current context."""
+    return _active_channel_var.get()
+
+
+def set_active_channel(channel: Optional["HumanInterventionChannel"]) -> None:
+    """Register the active HumanInterventionChannel for the current context."""
+    _active_channel_var.set(channel)
 
 
 class HumanInterventionChannel:
@@ -14,6 +27,8 @@ class HumanInterventionChannel:
         self._message_queue: Queue[str] = Queue()
         self._stop_requested = threading.Event()
         self._pause_requested = threading.Event()
+        self._session_allowed_paths: Set[str] = set()
+        self._session_allowed_commands: Set[str] = set()
 
     def send_message(self, message: str) -> None:
         """Enqueue guidance message to be injected into the next agent prompt."""
@@ -60,6 +75,70 @@ class HumanInterventionChannel:
         """Check if stop signal was sent."""
         return self._stop_requested.is_set()
 
+    def is_path_approved(self, path_str: str) -> bool:
+        """Check if path has already been explicitly approved in this session."""
+        return path_str in self._session_allowed_paths
+
+    def is_command_approved(self, command_str: str) -> bool:
+        """Check if command has already been explicitly approved in this session."""
+        return command_str in self._session_allowed_commands
+
+    def authorize_path(self, path_str: str) -> None:
+        """Authorize a path for the remainder of the session."""
+        self._session_allowed_paths.add(path_str)
+
+    def authorize_command(self, command_str: str) -> None:
+        """Authorize a command for the remainder of the session."""
+        self._session_allowed_commands.add(command_str)
+
+    def request_permission(
+        self,
+        role: str,
+        action_type: str,
+        target: str,
+        reason: str = "",
+        input_fn: Optional[Callable[[str], str]] = None,
+    ) -> tuple[bool, str]:
+        """Prompt developer for dynamic runtime permission escalation."""
+        if not self.enabled:
+            return False, "Permission denied: Human intervention channel is disabled."
+
+        # Check if already approved during this session
+        if action_type == "file_write" and target in self._session_allowed_paths:
+            return True, f"Permission already granted for path '{target}' in this session."
+        if action_type == "terminal_command" and target in self._session_allowed_commands:
+            return True, f"Permission already granted for command '{target}' in this session."
+
+        if input_fn is None and not (hasattr(sys.stdin, "isatty") and sys.stdin.isatty()):
+            return False, f"Permission denied: Non-interactive environment cannot prompt developer for '{target}'."
+
+        ask = input_fn or input
+        prompt = (
+            f"\n🛡️ [DEVELOPER PERMISSION REQUEST]\n"
+            f"  Agent Role:  {role}\n"
+            f"  Action:      {action_type}\n"
+            f"  Target:      {target}\n"
+            f"  Reason:      {reason}\n"
+            f"Grant permission? [y] Approve / [n] Reject / [m] Provide Guidance: "
+        )
+        try:
+            choice = ask(prompt).strip().lower()
+            if choice in ("y", "yes"):
+                if action_type == "file_write":
+                    self.authorize_path(target)
+                elif action_type == "terminal_command":
+                    self.authorize_command(target)
+                return True, "Permission explicitly granted by developer."
+            elif choice in ("m", "modify", "g", "guidance"):
+                feedback = ask("💬 Enter guidance for the agent: ").strip()
+                if feedback:
+                    self.send_message(feedback)
+                return False, f"Permission denied with developer guidance: {feedback}"
+            else:
+                return False, "Permission rejected by developer."
+        except (EOFError, KeyboardInterrupt):
+            return False, "Permission request cancelled."
+
     def prompt_gate(
         self,
         gate_name: str,
@@ -95,3 +174,4 @@ class HumanInterventionChannel:
             return "approved"
         except (EOFError, KeyboardInterrupt):
             return "rejected"
+

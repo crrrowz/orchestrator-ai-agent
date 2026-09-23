@@ -20,6 +20,8 @@ CRITICAL INSTRUCTIONS:
 3. Quality:
    - Never output `# TODO` or incomplete code.
    - Always ensure module imports, classes, and function signatures match architectural requirements.
+4. Deliverables:
+   - For all newly implemented services or libraries, create a concise `README.md` (quickstart + usage commands) and a standalone runnable `demo.py` verifying functionality interactively.
 """
 
 

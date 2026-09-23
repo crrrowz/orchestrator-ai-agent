@@ -16,6 +16,9 @@ htmlcov/
 # Local workspace & state
 workspace/
 diagnostics/logs/
+diagnostics/reports/
+diagnostics/memory/
+diagnostics/*.json
 html page/
 .env
 PowerShellHistory.txt

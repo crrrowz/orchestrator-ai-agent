@@ -22,6 +22,14 @@ class MemoryEntry(BaseModel):
     lessons: Optional[str] = None
 
 
+COMMON_TASK_STOPWORDS: set[str] = {
+    "create", "implement", "build", "write", "add", "make", "with", "test", "tests",
+    "file", "files", "using", "from", "service", "code", "the", "and", "for", "that",
+    "this", "into", "onto", "then", "should", "must", "have", "will", "does", "done",
+    "what", "when", "where", "which", "your", "task", "class", "function", "module",
+}
+
+
 class ConversationStore:
     """Manages persistent cross-run task memory stored in diagnostics/memory/."""
 
@@ -67,27 +75,42 @@ class ConversationStore:
         task: str,
         files: Optional[list[str]] = None,
         max_results: int = 3,
+        min_score: float = 3.0,
     ) -> list[MemoryEntry]:
-        """Retrieve memories relevant to the given task or touched files."""
+        """Retrieve memories relevant to the given task or touched files using filtered keywords."""
         all_memories = self.load_all_memories()
         if not all_memories:
             return []
 
-        task_words = set(re.findall(r"\w{3,}", task.lower()))
+        task_words = {
+            w for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", task.lower())
+            if w not in COMMON_TASK_STOPWORDS
+        }
         target_files = set(f.lower() for f in (files or []))
 
         scored: list[tuple[float, MemoryEntry]] = []
         for mem in all_memories:
             score = 0.0
-            mem_words = set(re.findall(r"\w{3,}", (mem.task + " " + mem.summary).lower()))
-            overlap = task_words.intersection(mem_words)
-            score += len(overlap) * 2.0
+            mem_words = {
+                w for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", (mem.task + " " + mem.summary).lower())
+                if w not in COMMON_TASK_STOPWORDS
+            }
+            overlap_count = 0
+            for tw in task_words:
+                for mw in mem_words:
+                    if tw == mw:
+                        overlap_count += 1
+                        break
+                    elif len(tw) >= 4 and len(mw) >= 4 and tw[:4] == mw[:4]:
+                        overlap_count += 1
+                        break
+            score += overlap_count * 2.0
 
             mem_files = set(f.lower() for f in mem.files_touched)
             file_overlap = target_files.intersection(mem_files)
             score += len(file_overlap) * 5.0
 
-            if score > 0:
+            if score >= min_score:
                 scored.append((score, mem))
 
         scored.sort(key=lambda x: x[0], reverse=True)
@@ -98,9 +121,10 @@ class ConversationStore:
         task: str,
         files: Optional[list[str]] = None,
         max_chars: int = 1500,
+        min_score: float = 3.0,
     ) -> Optional[str]:
-        """Format matching memories into a prompt injection block."""
-        relevant = self.find_relevant_memories(task, files, max_results=2)
+        """Format matching memories into a prompt injection block if relevance threshold met."""
+        relevant = self.find_relevant_memories(task, files, max_results=2, min_score=min_score)
         if not relevant:
             return None
 

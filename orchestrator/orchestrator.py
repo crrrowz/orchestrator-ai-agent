@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from orchestrator.config import ORCHESTRATOR_ROOT, OrchestratorConfig, SkillManager
-from orchestrator.pipeline import DevTestLoop, FullPipeline
+from orchestrator.pipeline import DevTestLoop, FullPipeline, AuditPipeline
 from orchestrator.pipeline.checkpoint import PipelineCheckpoint
 from orchestrator.utils import ConsoleOutput, GitOps
 
@@ -20,14 +20,16 @@ class Orchestrator:
     def run_task(
         self,
         task: str,
-        mode: Literal["dev-test", "full"] = "dev-test",
+        mode: Literal["dev-test", "full", "audit"] = "dev-test",
         workspace_override: Optional[Path] = None,
         checkpoint: Optional[PipelineCheckpoint] = None,
     ) -> dict:
         """Run an autonomous multi-agent task execution."""
         ws = (workspace_override or self.workspace).resolve()
 
-        if mode == "full":
+        if mode == "audit":
+            pipeline = AuditPipeline(self.config, self.skill_manager, ws)
+        elif mode == "full":
             pipeline = FullPipeline(self.config, self.skill_manager, ws, checkpoint=checkpoint)
         else:
             pipeline = DevTestLoop(self.config, self.skill_manager, ws, checkpoint=checkpoint)

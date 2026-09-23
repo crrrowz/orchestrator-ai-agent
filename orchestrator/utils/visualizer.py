@@ -38,9 +38,17 @@ class LogStep:
 class SessionLogStore:
     """Stores full structured execution logs for interactive exploration."""
 
-    def __init__(self, workspace_path: Optional[Path] = None):
+    def __init__(
+        self,
+        workspace_path: Optional[Path] = None,
+        max_retained_sessions: int = 10,
+    ):
         self.steps: List[LogStep] = []
         self.workspace_path = workspace_path
+        ws_name = workspace_path.name if workspace_path else "default"
+        import re
+        self.project_slug = re.sub(r"[^a-zA-Z0-9_\-]+", "_", ws_name.lower()).strip("_") or "default"
+        self.max_retained_sessions = max_retained_sessions
         self.current_role: str = "System"
         self.current_phase: str = "Initializing"
         self.current_model: str = "Unknown"
@@ -48,6 +56,8 @@ class SessionLogStore:
         self.milestones: List[str] = []
         self.start_time: float = time.time()
         self.phase_start_time: float = time.time()
+        self._session_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime(self.start_time))
+        self._session_file_name = f"session_{self._session_ts}.json"
 
     def set_agent_context(
         self,
@@ -90,23 +100,70 @@ class SessionLogStore:
         self.milestones.append(short_msg)
         if len(self.milestones) > 6:
             self.milestones.pop(0)
-        try:
-            self.save_to_file()
-        except Exception:
-            pass
+
+        # Throttled write to disk to prevent I/O storms (at most once every 5s)
+        now = time.time()
+        if (now - getattr(self, "_last_save_time", 0.0)) >= 5.0:
+            try:
+                self.save_to_file()
+                self._last_save_time = now
+            except Exception:
+                pass
         return step
 
     def save_to_file(self, target_dir: Optional[Path] = None) -> Path:
         out_dir = target_dir or (DEFAULT_DIAGNOSTICS_DIR / "logs")
         out_dir.mkdir(parents=True, exist_ok=True)
-        file_path = out_dir / "latest_session.json"
+
+        # 1. Project-specific partitioned directory
+        project_dir = out_dir / self.project_slug
+        project_dir.mkdir(parents=True, exist_ok=True)
+        session_file = project_dir / self._session_file_name
+
         data = {
+            "project": self.project_slug,
+            "workspace": str(self.workspace_path) if self.workspace_path else "",
             "session_start": self.start_time,
             "total_steps": len(self.steps),
             "steps": [asdict(s) for s in self.steps],
         }
-        file_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        return file_path
+        json_content = json.dumps(data, indent=2, ensure_ascii=False)
+
+        # Write timestamped project session file
+        session_file.write_text(json_content, encoding="utf-8")
+
+        # Update project-level latest session pointer
+        (project_dir / "latest_session.json").write_text(json_content, encoding="utf-8")
+
+        # Update global latest session pointer (backwards compatible)
+        (out_dir / "latest_session.json").write_text(json_content, encoding="utf-8")
+
+        # Enforce session retention policy per project (FIFO pruning)
+        self._prune_project_sessions(project_dir)
+
+        return session_file
+
+    def _prune_project_sessions(self, project_dir: Path) -> int:
+        """Prune old session_*.json files in the project directory exceeding max_retained_sessions."""
+        if self.max_retained_sessions <= 0:
+            return 0
+        try:
+            files = sorted(
+                project_dir.glob("session_*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            pruned = 0
+            if len(files) > self.max_retained_sessions:
+                for old in files[self.max_retained_sessions:]:
+                    try:
+                        old.unlink()
+                        pruned += 1
+                    except OSError:
+                        pass
+            return pruned
+        except Exception:
+            return 0
 
 
 class OrchestratorLiveVisualizer(ConversationVisualizerBase):

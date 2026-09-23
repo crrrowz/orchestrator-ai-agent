@@ -57,6 +57,7 @@ class TelemetryRecorder:
         reports_dir: Optional[Path] = None,
         circuit_breaker_threshold: int = 2,
         max_budget_usd: float = 0.50,
+        max_retained_reports: int = 20,
     ):
         self.task_description = task_description
         self.pipeline_mode = pipeline_mode
@@ -67,6 +68,7 @@ class TelemetryRecorder:
         
         self.circuit_breaker_threshold = circuit_breaker_threshold
         self.max_budget_usd = max_budget_usd
+        self.max_retained_reports = max_retained_reports
         self.budget_guard = BudgetGuard(max_budget_usd=max_budget_usd)
         self.start_time = now_utc
         self._start_perf = time.perf_counter()
@@ -232,4 +234,29 @@ class TelemetryRecorder:
         report_file = self.reports_dir / f"{self.report_id}.json"
         report_file.write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
+        # Automatically enforce report retention policy (FIFO auto-pruning)
+        self._prune_old_reports()
+
         return report
+
+    def _prune_old_reports(self) -> int:
+        """Enforce retention policy by pruning oldest run_*.json files exceeding max_retained_reports."""
+        if self.max_retained_reports <= 0:
+            return 0
+        try:
+            report_files = sorted(
+                self.reports_dir.glob("run_*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            pruned = 0
+            if len(report_files) > self.max_retained_reports:
+                for old_file in report_files[self.max_retained_reports:]:
+                    try:
+                        old_file.unlink()
+                        pruned += 1
+                    except OSError:
+                        pass
+            return pruned
+        except Exception:
+            return 0

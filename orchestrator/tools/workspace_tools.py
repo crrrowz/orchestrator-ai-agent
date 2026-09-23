@@ -1,11 +1,13 @@
-"""In-process native tools for workspace file operations and terminal execution."""
-
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Literal, Optional, Sequence, Any
+from pydantic import ConfigDict, Field
 from openhands.sdk.tool import Tool, ToolDefinition, register_tool, Action, Observation, ToolExecutor
 from openhands.sdk.tool.schema import TextContent
+from orchestrator.config import DEFAULT_WORKSPACE_DIR
+from orchestrator.control.human_channel import get_active_channel
 
 
 # ==========================================
@@ -14,6 +16,7 @@ from openhands.sdk.tool.schema import TextContent
 
 class WorkspaceFileAction(Action):
     """File manipulation action within the workspace sandbox."""
+    model_config = ConfigDict(extra="ignore")
     operation: Literal["read", "write", "edit", "list", "delete"]
     path: str
     content: Optional[str] = None
@@ -31,6 +34,18 @@ class WorkspaceFileObservation(Observation):
     files: Optional[list[str]] = None
 
 
+def _matches_path_scope(rel_posix: str, scope: str) -> bool:
+    """Match exact file name or directory boundary prefix, preventing PLAN.md matching PLAN.md.bak."""
+    clean = scope.lstrip("/")
+    if rel_posix == clean:
+        return True
+    if clean.endswith("/") and rel_posix.startswith(clean):
+        return True
+    if rel_posix.startswith(clean + "/"):
+        return True
+    return False
+
+
 def execute_file_action(
     action: WorkspaceFileAction,
     conversation=None,
@@ -40,14 +55,16 @@ def execute_file_action(
     blocked_write_prefixes: Optional[Sequence[str]] = None,
 ) -> WorkspaceFileObservation:
     """Safely execute file operation within workspace."""
-    workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve()
+    workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
     workspace_root.mkdir(parents=True, exist_ok=True)
 
-    raw_path = Path(action.path)
+    # Normalize path: strip leading virtual container /workspace or workspace prefixes
+    clean_path = re.sub(r"^[/\\]*(workspace[/\\]+)?", "", action.path.strip())
+    raw_path = Path(clean_path)
     if raw_path.is_absolute():
         target_path = raw_path.resolve()
     else:
-        target_path = (workspace_root / action.path.lstrip("/\\")).resolve()
+        target_path = (workspace_root / clean_path.lstrip("/\\")).resolve()
 
     # Sandboxing check
     try:
@@ -63,29 +80,32 @@ def execute_file_action(
 
     # RBAC Permission Enforcement
     if action.operation in ("write", "edit", "delete"):
-        if read_only:
-            err_msg = "Permission denied: Agent role has strictly read-only access to workspace files."
-            return WorkspaceFileObservation(
-                content=[TextContent(text=err_msg)],
-                is_error=True,
-                success=False,
-                message=err_msg
-            )
-
         rel_posix = target_path.relative_to(workspace_root).as_posix()
-        if allowed_write_prefixes:
-            if not any(rel_posix.startswith(p.lstrip("/")) or rel_posix == p for p in allowed_write_prefixes):
-                err_msg = f"Permission denied: Writing to '{action.path}' is outside permitted role scope {list(allowed_write_prefixes)}."
-                return WorkspaceFileObservation(
-                    content=[TextContent(text=err_msg)],
-                    is_error=True,
-                    success=False,
-                    message=err_msg
-                )
+        violation_reason = None
 
-        if blocked_write_prefixes:
-            if any(rel_posix.startswith(p.lstrip("/")) or rel_posix == p for p in blocked_write_prefixes):
-                err_msg = f"Permission denied: Modifying '{action.path}' is restricted for this agent role."
+        channel = getattr(conversation, "human_channel", None) or get_active_channel()
+        is_pre_authorized = channel.is_path_approved(rel_posix) if channel else False
+
+        if not is_pre_authorized:
+            if read_only:
+                violation_reason = "Agent role has strictly read-only access to workspace files."
+            elif allowed_write_prefixes and not any(_matches_path_scope(rel_posix, p) for p in allowed_write_prefixes):
+                violation_reason = f"Writing to '{action.path}' is outside permitted role scope {list(allowed_write_prefixes)}."
+            elif blocked_write_prefixes and any(_matches_path_scope(rel_posix, p) for p in blocked_write_prefixes):
+                violation_reason = f"Modifying '{action.path}' is restricted for this agent role."
+
+        if violation_reason:
+            granted = False
+            feedback = ""
+            if channel:
+                granted, feedback = channel.request_permission(
+                    role="agent",
+                    action_type="file_write",
+                    target=rel_posix,
+                    reason=violation_reason,
+                )
+            if not granted:
+                err_msg = f"Permission denied: {violation_reason} {feedback}".strip()
                 return WorkspaceFileObservation(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
@@ -163,15 +183,15 @@ def execute_file_action(
             )
 
         elif action.operation == "list":
-            search_dir = target_path if target_path.is_dir() else workspace_root
-            if not search_dir.exists():
-                err_msg = f"Directory '{search_dir}' does not exist."
+            if not target_path.exists():
+                err_msg = f"Directory '{action.path}' does not exist."
                 return WorkspaceFileObservation(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
                     message=err_msg
                 )
+            search_dir = target_path if target_path.is_dir() else target_path.parent
             ignored_dirs = {".git", ".venv", "__pycache__", ".pytest_cache", "node_modules", "dist", "build"}
             file_list = []
             for p in search_dir.rglob("*"):
@@ -302,6 +322,7 @@ class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObserva
 
 class WorkspaceTerminalAction(Action):
     """Terminal execution action within the workspace environment."""
+    model_config = ConfigDict(extra="ignore")
     command: str
     timeout_seconds: int = 30
 
@@ -314,14 +335,71 @@ class WorkspaceTerminalObservation(Observation):
     timed_out: bool = False
 
 
+DEFAULT_ALLOWED_COMMANDS = {
+    "pytest", "python", "py", "pip", "uv", "git", "ruff", "mypy", "graft",
+    "ls", "dir", "cat", "type", "echo", "pwd", "tree", "find", "cd", "where",
+}
+
+
+def get_allowed_command_binaries() -> set[str]:
+    """Retrieve allowed command binaries from environment or defaults."""
+    env_val = os.environ.get("ALLOWED_COMMANDS")
+    if env_val:
+        return {c.strip().lower() for c in env_val.split(",") if c.strip()}
+    return set(DEFAULT_ALLOWED_COMMANDS)
+
+
+ALLOWED_COMMAND_BINARIES = DEFAULT_ALLOWED_COMMANDS
+
+
+def is_command_allowed(command: str) -> bool:
+    """Validate that the command base binary is in the allowlist."""
+    clean = (command or "").strip()
+    if not clean:
+        return False
+    parts = clean.split()
+    base_cmd = Path(parts[0].strip("'\"")).name.lower()
+    if base_cmd.endswith(".exe"):
+        base_cmd = base_cmd[:-4]
+    return base_cmd in get_allowed_command_binaries()
+
+
 def execute_terminal_action(
     action: WorkspaceTerminalAction,
     conversation=None,
     base_dir: Optional[Path] = None
 ) -> WorkspaceTerminalObservation:
     """Execute terminal command safely inside workspace directory."""
-    workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve()
+    workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
     workspace_root.mkdir(parents=True, exist_ok=True)
+
+    channel = getattr(conversation, "human_channel", None) or get_active_channel()
+    is_pre_authorized = channel.is_command_approved(action.command) if channel else False
+
+    if not is_command_allowed(action.command) and not is_pre_authorized:
+        granted = False
+        feedback = ""
+        allowed_list = sorted(get_allowed_command_binaries())
+        if channel:
+            granted, feedback = channel.request_permission(
+                role="agent",
+                action_type="terminal_command",
+                target=action.command,
+                reason=f"Command binary is outside permitted whitelist {allowed_list}",
+            )
+        if not granted:
+            err_msg = (
+                f"Security policy violation: Command binary is not permitted. {feedback} "
+                f"Allowed tools: {allowed_list}"
+            ).strip()
+            return WorkspaceTerminalObservation(
+                content=[TextContent(text=err_msg)],
+                is_error=True,
+                exit_code=126,
+                stdout="",
+                stderr=err_msg,
+                timed_out=False
+            )
 
     # Sanitize env to prevent leaking sensitive API keys / secrets to commands or child processes
     sensitive_keywords = {"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CREDENTIAL"}
@@ -424,9 +502,84 @@ class WorkspaceTerminalTool(ToolDefinition[WorkspaceTerminalAction, WorkspaceTer
         ]
 
 
-# Register both tools in OpenHands global tool registry
+# Register tools in OpenHands global tool registry
 register_tool("WorkspaceFileTool", WorkspaceFileTool)
 register_tool("WorkspaceTerminalTool", WorkspaceTerminalTool)
+
+
+# ==========================================
+# 3. Dynamic Permission Escalation Tool
+# ==========================================
+
+class RequestPermissionAction(Action):
+    """Explicitly request approval from the human developer for a privileged or restricted task."""
+    model_config = ConfigDict(extra="ignore")
+    action_type: Literal["terminal_command", "file_write", "dependency_install", "architectural_change"]
+    target: str = Field(description="Command, file path, or package name requiring authorization")
+    justification: str = Field(description="Clear technical rationale explaining why this operation is essential")
+
+
+class RequestPermissionObservation(Observation):
+    """Result of human developer permission review."""
+    granted: bool = False
+    message: str = ""
+
+
+class RequestPermissionExecutor(ToolExecutor[RequestPermissionAction, RequestPermissionObservation]):
+    def __call__(
+        self,
+        action: RequestPermissionAction,
+        conversation: Any = None,
+    ) -> RequestPermissionObservation:
+        channel = getattr(conversation, "human_channel", None) or get_active_channel()
+        if not channel:
+            msg = "Permission request failed: No interactive human communication channel active."
+            return RequestPermissionObservation(
+                content=[TextContent(text=msg)],
+                is_error=True,
+                granted=False,
+                message=msg,
+            )
+
+        granted, feedback = channel.request_permission(
+            role="agent",
+            action_type="terminal_command" if action.action_type in ("terminal_command", "dependency_install") else "file_write",
+            target=action.target,
+            reason=f"Agent request: {action.justification}",
+        )
+        if granted:
+            msg = f"Permission GRANTED by developer for '{action.target}'. You may proceed with the operation."
+            return RequestPermissionObservation(
+                content=[TextContent(text=msg)],
+                is_error=False,
+                granted=True,
+                message=msg,
+            )
+        else:
+            msg = f"Permission DENIED by developer for '{action.target}'. Feedback: {feedback}"
+            return RequestPermissionObservation(
+                content=[TextContent(text=msg)],
+                is_error=True,
+                granted=False,
+                message=msg,
+            )
+
+
+class RequestPermissionTool(ToolDefinition[RequestPermissionAction, RequestPermissionObservation]):
+    """Tool enabling agents to proactively ask developer permission before running privileged actions."""
+    @classmethod
+    def create(cls, conv_state: Optional[Any] = None, **params) -> Sequence["RequestPermissionTool"]:
+        return [
+            cls(
+                description="Request human developer approval before executing restricted actions (e.g. installing packages, modifying protected files).",
+                action_type=RequestPermissionAction,
+                observation_type=RequestPermissionObservation,
+                executor=RequestPermissionExecutor(),
+            )
+        ]
+
+
+register_tool("RequestPermissionTool", RequestPermissionTool)
 
 
 # Factory functions to build tool specifications for Agents
@@ -453,3 +606,8 @@ def create_workspace_terminal_tool(workspace_path: Optional[Path] = None) -> Too
     if workspace_path:
         params["workspace_path"] = str(Path(workspace_path).resolve())
     return Tool(name="WorkspaceTerminalTool", params=params)
+
+
+def create_request_permission_tool() -> Tool:
+    """Tool for agents to request permission from the developer."""
+    return Tool(name="RequestPermissionTool", params={})

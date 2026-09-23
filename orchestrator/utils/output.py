@@ -1,5 +1,4 @@
-"""Terminal output formatting using Rich for pipeline status and agent updates."""
-
+from typing import Optional
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -49,14 +48,28 @@ class ConsoleOutput:
         console.print(f"[warning][WARN][/warning] {message}")
 
     @staticmethod
-    def summary_table(iterations: int, status: str, commit_hash: str = "") -> None:
+    def summary_table(
+        iterations: int = 1,
+        status: str = "SUCCESS",
+        commit_hash: str = "",
+        total_tokens: int = 0,
+        total_cost_usd: float = 0.0,
+        iteration: Optional[int] = None,
+    ) -> None:
+        actual_iterations = iteration if iteration is not None else iterations
         table = Table(title="Pipeline Execution Summary", border_style="blue")
         table.add_column("Property", style="bold cyan")
         table.add_column("Value", style="white")
 
         table.add_row("Status", f"[green]{status}[/green]" if status == "SUCCESS" else f"[red]{status}[/red]")
-        table.add_row("Total Iterations", str(iterations))
+        table.add_row("Total Iterations", str(actual_iterations))
+        if total_tokens > 0:
+            table.add_row("Total Tokens", f"{total_tokens:,}")
+        if total_cost_usd > 0.0 or total_tokens > 0:
+            cost_str = f"${total_cost_usd:.4f}" if total_cost_usd > 0.0 else "$0.0000 (Free Tier)"
+            table.add_row("Total Cost", cost_str)
         if commit_hash:
             table.add_row("Git Commit", commit_hash)
 
         console.print(table)
+

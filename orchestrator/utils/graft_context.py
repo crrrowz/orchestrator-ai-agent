@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -15,10 +16,20 @@ class GraftContextProvider:
         return shutil.which("graft") is not None
 
     @classmethod
-    def build_index(cls, workspace: Path) -> bool:
-        """Build or refresh local graft/ context graph in workspace."""
+    def build_index(cls, workspace: Path, force: bool = False, max_age_seconds: float = 300.0) -> bool:
+        """Build or refresh local graft/ context graph in workspace if stale or forced."""
         if not cls.is_graft_available():
             return False
+
+        index_dir = (workspace / "graft").resolve()
+        if not force and index_dir.exists():
+            try:
+                mtime = index_dir.stat().st_mtime
+                if (time.time() - mtime) < max_age_seconds:
+                    return True
+            except Exception:
+                pass
+
         try:
             res = subprocess.run(
                 ["graft", "build"],

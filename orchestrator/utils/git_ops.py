@@ -35,6 +35,8 @@ class GitOps:
             return res.returncode == 0
         return True
 
+    init_if_needed = init_repo
+
     def get_status(self) -> str:
         """Get git status output (porcelain format)."""
         proc = self._run_git("status", "--porcelain")
@@ -44,11 +46,57 @@ class GitOps:
         """Check if there are modified, staged, or untracked files."""
         return bool(self.get_status().strip())
 
+    is_dirty = has_uncommitted_changes
+
     def get_diff(self, staged: bool = False) -> str:
         """Get git diff of working directory or staged changes."""
         args = ["diff", "--cached"] if staged else ["diff"]
         proc = self._run_git(*args)
         return proc.stdout
+
+    def get_compact_diff(
+        self,
+        max_lines_per_file: int = 50,
+        max_chars: int = 4000,
+        staged: bool = False,
+    ) -> str:
+        """Generate compact diff with --stat summary and per-file truncation to prevent context blowup."""
+        stat_args = ["diff", "--cached", "--stat"] if staged else ["diff", "--stat"]
+        stat_proc = self._run_git(*stat_args)
+        stat_summary = stat_proc.stdout.strip()
+
+        diff_args = ["diff", "--cached", "--unified=3"] if staged else ["diff", "--unified=3"]
+        diff_proc = self._run_git(*diff_args)
+        diff_text = diff_proc.stdout.strip()
+
+        if not diff_text:
+            return stat_summary or self.get_status().strip()
+
+        lines = diff_text.splitlines()
+        truncated_lines: list[str] = []
+        file_line_count = 0
+        in_file = False
+
+        for line in lines:
+            if line.startswith("diff --git"):
+                in_file = True
+                file_line_count = 0
+                truncated_lines.append(line)
+            elif in_file:
+                file_line_count += 1
+                if file_line_count <= max_lines_per_file:
+                    truncated_lines.append(line)
+                elif file_line_count == max_lines_per_file + 1:
+                    truncated_lines.append("  [... diff truncated for this file ...]")
+            else:
+                truncated_lines.append(line)
+
+        result = "\n".join(truncated_lines).strip()
+        if len(result) > max_chars:
+            omitted = len(result) - max_chars
+            result = result[:max_chars] + f"\n\n[... Diff truncated: {omitted} characters omitted to save tokens ...]"
+
+        return f"Diff Summary:\n{stat_summary}\n\nDetailed Changes:\n{result}".strip() if stat_summary else result
 
     def stage_all(self) -> bool:
         """Stage all changes in the workspace."""
@@ -99,6 +147,8 @@ class GitOps:
             return branch_name
 
         return None
+
+    create_and_checkout_branch = create_task_branch
 
     def get_current_branch(self) -> Optional[str]:
         """Return the active git branch name."""

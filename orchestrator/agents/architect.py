@@ -25,6 +25,7 @@ CRITICAL INSTRUCTIONS:
    - Clear module boundaries and interface contracts.
    - Step-by-step implementation order for the Developer agent.
    - Comprehensive test strategy for the Tester agent.
+   - Mandatory Deliverables: Explicitly specify `README.md` (architecture + usage + run commands) and a standalone runnable `demo.py` showcasing the implementation interactively.
 """
 
 

@@ -17,13 +17,29 @@ CRITICAL INSTRUCTIONS:
 2. Tools:
    - Inspect files via read-only workspace operations.
 3. Verdict Format:
-   Your review must strictly finish with:
-   VERDICT: [APPROVED | REJECTED]
-   REASONING:
-   - <Point 1>
-   - <Point 2>
-   REQUIRED_FIXES:
-   1. <Fix details if rejected>
+   Your review must conclude with a structured JSON block:
+   ```json
+   {
+     "verdict": "APPROVED",
+     "reasoning": [
+       "Adheres to clean architecture",
+       "Tests cover edge cases"
+     ],
+     "required_fixes": []
+   }
+   ```
+   Or if rejected:
+   ```json
+   {
+     "verdict": "REJECTED",
+     "reasoning": [
+       "Critical security or architectural flaw identified"
+     ],
+     "required_fixes": [
+       "Detail specific actionable code changes needed"
+     ]
+   }
+   ```
 """
 
 
