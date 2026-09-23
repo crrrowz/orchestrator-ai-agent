@@ -7,6 +7,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+# Force UTF-8 encoding for standard streams on Windows to prevent UnicodeEncodeError
+if sys.platform == "win32":
+    try:
+        if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Suppress OpenHands banner box & debug spam immediately before any SDK import
 os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
 os.environ["LITELLM_LOG"] = "CRITICAL"

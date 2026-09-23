@@ -178,9 +178,35 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
     ):
         super().__init__()
         self.store = log_store
-        self.console = console or Console()
+        self.console = console or Console(legacy_windows=False)
         self.verbosity = (verbosity or "normal").lower()
         self._last_thought: Optional[str] = None
+
+    def _safe_print(self, *args, **kwargs) -> None:
+        """Safely print to console with fallback for legacy Windows terminal charmap encoding."""
+        try:
+            self.console.print(*args, **kwargs)
+        except (UnicodeEncodeError, Exception):
+            try:
+                cleaned_args = []
+                for a in args:
+                    if isinstance(a, str):
+                        cleaned = (
+                            a.replace("▶", ">")
+                            .replace("🪙", "$")
+                            .replace("⏱", "")
+                            .replace("💭", "*")
+                            .replace("✓", "[OK]")
+                            .replace("✗", "[ERR]")
+                            .encode("ascii", errors="replace")
+                            .decode("ascii")
+                        )
+                        cleaned_args.append(cleaned)
+                    else:
+                        cleaned_args.append(a)
+                self.console.print(*cleaned_args, **kwargs)
+            except Exception:
+                pass
 
     def on_event(self, event: Event) -> None:
         """Process conversation events, log to store, and display real-time progress."""
@@ -244,7 +270,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     if cost > 0:
                         tokens_str += f" [dim](${cost:.4f})[/dim]"
 
-            self.console.print(
+            self._safe_print(
                 f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
                 f"[blue]({model})[/blue] "
                 f"[bold white]{summary}[/bold white] "
@@ -253,14 +279,14 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             )
             if self._last_thought and self.verbosity != "quiet":
                 if self.verbosity in ("verbose", "debug"):
-                    self.console.print(
+                    self._safe_print(
                         f"       [dim italic]💭 {self._last_thought}[/dim italic]"
                     )
                 else:
                     thought_preview = self._last_thought.replace("\n", " ").strip()
                     if len(thought_preview) > 110:
                         thought_preview = thought_preview[:107] + "..."
-                    self.console.print(
+                    self._safe_print(
                         f"       [dim italic]💭 {thought_preview}[/dim italic]"
                     )
 
@@ -291,7 +317,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                         if is_err
                         else "[bold green]✓ OK[/bold green]"
                     )
-                    self.console.print(f"       {icon} [dim]{text_res}[/dim]")
+                    self._safe_print(f"       {icon} [dim]{text_res}[/dim]")
                 else:
                     obs_preview = str(text_res).replace("\n", " ").strip()
                     if len(obs_preview) > 95:
@@ -301,7 +327,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                         if is_err
                         else "[bold green]✓ OK[/bold green]"
                     )
-                    self.console.print(f"       {icon} [dim]{obs_preview}[/dim]")
+                    self._safe_print(f"       {icon} [dim]{obs_preview}[/dim]")
 
         # 3. Capture General Messages & Errors
         elif event_name in ("ConversationErrorEvent", "AgentErrorEvent"):
@@ -313,7 +339,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 is_error=True,
                 observation=str(err_msg),
             )
-            self.console.print(
+            self._safe_print(
                 f"       [bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]"
             )
 

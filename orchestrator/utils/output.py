@@ -14,7 +14,7 @@ custom_theme = Theme(
     }
 )
 
-console = Console(theme=custom_theme)
+console = Console(theme=custom_theme, legacy_windows=False)
 
 
 class ConsoleOutput:
