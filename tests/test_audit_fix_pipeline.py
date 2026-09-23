@@ -69,9 +69,9 @@ def test_audit_fix_pipeline_clean_convergence(tmp_path: Path):
         "def main():\n    return 'clean'\n", encoding="utf-8"
     )
 
-    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    cfg = OrchestratorConfig(workspace_path=tmp_path, auto_chain_audit=False)
     sm = SkillManager(ORCHESTRATOR_ROOT)
-    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path, auto_chain_audit=False)
 
     with (
         patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls,
@@ -97,14 +97,14 @@ def test_audit_fix_pipeline_clean_convergence(tmp_path: Path):
 
 
 def test_audit_fix_pipeline_default_task_zero_tokens_clean(tmp_path: Path):
-    """When workspace is clean and default task is used, Developer is never invoked (0 tokens)."""
+    """When workspace is clean and auto-chain is disabled, Developer is never invoked (0 tokens)."""
     (tmp_path / "clean_module.py").write_text(
         "def compute():\n    return 42\n", encoding="utf-8"
     )
 
-    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    cfg = OrchestratorConfig(workspace_path=tmp_path, auto_chain_audit=False)
     sm = SkillManager(ORCHESTRATOR_ROOT)
-    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path, auto_chain_audit=False)
 
     with patch(
         "orchestrator.pipeline.audit_fix_pipeline.Conversation"
@@ -121,6 +121,41 @@ def test_audit_fix_pipeline_default_task_zero_tokens_clean(tmp_path: Path):
             "No remediation iterations were needed; workspace was clean on initial scan."
             in content
         )
+
+
+def test_audit_fix_pipeline_auto_chains_audit(tmp_path: Path):
+    """When workspace is clean and AUDIT_REPORT.md is missing, AuditPipeline is auto-chained."""
+    (tmp_path / "clean_module.py").write_text(
+        "def compute():\n    return 42\n", encoding="utf-8"
+    )
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path, auto_chain_audit=True)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path, auto_chain_audit=True)
+
+    def mock_audit_run(*args, **kwargs):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "AUDIT_REPORT.md").write_text(
+            "## 4. Key Recommendations\n- Refactor clean_module.py", encoding="utf-8"
+        )
+        return {"status": "AUDIT_COMPLETED"}
+
+    with (
+        patch(
+            "orchestrator.pipeline.audit_pipeline.AuditPipeline.run",
+            side_effect=mock_audit_run,
+        ) as mock_audit,
+        patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls,
+    ):
+        mock_conv = MagicMock()
+        mock_conv_cls.return_value = mock_conv
+
+        res = pipeline.run("Autonomous codebase defect and optimization fix loop.")
+
+        mock_audit.assert_called_once()
+        assert res["status"] in ("CONVERGED_CLEAN", "MAX_ITERATIONS_REACHED")
+        mock_conv.run.assert_called_once()
 
 
 def test_audit_fix_pipeline_remediation_loop(tmp_path: Path):

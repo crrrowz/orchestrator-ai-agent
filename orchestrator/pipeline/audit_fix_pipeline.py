@@ -70,6 +70,7 @@ class AuditFixPipeline:
         workspace_path: Optional[Path] = None,
         human_channel: Optional[HumanInterventionChannel] = None,
         controller: Optional[PipelineController] = None,
+        auto_chain_audit: Optional[bool] = None,
     ):
         self.config = config
         self.skill_manager = skill_manager
@@ -80,6 +81,11 @@ class AuditFixPipeline:
         self.controller = controller or PipelineController()
         self.budget_guard = BudgetGuard(max_budget_usd=config.max_budget_usd)
         self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
+        self.auto_chain_audit = (
+            auto_chain_audit
+            if auto_chain_audit is not None
+            else getattr(config, "auto_chain_audit", True)
+        )
 
     def _run_conv(
         self,
@@ -337,6 +343,35 @@ class AuditFixPipeline:
 
             # 3. On iteration 1: If static and tests are clean, check for existing audit report or explicit user directive
             if iteration == 1 and not all_issues:
+                if not existing_report_content and self.auto_chain_audit:
+                    from orchestrator.pipeline.audit_pipeline import AuditPipeline
+
+                    ConsoleOutput.agent_step(
+                        "AUDIT-CHAIN",
+                        "Static checks and tests are clean. Auto-chaining deep architectural Auditor agent...",
+                    )
+                    audit_pipe = AuditPipeline(
+                        config=self.config,
+                        skill_manager=self.skill_manager,
+                        workspace_path=self.workspace_path,
+                        human_channel=self.human_channel,
+                        controller=self.controller,
+                    )
+                    audit_pipe.run(task_description=task_description)
+                    audit_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
+                    if not audit_file.exists():
+                        audit_file = self.workspace_path / "AUDIT_REPORT.md"
+                    if audit_file.exists():
+                        try:
+                            existing_report_content = audit_file.read_text(
+                                encoding="utf-8", errors="replace"
+                            ).strip()
+                            ConsoleOutput.info(
+                                f"Architectural audit complete. Loaded {len(existing_report_content)} chars of recommendations."
+                            )
+                        except Exception:
+                            pass
+
                 if existing_report_content:
                     auditor_findings = f"[Existing Audit Report Recommendations]\n{existing_report_content[:3000]}"
                     all_issues.append(auditor_findings)

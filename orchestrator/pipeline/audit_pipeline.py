@@ -236,11 +236,18 @@ class AuditPipeline:
             f"Static Analysis Findings:\n{static_report}\n"
             f"{graft_part}\n\n"
             "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
-            "1. Do NOT attempt to read all files or explore directories with terminal commands.\n"
-            "2. Read AT MOST 3-5 critical hotspot files identified above to verify key logic.\n"
-            "3. Generate `docs/AUDIT_REPORT.md` (under the `docs/` folder) in a SINGLE comprehensive `write` operation.\n"
+            "1. Inspect 3-5 critical hotspot files identified above to verify key architecture, boundaries, and duplication.\n"
+            "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`) in a SINGLE comprehensive `write` operation.\n"
+            "3. Your report MUST follow this rigorous structure:\n"
+            "   - # Codebase Architecture & Security Audit Report\n"
+            "   - ## 1. Executive Summary & Architecture Health Score\n"
+            "   - ## 2. Structural Hotspots & Module Boundaries (Analyze files > 300 LOC, coupling, cohesion)\n"
+            "   - ## 3. DRY Violations & Duplicate Logic (Identify exact duplicate functions, e.g. `_run_conv` in pipelines)\n"
+            "   - ## 4. Security, Secret Leak & Subprocess Vulnerability Audit\n"
+            "   - ## 5. Error Handling, Edge Cases & Failure Recovery Gaps\n"
+            "   - ## 6. Actionable Prioritized Remediation Roadmap (Specific code tasks for Developer agent)\n"
             "4. NEVER re-read `docs/AUDIT_REPORT.md` or append to it across multiple calls.\n"
-            "5. Once `docs/AUDIT_REPORT.md` is written, immediately call FinishAction to conclude your turn."
+            "5. Once `docs/AUDIT_REPORT.md` is written, call FinishAction to conclude your turn."
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))

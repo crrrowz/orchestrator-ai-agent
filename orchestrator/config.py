@@ -71,6 +71,9 @@ class OrchestratorConfig(BaseModel):
     enable_memory: bool = Field(
         default=os.environ.get("ENABLE_MEMORY", "true").lower() == "true"
     )
+    auto_chain_audit: bool = Field(
+        default=os.environ.get("AUTO_CHAIN_AUDIT", "true").lower() == "true"
+    )
     max_retained_reports: int = Field(
         default=int(os.environ.get("MAX_RETAINED_REPORTS", "20"))
     )

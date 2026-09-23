@@ -647,6 +647,22 @@ def execute_terminal_action(
         )
         stdout_text = sanitize_output_secrets(proc.stdout or "")
         stderr_text = sanitize_output_secrets(proc.stderr or "")
+
+        # Truncate excessive terminal output to prevent LLM context explosion (max 4000 chars / ~60 lines)
+        if len(stdout_text) > 4000:
+            lines = stdout_text.splitlines()
+            if len(lines) > 60:
+                stdout_text = (
+                    "\n".join(lines[:30])
+                    + f"\n... [{len(lines) - 50} lines omitted to conserve token context] ...\n"
+                    + "\n".join(lines[-20:])
+                )
+            else:
+                stdout_text = (
+                    stdout_text[:4000]
+                    + "\n... [Output truncated to conserve token context] ..."
+                )
+
         output_text = f"Exit code: {proc.returncode}\nStdout:\n{stdout_text}\nStderr:\n{stderr_text}"
         return WorkspaceTerminalObservation(
             content=[TextContent(text=output_text)],

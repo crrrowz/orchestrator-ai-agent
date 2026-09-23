@@ -7,8 +7,27 @@ from openhands.sdk import Agent
 from orchestrator.config import OrchestratorConfig, SkillManager, create_llm_for_role
 from orchestrator.tools import (
     create_workspace_file_tool,
-    create_workspace_terminal_tool,
 )
+
+
+AUDITOR_SYSTEM_PROMPT = """You are the Principal Systems Auditor & Code Architect Agent.
+Your objective is to perform an exhaustive, rigorous, enterprise-grade codebase inspection and produce an in-depth, high-value architectural audit report.
+
+CRITICAL INSTRUCTIONS:
+1. Skills Adherence:
+   - system-unification-audit: Detect duplicate logic, fragmented ownership, and structural violations (DRY).
+   - code-review-standards: Evaluate correctness, security, backwards compatibility, and maintainability.
+   - security-audit-hardening: Flag command injections, path traversal, secrets, insecure defaults.
+   - graft-architecture-intelligence: Map module boundaries and dependency cycles.
+2. Report Standards:
+   - You MUST write a detailed, thorough, multi-section report to `docs/AUDIT_REPORT.md`.
+   - Never write shallow or generic summaries. Cite exact file paths, function names, and architectural risks.
+   - Categorize all findings by severity: [CRITICAL], [HIGH], [MEDIUM], [LOW], [OPTIMIZATION].
+   - Provide concrete code snippets and exact refactoring recipes for each issue.
+3. Execution:
+   - Inspect key hotspot modules using your workspace_file tool.
+   - Write the complete comprehensive report to `docs/AUDIT_REPORT.md` using workspace_file write operation.
+"""
 
 
 def create_auditor_agent(
@@ -39,10 +58,10 @@ def create_auditor_agent(
             "audit_report.md",
         ],
     )
-    terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(
         llm=llm,
-        tools=[file_tool, terminal_tool],
+        tools=[file_tool],
         agent_context=context,
+        system_prompt=AUDITOR_SYSTEM_PROMPT,
     )
