@@ -41,7 +41,7 @@ class OrchestratorConfig(BaseModel):
         role="developer",
         model=os.environ.get("DEVELOPER_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
         temperature=0.2,
-        skills=["clean-python-architecture", "systematic-debugging"],
+        skills=["clean-python-architecture", "systematic-debugging", "docker-devops-containerization"],
     ))
     tester: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="tester",
@@ -53,13 +53,13 @@ class OrchestratorConfig(BaseModel):
         role="reviewer",
         model=os.environ.get("REVIEWER_MODEL", "openai/gpt-4o"),
         temperature=0.1,
-        skills=["code-review-standards"],
+        skills=["code-review-standards", "security-audit-hardening"],
     ))
     architect: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="architect",
         model=os.environ.get("ARCHITECT_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
         temperature=0.3,
-        skills=["architectural-decomposition"],
+        skills=["architectural-decomposition", "api-design-contract"],
     ))
 
 

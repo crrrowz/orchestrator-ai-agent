@@ -41,6 +41,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Check configured models, API keys, and settings.",
     )
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Launch interactive setup wizard.",
+    )
     return parser.parse_args()
 
 
@@ -75,6 +81,35 @@ def handle_check_config(config: OrchestratorConfig) -> None:
     print(f"  OpenRouter: {'Set' if config.openrouter_api_key else 'Missing'}")
 
 
+def interactive_wizard(config: OrchestratorConfig, skill_manager: SkillManager) -> tuple[str, str, Path]:
+    """Interactive prompt wizard for users running without command-line arguments."""
+    ConsoleOutput.banner(
+        "Antigravity Multi-Agent Orchestrator",
+        f"Active Skills: {len(skill_manager.available_skills)} loaded"
+    )
+    print("\nEnter the software task you want the multi-agent team to build.")
+    print("Example: 'Create a JWT authentication service with token revocation and pytest tests'")
+    
+    try:
+        task = input("\n📝 Task Description: ").strip()
+        while not task:
+            task = input("Please enter a non-empty task description: ").strip()
+
+        print("\nChoose Pipeline Execution Mode:")
+        print("  [1] Dev-Test Loop (Developer writes code, Tester runs pytest in loop) [Fast]")
+        print("  [2] Full 4-Agent Pipeline (Architect -> Dev -> Test -> Independent Reviewer) [Complete]")
+        mode_choice = input("Select mode [1/2, default 1]: ").strip()
+        mode = "full" if mode_choice == "2" else "dev-test"
+
+        ws_input = input(f"Target workspace directory [Default: {config.workspace_path}]: ").strip()
+        workspace = Path(ws_input).resolve() if ws_input else config.workspace_path
+
+        return task, mode, workspace
+    except (KeyboardInterrupt, EOFError):
+        print("\nOperation cancelled by user.")
+        sys.exit(0)
+
+
 def main() -> None:
     args = parse_args()
     config = OrchestratorConfig()
@@ -88,15 +123,19 @@ def main() -> None:
         handle_check_config(config)
         sys.exit(0)
 
-    if not args.task:
-        ConsoleOutput.error("No task specified. Provide a task description or use --help.")
-        sys.exit(1)
+    # If no task is provided, run the friendly interactive wizard
+    if not args.task or args.interactive:
+        task, mode, workspace = interactive_wizard(config, skill_manager)
+    else:
+        task = args.task
+        mode = args.mode
+        workspace = args.workspace or config.workspace_path
 
     orchestrator = Orchestrator(config)
     orchestrator.run_task(
-        task=args.task,
-        mode=args.mode,
-        workspace_override=args.workspace,
+        task=task,
+        mode=mode,
+        workspace_override=workspace,
     )
 
 
