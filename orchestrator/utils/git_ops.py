@@ -9,7 +9,8 @@ class GitOps:
     """Provides high-level Git operations for the multi-agent workspace."""
 
     def __init__(self, workspace_path: Path | str):
-        self.workspace_path = Path(workspace_path).resolve()
+        p = Path(workspace_path).resolve()
+        self.workspace_path = p.parent if p.is_file() else p
 
     def _run_git(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(

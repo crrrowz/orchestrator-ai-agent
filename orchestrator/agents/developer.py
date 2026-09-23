@@ -28,14 +28,16 @@ CRITICAL INSTRUCTIONS:
 def create_developer_agent(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    workspace_path: Optional[Path] = None
+    workspace_path: Optional[Path] = None,
+    allow_test_writes: bool = False,
 ) -> Agent:
     """Build a Developer agent configured with developer skills and tools."""
     workspace = workspace_path or config.workspace_path
     llm = create_llm_for_role(config, config.developer)
     context = skill_manager.build_agent_context(config.developer.skills)
 
-    file_tool = create_workspace_file_tool(workspace, blocked_write_prefixes=["tests/"])
+    blocked = None if allow_test_writes else ["tests/"]
+    file_tool = create_workspace_file_tool(workspace, blocked_write_prefixes=blocked)
     terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(
@@ -44,3 +46,4 @@ def create_developer_agent(
         agent_context=context,
         system_prompt=DEVELOPER_SYSTEM_PROMPT,
     )
+

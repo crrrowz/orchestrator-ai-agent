@@ -4,6 +4,7 @@ from .base_pipeline import BasePipeline
 from .dev_test_loop import DevTestLoop
 from .full_pipeline import FullPipeline
 from .audit_pipeline import AuditPipeline
+from .audit_fix_pipeline import AuditFixPipeline
 from .state_machine import PipelineStateMachine, PipelinePhase
 from .milestone_dag import MilestoneParser, SubtaskMilestone
 from .checkpoint import PipelineCheckpointManager, PipelineCheckpoint
@@ -14,6 +15,7 @@ __all__ = [
     "DevTestLoop",
     "FullPipeline",
     "AuditPipeline",
+    "AuditFixPipeline",
     "PipelineStateMachine",
     "PipelinePhase",
     "MilestoneParser",
@@ -22,4 +24,5 @@ __all__ = [
     "PipelineCheckpoint",
     "ReviewerVerdict",
 ]
+
 
