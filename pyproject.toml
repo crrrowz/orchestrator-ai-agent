@@ -1,0 +1,24 @@
+[project]
+name = "antigravity-agent-orchestrator"
+version = "0.1.0"
+description = "Multi-Agent Software Development Orchestrator powered by OpenHands SDK"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openhands-sdk>=1.49.0",
+    "python-dotenv>=1.0.0",
+    "rich>=14.0.0",
+    "pytest>=8.0.0",
+    "pydantic>=2.7.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["orchestrator"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

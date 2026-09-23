@@ -1,0 +1,19 @@
+# Python environment & dependencies
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local workspace & state
+workspace/
+.env
+PowerShellHistory.txt
