@@ -207,7 +207,7 @@ class AuditPipeline:
         )
         ConsoleOutput.agent_step(
             "Auditor",
-            "Performing deep inspection and writing AUDIT_REPORT.md...",
+            "Performing deep inspection and writing docs/AUDIT_REPORT.md...",
             model=auditor_agent.llm.model,
         )
 
@@ -235,9 +235,9 @@ class AuditPipeline:
             "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
             "1. Do NOT attempt to read all files or explore directories with terminal commands.\n"
             "2. Read AT MOST 3-5 critical hotspot files identified above to verify key logic.\n"
-            "3. Generate `AUDIT_REPORT.md` in the workspace root in a SINGLE comprehensive `write` operation.\n"
-            "4. NEVER re-read `AUDIT_REPORT.md` or append to it across multiple calls.\n"
-            "5. Once `AUDIT_REPORT.md` is written, immediately call FinishAction to conclude your turn."
+            "3. Generate `docs/AUDIT_REPORT.md` (under the `docs/` folder) in a SINGLE comprehensive `write` operation.\n"
+            "4. NEVER re-read `docs/AUDIT_REPORT.md` or append to it across multiple calls.\n"
+            "5. Once `docs/AUDIT_REPORT.md` is written, immediately call FinishAction to conclude your turn."
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))
@@ -250,7 +250,14 @@ class AuditPipeline:
         dur = time.perf_counter() - t_start
         u_audit = get_llm_usage(auditor_agent.llm)
 
-        report_file = self.workspace_path / "AUDIT_REPORT.md"
+        docs_dir = self.workspace_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        report_file = docs_dir / "AUDIT_REPORT.md"
+        root_report_file = self.workspace_path / "AUDIT_REPORT.md"
+
+        # Migrate if agent wrote to workspace root
+        if not report_file.exists() and root_report_file.exists():
+            root_report_file.replace(report_file)
 
         # Step 3: Fallback report generation if agent did not write the file (e.g. offline/mock)
         if not report_file.exists():

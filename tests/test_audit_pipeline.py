@@ -34,9 +34,15 @@ def test_audit_pipeline_metrics_collection(tmp_path: Path):
 
 
 def test_auditor_agent_rbac_write_restriction(tmp_path: Path):
-    """Auditor agent file tool must deny writing to source files and allow AUDIT_REPORT.md."""
-    # Auditor file tool allows only AUDIT_REPORT.md / audit_report.md
-    allowed_prefixes = ["AUDIT_REPORT.md", "audit_report.md"]
+    """Auditor agent file tool must deny writing to source files and allow docs/AUDIT_REPORT.md."""
+    # Auditor file tool allows only docs/AUDIT_REPORT.md and related report paths
+    allowed_prefixes = [
+        "docs/AUDIT_REPORT.md",
+        "docs/audit_report.md",
+        "docs/",
+        "AUDIT_REPORT.md",
+        "audit_report.md",
+    ]
 
     # 1. Attempt writing to source file -> should be denied
     action_source = WorkspaceFileAction(
@@ -53,10 +59,10 @@ def test_auditor_agent_rbac_write_restriction(tmp_path: Path):
     assert "Permission denied" in obs_source.message
     assert not (tmp_path / "src" / "service.py").exists()
 
-    # 2. Attempt writing to AUDIT_REPORT.md -> should succeed
+    # 2. Attempt writing to docs/AUDIT_REPORT.md -> should succeed
     action_report = WorkspaceFileAction(
         operation="write",
-        path="AUDIT_REPORT.md",
+        path="docs/AUDIT_REPORT.md",
         content="# Codebase Audit Report\n\nAll clear.\n",
     )
     obs_report = execute_file_action(
@@ -65,12 +71,12 @@ def test_auditor_agent_rbac_write_restriction(tmp_path: Path):
         allowed_write_prefixes=allowed_prefixes,
     )
     assert obs_report.success is True
-    assert (tmp_path / "AUDIT_REPORT.md").exists()
-    assert "All clear" in (tmp_path / "AUDIT_REPORT.md").read_text(encoding="utf-8")
+    assert (tmp_path / "docs" / "AUDIT_REPORT.md").exists()
+    assert "All clear" in (tmp_path / "docs" / "AUDIT_REPORT.md").read_text(encoding="utf-8")
 
 
 def test_audit_pipeline_run_generates_report(tmp_path: Path):
-    """AuditPipeline.run should produce AUDIT_REPORT.md and record audit telemetry."""
+    """AuditPipeline.run should produce docs/AUDIT_REPORT.md and record audit telemetry."""
     # Create sample code in workspace
     (tmp_path / "app.py").write_text("def run():\n    print('ok')\n", encoding="utf-8")
 
@@ -95,7 +101,7 @@ def test_audit_pipeline_run_generates_report(tmp_path: Path):
         res = pipeline.run("Comprehensive security and architecture audit")
 
         assert res["status"] == "AUDIT_COMPLETED"
-        report_file = tmp_path / "AUDIT_REPORT.md"
+        report_file = tmp_path / "docs" / "AUDIT_REPORT.md"
         assert report_file.exists()
         content = report_file.read_text(encoding="utf-8")
         assert "Codebase Architecture & Security Audit Report" in content

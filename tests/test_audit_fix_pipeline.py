@@ -89,7 +89,7 @@ def test_audit_fix_pipeline_clean_convergence(tmp_path: Path):
         res = pipeline.run("Autonomous auto-fix validation")
 
         assert res["status"] in ("CONVERGED_CLEAN", "MAX_ITERATIONS_REACHED")
-        report_file = tmp_path / "AUDIT_FIX_REPORT.md"
+        report_file = tmp_path / "docs" / "AUDIT_FIX_REPORT.md"
         assert report_file.exists()
         content = report_file.read_text(encoding="utf-8")
         assert "Autonomous Codebase Audit & Auto-Fix Report" in content
@@ -126,7 +126,7 @@ def test_audit_fix_pipeline_remediation_loop(tmp_path: Path):
         res = pipeline.run("Fix syntax error")
 
         assert res["status"] == "CONVERGED_CLEAN"
-        assert (tmp_path / "AUDIT_FIX_REPORT.md").exists()
+        assert (tmp_path / "docs" / "AUDIT_FIX_REPORT.md").exists()
         # Verify code was actually fixed
         assert "def foo():" in broken_py.read_text(encoding="utf-8")
 

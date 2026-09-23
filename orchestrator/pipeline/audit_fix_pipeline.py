@@ -246,14 +246,16 @@ class AuditFixPipeline:
 
         # Check for existing AUDIT_REPORT.md or explicit file in task
         existing_report_content = ""
-        audit_file = self.workspace_path / "AUDIT_REPORT.md"
+        audit_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
+        if not audit_file.exists():
+            audit_file = self.workspace_path / "AUDIT_REPORT.md"
         if audit_file.exists():
             try:
                 existing_report_content = audit_file.read_text(
                     encoding="utf-8", errors="replace"
                 ).strip()
                 ConsoleOutput.info(
-                    f"Loaded existing audit report from {audit_file.name} ({len(existing_report_content)} chars)."
+                    f"Loaded existing audit report from {audit_file.relative_to(self.workspace_path)} ({len(existing_report_content)} chars)."
                 )
             except Exception:
                 pass
@@ -471,8 +473,10 @@ class AuditFixPipeline:
         if final_status == "IN_PROGRESS":
             final_status = "MAX_ITERATIONS_REACHED"
 
-        # Generate AUDIT_FIX_REPORT.md
-        report_file = self.workspace_path / "AUDIT_FIX_REPORT.md"
+        # Generate docs/AUDIT_FIX_REPORT.md
+        docs_dir = self.workspace_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        report_file = docs_dir / "AUDIT_FIX_REPORT.md"
         report_content = self._generate_report_content(
             task_description=task_description,
             final_status=final_status,
