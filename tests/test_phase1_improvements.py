@@ -99,3 +99,32 @@ def test_auditor_fallback_recovery(tmp_path: Path):
     assert len(reports) == 1
     assert reports[0].report_id == "run_recovered_from_session"
     assert any(inc.incident_type == "user_interruption" for inc in reports[0].incidents)
+
+
+def test_telemetry_timed_step_and_per(tmp_path: Path):
+    """Verify timed_step context manager records duration and metrics, and PER calculation is exact."""
+    recorder = TelemetryRecorder(
+        task_description="Timed Step Task",
+        pipeline_mode="audit-fix",
+        reports_dir=tmp_path / "reports",
+        max_budget_usd=1.0,
+    )
+
+    with recorder.timed_step("developer", "fix_code", iteration=1) as state:
+        state["diff_text"] = "--- a/foo.py\n+++ b/foo.py"
+
+    assert len(recorder.metrics) == 1
+    assert recorder.metrics[0].agent_role == "developer"
+    assert recorder.metrics[0].action_type == "fix_code"
+    assert recorder.metrics[0].diff_size_bytes > 0
+    assert recorder.metrics[0].duration_seconds >= 0.0
+
+    # PER calculation
+    per = TelemetryRecorder.calculate_per(resolved_findings_delta=2, tokens_consumed=50_000)
+    assert per == 4.0
+
+    # Finalize with PER
+    report = recorder.finalize(completed_successfully=True, resolved_findings_delta=1)
+    assert report.completed_successfully is True
+    assert report.progress_efficiency_ratio >= 0.0
+

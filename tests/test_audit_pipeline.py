@@ -123,3 +123,27 @@ def test_orchestrator_mode_audit_dispatch(tmp_path: Path):
         )
         assert result["status"] == "AUDIT_COMPLETED"
         mock_run.assert_called_once_with("Audit security")
+
+
+def test_audit_report_io_normalization_and_reading(tmp_path: Path):
+    """Test locate_and_normalize_report migrates root report to docs/ and read_report extracts text."""
+    from orchestrator.pipeline import locate_and_normalize_report, read_report
+
+    # Initially empty
+    assert locate_and_normalize_report(tmp_path, "AUDIT_REPORT.md") is None
+    assert read_report(tmp_path, "AUDIT_REPORT.md") == ""
+
+    # Create root level report
+    root_report = tmp_path / "AUDIT_REPORT.md"
+    root_report.write_text("# Root Audit\nSample body.", encoding="utf-8")
+
+    # Locate and normalize should migrate to docs/
+    normalized_path = locate_and_normalize_report(tmp_path, "AUDIT_REPORT.md")
+    assert normalized_path == tmp_path / "docs" / "AUDIT_REPORT.md"
+    assert normalized_path.exists()
+    assert not root_report.exists()
+
+    # read_report should return content
+    content = read_report(tmp_path, "AUDIT_REPORT.md")
+    assert "Root Audit" in content
+

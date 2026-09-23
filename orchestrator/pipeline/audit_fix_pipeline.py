@@ -14,11 +14,19 @@ from orchestrator.agents import (
     create_developer_agent,
 )
 from orchestrator.control import (
+    DynamicTokenGovernor,
     HumanInterventionChannel,
     PipelineController,
 )
 from orchestrator.control.human_channel import set_active_channel
+
+from orchestrator.pipeline.audit_report_io import (
+    locate_and_normalize_report,
+    read_report,
+)
 from orchestrator.pipeline.base_pipeline import BasePipeline
+
+
 from orchestrator.pipeline.iteration_state import StructuredIterationState
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
@@ -196,19 +204,13 @@ def check_and_rotate_stale_reports(
     If all prior findings were resolved (CONVERGED_CLEAN), auto-archive both to diagnostics/reports/archive/
     and signal a fresh audit pass. If partially resolved, return set of already resolved finding titles.
     """
-    docs_dir = workspace_path / "docs"
-    audit_file = docs_dir / "AUDIT_REPORT.md"
-    if not audit_file.exists():
-        audit_file = workspace_path / "AUDIT_REPORT.md"
+    audit_file = locate_and_normalize_report(workspace_path, "AUDIT_REPORT.md")
+    fix_file = locate_and_normalize_report(workspace_path, "AUDIT_FIX_REPORT.md")
 
-    fix_file = docs_dir / "AUDIT_FIX_REPORT.md"
-    if not fix_file.exists():
-        fix_file = workspace_path / "AUDIT_FIX_REPORT.md"
-
-    if not audit_file.exists():
+    if not audit_file or not audit_file.exists():
         return "", set()
 
-    if not fix_file.exists():
+    if not fix_file or not fix_file.exists():
         return audit_file.read_text(encoding="utf-8", errors="replace").strip(), set()
 
     try:
@@ -433,12 +435,15 @@ class AuditFixPipeline(BasePipeline):
             self.skill_manager,
             self.workspace_path,
             allow_test_writes=True,
+            task_text=task_description,
         )
 
         reset_append_counts()
         completed_fixes: List[str] = []
         resolved_findings: List[str] = []
         current_finding: Optional[Dict[str, Any]] = None
+        consecutive_zero_mods: Dict[str, int] = {}
+        retry_directive: Optional[str] = None
         fixes_applied_log: List[Dict[str, Any]] = []
         final_status = "IN_PROGRESS"
         last_issues: List[str] = []
@@ -503,24 +508,18 @@ class AuditFixPipeline(BasePipeline):
                         controller=self.controller,
                     )
                     audit_pipe.run(task_description=task_description)
-                    audit_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
-                    if not audit_file.exists():
-                        audit_file = self.workspace_path / "AUDIT_REPORT.md"
-                    if audit_file.exists():
-                        try:
-                            existing_report_content = audit_file.read_text(
-                                encoding="utf-8", errors="replace"
-                            ).strip()
-                            audit_findings_queue = extract_audit_findings_list(
-                                existing_report_content
-                            )
-                        except Exception:
-                            pass
+                    audit_content = read_report(self.workspace_path, "AUDIT_REPORT.md")
+                    if audit_content:
+                        existing_report_content = audit_content
+                        audit_findings_queue = extract_audit_findings_list(
+                            existing_report_content
+                        )
 
                 # If a finding was in-flight and needs a retry, re-present it
                 if current_finding:
+                    retry_prefix = f"⚠️ {retry_directive}\n\n" if retry_directive else ""
                     all_issues.append(
-                        f"[Audit Finding Remediation: {current_finding['severity']} - {current_finding['title']}]\n"
+                        f"{retry_prefix}[Audit Finding Remediation: {current_finding['severity']} - {current_finding['title']}]\n"
                         f"{current_finding['content'][:2500]}"
                     )
                 # Otherwise, pop the next highest priority finding from the queue
@@ -629,16 +628,40 @@ class AuditFixPipeline(BasePipeline):
                 if ".git" not in p.parts and ".venv" not in p.parts
             }
 
+            # Compute dynamic token budget and governor for this iteration
+            finding_sev = (
+                current_finding.get("severity", "MEDIUM")
+                if current_finding
+                else "MEDIUM"
+            )
+            finding_context = (
+                (current_finding.get("title", "") + " " + current_finding.get("content", ""))
+                if current_finding
+                else issues_text
+            )
+            hard_cap = getattr(self.config, "max_tokens_budget", 180_000)
+
+            governor = DynamicTokenGovernor.compute_iteration_budget(
+                role="developer",
+                severity=finding_sev,
+                affected_files_count=len(affected_files),
+                task_text=finding_context,
+                hard_ceiling=min(hard_cap, 180_000),
+            )
+            step_limit = getattr(
+                governor,
+                "suggested_max_steps",
+                min(getattr(self.config, "max_agent_steps", 8), 8),
+            )
+
             t_dev = time.perf_counter()
             dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
             self._run_conv(
                 dev_conv,
                 "Developer",
-                max_steps=min(getattr(self.config, "max_agent_steps", 8), 8),
-                max_tokens=min(
-                    getattr(self.config, "max_tokens_budget", 80_000), 80_000
-                ),
-                task_complexity="medium",
+                max_steps=step_limit,
+                governor=governor,
+                task_complexity="high" if governor.allocation.total_budget > 100_000 else "medium",
             )
             if hasattr(visualizer, "close"):
                 visualizer.close()
@@ -725,7 +748,9 @@ class AuditFixPipeline(BasePipeline):
                             f"Iteration {iteration}: Verified & resolved {finding_label}."
                         )
                         resolved_findings.append(finding_label)
+                        consecutive_zero_mods.pop(current_finding["title"], None)
                         current_finding = None
+                        retry_directive = None
 
                     if not audit_findings_queue and not current_finding:
                         ConsoleOutput.success(
@@ -741,23 +766,42 @@ class AuditFixPipeline(BasePipeline):
                         )
                         continue
                 else:
+                    finding_title = current_finding["title"] if current_finding else "Active Task"
+                    consecutive_zero_mods[finding_title] = consecutive_zero_mods.get(finding_title, 0) + 1
+                    fail_count = consecutive_zero_mods[finding_title]
+
                     ConsoleOutput.warning(
-                        f"Iteration {iteration}: Developer made 0 code modifications for active finding. "
-                        "Refining directive for next iteration..."
+                        f"Iteration {iteration}: Developer made 0 code modifications for active finding (attempt {fail_count}/2)."
                     )
-                    all_issues = [
-                        "CRITICAL: 0 code modifications were applied in the previous attempt. "
-                        "You must open the locked file using `workspace_file` and implement the change."
-                    ]
+                    if fail_count >= 2:
+                        ConsoleOutput.warning(
+                            f"Finding Circuit Breaker: [{finding_title}] produced 0 modifications in 2 consecutive attempts. "
+                            "Rotating to backlog tail to prevent pipeline blockage."
+                        )
+                        if current_finding:
+                            audit_findings_queue.append(current_finding)
+                            current_finding = None
+                        retry_directive = None
+                    else:
+                        retry_directive = (
+                            f"CRITICAL ACTION-FIRST DIRECTIVE (Attempt 2/2):\n"
+                            f"The previous attempt applied 0 code modifications to '{finding_title}'. "
+                            "You are STRICTLY FORBIDDEN from reading files, listing directories, or executing exploration commands. "
+                            "You already have the full file context. You must immediately call workspace_file(operation='edit') on step 1."
+                        )
             else:
                 ConsoleOutput.warning(
                     f"Iteration {iteration} verification: Issues remain "
                     f"(Static Clean: {post_static_ok}, Tests Clean: {post_tests_ok}). Proceeding to next iteration."
                 )
                 all_issues = remaining_issues
+                retry_directive = None
 
         if final_status == "IN_PROGRESS":
             final_status = "MAX_ITERATIONS_REACHED"
+
+        u_total = get_llm_usage(developer_agent.llm)
+        total_tokens = u_total.get("total_tokens", 0)
 
         # Generate docs/AUDIT_FIX_REPORT.md
         docs_dir = self.workspace_path / "docs"
@@ -772,13 +816,16 @@ class AuditFixPipeline(BasePipeline):
             completed_fixes=completed_fixes,
             resolved_findings=resolved_findings,
             remaining_backlog=audit_findings_queue,
+            total_tokens=total_tokens,
         )
         report_file.write_text(report_content, encoding="utf-8")
 
-        telemetry.finalize(completed_successfully=(final_status == "CONVERGED_CLEAN"))
+        telemetry.finalize(
+            completed_successfully=(final_status == "CONVERGED_CLEAN"),
+            resolved_findings_delta=len(resolved_findings),
+        )
         log_store.save_to_file()
 
-        u_total = get_llm_usage(developer_agent.llm)
         ConsoleOutput.banner(
             "Audit & Auto-Fix Run Finished",
             f"Status: {final_status} | Report: {report_file.name} | Total Tokens: {u_total['total_tokens']:,}",
@@ -788,7 +835,7 @@ class AuditFixPipeline(BasePipeline):
             "status": final_status,
             "report_path": str(report_file),
             "iterations": len(fixes_applied_log) or 1,
-            "tokens": u_total.get("total_tokens", 0),
+            "tokens": total_tokens,
             "cost_usd": u_total.get("estimated_cost_usd", 0.0),
         }
 
@@ -802,9 +849,12 @@ class AuditFixPipeline(BasePipeline):
         completed_fixes: Optional[List[str]] = None,
         resolved_findings: Optional[List[str]] = None,
         remaining_backlog: Optional[List[dict]] = None,
+        total_tokens: int = 0,
     ) -> str:
         """Construct the markdown summary of the audit-fix session."""
         ts = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        resolved_count = len(resolved_findings) if resolved_findings else 0
+        per_score = TelemetryRecorder.calculate_per(resolved_count, total_tokens)
         lines = [
             "# Autonomous Codebase Audit & Auto-Fix Report",
             "",
@@ -812,6 +862,7 @@ class AuditFixPipeline(BasePipeline):
             f"- **Final Outcome**: `{final_status}`",
             f"- **Target Workspace**: `{self.workspace_path}`",
             f"- **Task Directive**: {task_description or 'Comprehensive Audit & Fix'}",
+            f"- **Progress Efficiency Ratio (PER)**: `{per_score}` findings/100k tokens",
             f"- **Total Python Files**: {metrics.get('total_files', 0)}",
             f"- **Total Lines of Code**: {metrics.get('total_loc', 0)}",
             "",

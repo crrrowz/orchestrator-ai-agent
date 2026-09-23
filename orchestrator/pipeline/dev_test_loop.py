@@ -19,6 +19,7 @@ from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
 from orchestrator.utils import ConsoleOutput, PytestOutputParser
 
 
+
 class DevTestLoop(BasePipeline):
     """Manages the iteration loop between Developer and Tester agents with cost protection."""
 
@@ -41,22 +42,19 @@ class DevTestLoop(BasePipeline):
         )
 
     def _execute_pytest(self, timeout_seconds: int = 60):
-        """Execute pytest using module-level execute_terminal_action for mock compatibility."""
-        if (self.workspace_path / "pyproject.toml").exists():
-            pytest_cmd = "pytest -v"
-        elif (self.workspace_path / "tests").exists():
-            pytest_cmd = "pytest tests/ -v"
-        else:
-            pytest_cmd = "pytest -v"
-
+        """Execute pytest using adapter command and module-level terminal action for mock compatibility."""
+        test_cmd = (
+            self.adapter.get_test_command(self.workspace_path)
+            if self.adapter
+            else None
+        ) or "pytest -v"
         return execute_terminal_action(
-            WorkspaceTerminalAction(
-                command=pytest_cmd, timeout_seconds=timeout_seconds
-            ),
+            WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),
             base_dir=self.workspace_path,
         )
 
     def run(self, task_description: str) -> Dict[str, Any]:
+
         """Execute the Dev-Test pipeline with circuit breaker protection."""
         recorder, memory_store, log_store, visualizer, graft_map = self._setup_run(
             task_description=task_description,

@@ -143,19 +143,24 @@ class GitOps:
         proc = self._run_git("log", f"-n{max_count}", "--oneline")
         return proc.stdout.strip()
 
+    @staticmethod
+    def sanitize_branch_name(task_name: str, max_length: int = 30) -> str:
+        """Sanitize a task or feature name into a valid, clean git branch component."""
+        import re
+
+        clean_slug = re.sub(
+            r"[^a-zA-Z0-9_\-]+", "-", task_name.strip().lower()
+        ).strip("-")[:max_length]
+        return clean_slug or "task"
+
     def create_task_branch(self, task_name: str) -> Optional[str]:
         """Create and switch to an isolated task branch slug."""
         if not self.is_git_repo():
             self.init_repo()
 
-        import re
         import time
 
-        clean_slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", task_name.strip().lower()).strip(
-            "-"
-        )[:25]
-        if not clean_slug:
-            clean_slug = "task"
+        clean_slug = self.sanitize_branch_name(task_name)
         timestamp = int(time.time())
         branch_name = f"agent/{clean_slug}-{timestamp}"
 

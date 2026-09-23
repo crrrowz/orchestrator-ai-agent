@@ -7,7 +7,8 @@ from .audit_pipeline import AuditPipeline
 from .audit_fix_pipeline import AuditFixPipeline
 from .state_machine import PipelineStateMachine, PipelinePhase
 from .milestone_dag import MilestoneParser, SubtaskMilestone
-from .checkpoint import PipelineCheckpointManager, PipelineCheckpoint
+from .audit_report_io import locate_and_normalize_report, read_report
+from .checkpoint import PipelineCheckpoint, PipelineCheckpointManager
 from .reviewer_parser import ReviewerVerdict
 
 __all__ = [
@@ -23,4 +24,6 @@ __all__ = [
     "PipelineCheckpointManager",
     "PipelineCheckpoint",
     "ReviewerVerdict",
+    "locate_and_normalize_report",
+    "read_report",
 ]

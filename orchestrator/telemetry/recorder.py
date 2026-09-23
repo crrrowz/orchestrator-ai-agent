@@ -5,13 +5,15 @@ import hashlib
 import re
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
 from orchestrator.control.budget_guard import BudgetGuard
 from orchestrator.telemetry.schemas import DiagnosticReport, StepIncident, StepMetric
+
 
 
 def get_llm_usage(llm) -> dict:
@@ -150,6 +152,56 @@ class TelemetryRecorder:
         )
         self.metrics.append(metric)
 
+    @contextmanager
+    def timed_step(
+        self,
+        agent_role: str,
+        action_type: str,
+        iteration: int = 1,
+        agent: Optional[Any] = None,
+        diff_text: str = "",
+        error_summary: Optional[str] = None,
+    ):
+        """Context manager to measure step duration and automatically record token metrics."""
+        t0 = time.perf_counter()
+        step_state = {
+            "success": True,
+            "error_summary": error_summary,
+            "diff_text": diff_text,
+        }
+        try:
+            yield step_state
+        except Exception as e:
+            step_state["success"] = False
+            step_state["error_summary"] = str(e)
+            raise
+        finally:
+            dur = time.perf_counter() - t0
+            u = (
+                get_llm_usage(getattr(agent, "llm", None))
+                if agent
+                else {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "estimated_cost_usd": 0.0,
+                }
+            )
+            self.record_step(
+                agent_role=agent_role,
+                action_type=action_type,
+                iteration=iteration,
+                duration_seconds=dur,
+                success=step_state.get("success", True),
+                diff_text=step_state.get("diff_text", ""),
+                error_summary=step_state.get("error_summary"),
+                prompt_tokens=u["prompt_tokens"],
+                completion_tokens=u["completion_tokens"],
+                total_tokens=u["total_tokens"],
+                estimated_cost_usd=u["estimated_cost_usd"],
+            )
+
+
     def record_incident(self, step_name: str, incident_type: str, details: str) -> None:
         """Log a failure or anomaly during execution."""
         incident = StepIncident(
@@ -243,13 +295,23 @@ class TelemetryRecorder:
 
         return False
 
-    def finalize(self, completed_successfully: bool) -> DiagnosticReport:
+    @staticmethod
+    def calculate_per(resolved_findings_delta: int, tokens_consumed: int) -> float:
+        """Calculate Progress Efficiency Ratio (PER): (resolved / tokens) * 100,000."""
+        if tokens_consumed <= 0:
+            return 0.0
+        return round((resolved_findings_delta / tokens_consumed) * 100_000, 3)
+
+    def finalize(
+        self, completed_successfully: bool, resolved_findings_delta: int = 0
+    ) -> DiagnosticReport:
         """Complete the telemetry session, generate report, and save to disk."""
         end_time = datetime.now(timezone.utc)
         total_duration = round(time.perf_counter() - self._start_perf, 2)
         total_iterations = max((m.iteration for m in self.metrics), default=1)
         total_tok = sum(m.total_tokens for m in self.metrics)
         total_cost = sum(m.estimated_cost_usd for m in self.metrics)
+        per = self.calculate_per(resolved_findings_delta, total_tok)
 
         # Generate automatic recommendations
         if (
@@ -274,6 +336,7 @@ class TelemetryRecorder:
             budget_exhausted=self.budget_exhausted,
             total_tokens=total_tok,
             total_cost_usd=round(total_cost, 6),
+            progress_efficiency_ratio=per,
             metrics=self.metrics,
             incidents=self.incidents,
             recommendations=self.recommendations,

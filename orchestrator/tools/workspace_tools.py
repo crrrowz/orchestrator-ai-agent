@@ -1,3 +1,4 @@
+import ast
 import os
 import re
 import shlex
@@ -5,7 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Literal, Optional, Sequence, Any
+from typing import Literal, Optional, Sequence, Any, Tuple
 from pydantic import ConfigDict, Field
 from openhands.sdk.tool import (
     Tool,
@@ -40,13 +41,57 @@ class WorkspaceFileAction(Action):
     """File manipulation action within the workspace sandbox."""
 
     model_config = ConfigDict(extra="ignore")
-    operation: Literal["read", "write", "edit", "list", "delete", "append"]
+    operation: Literal["read", "write", "edit", "list", "delete", "append", "symbol"]
     path: str
+    symbol: Optional[str] = None
     content: Optional[str] = None
     target_text: Optional[str] = None
     replacement_text: Optional[str] = None
     start_line: Optional[int] = None
     end_line: Optional[int] = None
+
+
+def extract_ast_symbol(
+    file_path: Path, symbol_name: str
+) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[str]]:
+    """Parse python file and extract exact function or class symbol with line bounds."""
+    try:
+        source = file_path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source, filename=str(file_path))
+    except Exception as e:
+        return None, None, None, f"Failed to parse '{file_path.name}' with AST: {e}"
+
+    lines = source.splitlines(keepends=True)
+    target = symbol_name.strip()
+
+    match_node = None
+    all_symbols = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            all_symbols.append(node.name)
+            if node.name == target:
+                match_node = node
+                break
+
+    # If qualified like ClassName.method
+    if not match_node and "." in target:
+        cls_name, m_name = target.split(".", 1)
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name == cls_name:
+                for sub in node.body:
+                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)) and sub.name == m_name:
+                        match_node = sub
+                        break
+
+    if match_node:
+        start_ln = getattr(match_node, "lineno", 1)
+        end_ln = getattr(match_node, "end_lineno", len(lines))
+        extracted = "".join(lines[start_ln - 1 : end_ln])
+        return extracted, start_ln, end_ln, None
+
+    avail_str = ", ".join(all_symbols[:15]) if all_symbols else "None"
+    return None, None, None, f"Symbol '{target}' not found in '{file_path.name}'. Available symbols: {avail_str}"
 
 
 class WorkspaceFileObservation(Observation):
@@ -293,6 +338,50 @@ def execute_file_action(
                 file_content=selected_content,
             )
 
+        elif action.operation == "symbol" or (
+            action.operation == "read" and getattr(action, "symbol", None)
+        ):
+            if not target_path.exists():
+                err_msg = f"File '{action.path}' does not exist."
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg,
+                )
+            sym = (getattr(action, "symbol", None) or "").strip()
+            if not sym:
+                err_msg = "Missing 'symbol' parameter required for operation='symbol'."
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg,
+                )
+
+            extracted, start_ln, end_ln, err = extract_ast_symbol(target_path, sym)
+            if err:
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err)],
+                    is_error=True,
+                    success=False,
+                    message=err,
+                )
+
+            annotated_lines = []
+            for idx, line in enumerate((extracted or "").splitlines(), start=start_ln or 1):
+                annotated_lines.append(f"{idx:4d}: {line}")
+            annotated_content = "\n".join(annotated_lines)
+            selected_content = sanitize_output_secrets(annotated_content)
+
+            return WorkspaceFileObservation(
+                content=[TextContent(text=selected_content)],
+                is_error=False,
+                success=True,
+                message=f"Extracted symbol '{sym}' (lines {start_ln}-{end_ln}) from '{action.path}'.",
+                file_content=selected_content,
+            )
+
         elif action.operation == "write":
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(action.content or "", encoding="utf-8")
@@ -533,7 +622,7 @@ class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObserva
 
         return [
             cls(
-                description="Read, write, edit, append, list, and delete files inside the project workspace.",
+                description="Read, write, edit, append, list, delete, or inspect specific functions/classes (operation='symbol', symbol='<name>') inside the project workspace.",
                 action_type=WorkspaceFileAction,
                 observation_type=WorkspaceFileObservation,
                 executor=WorkspaceFileExecutor(
@@ -582,12 +671,9 @@ DEFAULT_ALLOWED_COMMANDS = {
     "dir",
     "cat",
     "type",
-    "echo",
     "pwd",
     "tree",
     "find",
-    "cd",
-    "where",
 }
 
 
@@ -597,9 +683,6 @@ def get_allowed_command_binaries() -> set[str]:
     if env_val:
         return {c.strip().lower() for c in env_val.split(",") if c.strip()}
     return set(DEFAULT_ALLOWED_COMMANDS)
-
-
-ALLOWED_COMMAND_BINARIES = DEFAULT_ALLOWED_COMMANDS
 
 
 DANGEROUS_CHAINING_TOKENS = {";", "&&", "||", "|", "&"}

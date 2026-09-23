@@ -9,6 +9,7 @@ from orchestrator.agents import create_auditor_agent
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import HumanInterventionChannel, PipelineController
 from orchestrator.control.human_channel import set_active_channel
+from orchestrator.pipeline.audit_report_io import locate_and_normalize_report
 from orchestrator.pipeline.base_pipeline import BasePipeline
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.utils import (
@@ -164,14 +165,11 @@ class AuditPipeline(BasePipeline):
         dur = time.perf_counter() - t_start
         u_audit = get_llm_usage(auditor_agent.llm)
 
-        docs_dir = self.workspace_path / "docs"
-        docs_dir.mkdir(parents=True, exist_ok=True)
-        report_file = docs_dir / "AUDIT_REPORT.md"
-        root_report_file = self.workspace_path / "AUDIT_REPORT.md"
-
-        # Migrate if agent wrote to workspace root
-        if not report_file.exists() and root_report_file.exists():
-            root_report_file.replace(report_file)
+        # Step 2: Locate and normalize AUDIT_REPORT.md
+        report_file = locate_and_normalize_report(self.workspace_path, "AUDIT_REPORT.md")
+        if not report_file:
+            report_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
+            report_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Step 3: Fallback report generation if agent did not write the file (e.g. offline/mock)
         if not report_file.exists():

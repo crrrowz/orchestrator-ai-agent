@@ -46,6 +46,8 @@ class DiagnosticReport(BaseModel):
     budget_exhausted: bool = False
     total_tokens: int = 0
     total_cost_usd: float = 0.0
+    progress_efficiency_ratio: float = 0.0
     metrics: List[StepMetric] = Field(default_factory=list)
     incidents: List[StepIncident] = Field(default_factory=list)
     recommendations: List[str] = Field(default_factory=list)
+

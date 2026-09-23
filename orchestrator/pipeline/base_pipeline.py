@@ -1,9 +1,9 @@
 """Base Pipeline defining common lifecycle, telemetry, git ops, and execution loops."""
 
 from abc import ABC, abstractmethod
-import re
 import sys
 import threading
+
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -19,8 +19,10 @@ from orchestrator.config import (
 from orchestrator.control import (
     BudgetGuard,
     ContextBudgetManager,
+    DynamicTokenGovernor,
     HumanChannel,
     PipelineController,
+    TokenPhase,
 )
 from orchestrator.guards.preflight import PreFlightGuard
 from orchestrator.memory import ConversationMemoryStore
@@ -93,12 +95,8 @@ class BasePipeline(ABC):
             ConsoleOutput.warning(
                 "Workspace has uncommitted changes. Stashing or proceeding on working tree."
             )
-        task_slug = (
-            re.sub(r"[^a-zA-Z0-9_\-]+", "-", task_description.lower())[:30].strip("-")
-            or "task"
-        )
-        branch_name = f"agent/{task_slug}-{int(time.time())}"
-        if self.git.create_and_checkout_branch(branch_name):
+        branch_name = self.git.create_task_branch(task_description)
+        if branch_name:
             ConsoleOutput.agent_step(
                 "GIT", f"Isolated task branch created: [bold]{branch_name}[/bold]"
             )
@@ -144,10 +142,15 @@ class BasePipeline(ABC):
         max_tokens: Optional[int] = None,
         timeout_seconds: float = 300.0,
         task_complexity: str = "medium",
+        governor: Optional[DynamicTokenGovernor] = None,
     ) -> None:
         """Run agent conversation with dynamic task-aware output budgeting, token cap monitor, and timeout guard."""
         step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
-        token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 350_000)
+        token_limit = (
+            governor.allocation.total_budget
+            if governor
+            else (max_tokens or getattr(self.config, "max_tokens_budget", 350_000))
+        )
 
         # 1. Dynamic Task-Aware Output Budgeting
         hard_ceil = getattr(self.config, "max_tokens_per_call", 8192)
@@ -203,7 +206,7 @@ class BasePipeline(ABC):
                             conv.pause()
                         break
 
-                    # Token limit check
+                    # Token limit & phase governor checks
                     llm = getattr(conv, "agent", None) and getattr(
                         conv.agent, "llm", None
                     )
@@ -216,6 +219,33 @@ class BasePipeline(ABC):
                                 ct, (int, float)
                             ):
                                 delta_tok = int(pt + ct) - initial_tok
+
+                                # If governor is attached, track actions and enforce phase budget
+                                if governor:
+                                    # Inspect conversation events to detect code modifications
+                                    ev_list = getattr(getattr(conv, "state", None), "events", []) or []
+                                    for ev in ev_list:
+                                        act = getattr(ev, "action", ev)
+                                        act_type = getattr(act, "__class__", type(act)).__name__
+                                        args = getattr(act, "arguments", {}) or {}
+                                        phase = governor.classify_action(act_type, args)
+                                        if phase == TokenPhase.IMPLEMENTATION:
+                                            governor.has_performed_edit = True
+
+                                    if not governor.has_performed_edit:
+                                        governor.allocation.investigation_consumed = delta_tok
+                                        if governor.is_investigation_exhausted():
+                                            ConsoleOutput.warning(
+                                                f"Agent {role_name} exhausted investigation token budget "
+                                                f"({delta_tok:,} >= {governor.allocation.investigation_budget:,}) "
+                                                f"without code edits. Halting exploration loop."
+                                            )
+                                            if hasattr(conv, "interrupt"):
+                                                conv.interrupt()
+                                            elif hasattr(conv, "pause"):
+                                                conv.pause()
+                                            break
+
                                 if token_limit > 0 and delta_tok >= token_limit:
                                     ConsoleOutput.warning(
                                         f"Agent {role_name} exceeded hard token cap for this turn ({delta_tok:,} >= {token_limit:,}). Halting execution."
@@ -312,7 +342,11 @@ class BasePipeline(ABC):
 
     def _execute_tests(self, timeout_seconds: int = 60) -> WorkspaceTerminalObservation:
         """Execute project test suite using detected language adapter."""
-        test_cmd = self.adapter.get_test_command(self.workspace_path)
+        test_cmd = (
+            self.adapter.get_test_command(self.workspace_path)
+            if self.adapter
+            else None
+        ) or "pytest -v"
 
         return execute_terminal_action(
             WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),

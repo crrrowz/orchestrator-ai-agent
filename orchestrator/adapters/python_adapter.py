@@ -45,36 +45,76 @@ class PythonAdapter(ProjectAdapter):
             return (True, [])
         return (False, [err_msg] if err_msg else [])
 
-    def run_zero_token_autofix(self, workspace: Path) -> Tuple[bool, str]:
-        """Execute deterministic safe lint fixes and formatting via Ruff in <100ms."""
-        if not shutil.which("ruff"):
+    def run_zero_token_autofix(
+        self,
+        workspace: Path,
+        scope: list[str] | None = None,
+        unsafe: bool = False,
+    ) -> tuple[bool, str]:
+        """Execute deterministic safe lint fixes and formatting via Ruff in <100ms.
+
+        Args:
+            workspace: Root directory passed to Ruff as cwd.
+            scope: Optional explicit file paths (relative to workspace) Ruff should
+                target. When provided, every ruff invocation is restricted to these
+                files so unintended repository-wide rewrites are avoided.
+            unsafe: Whether to permit `--unsafe-fixes`. Defaults to False to avoid
+                semantic rewrites (e.g. name mangling, encoding insertions) that
+                can alter behavior outside the pipeline's touched files.
+
+        Returns:
+            (success, message). On failure the message details the cause so callers
+            never silently ignore the result.
+        """
+        ruff = shutil.which("ruff")
+        if ruff is None:
             return (False, "ruff CLI not available in PATH")
 
+        # Capture a pre-fix diff snapshot so changes are auditable / revertible.
+        pre_diff = _git_diff_stat(workspace)
+
+        check_args: list[str] = ["ruff", "check", "--fix", "--output-format=concise"]
+        if unsafe:
+            check_args.append("--unsafe-fixes")
+        check_args.append("--no-cache")
+
+        if scope:
+            check_args.extend(scope)
+            format_args: list[str] = ["ruff", "format"] + scope
+        else:
+            check_args.append(".")
+            format_args = ["ruff", "format", "."]
+
         try:
-            subprocess.run(
-                [
-                    "ruff",
-                    "check",
-                    "--fix",
-                    "--unsafe-fixes",
-                    "--output-format=concise",
-                    ".",
-                ],
+            check_res = subprocess.run(
+                check_args,
                 cwd=str(workspace),
                 capture_output=True,
                 text=True,
-                timeout=15,
+                timeout=30,
             )
             subprocess.run(
-                ["ruff", "format", "."],
+                format_args,
                 cwd=str(workspace),
                 capture_output=True,
                 text=True,
-                timeout=15,
+                timeout=30,
             )
-            return (True, "Ruff automated fixes applied")
-        except Exception as e:
-            return (False, str(e))
+        except subprocess.TimeoutExpired as exc:
+            return (False, f"Ruff autofix timed out after 30s: {exc}")
+        except Exception as exc:
+            return (False, f"Ruff autofix failed: {exc}")
+
+        post_diff = _git_diff_stat(workspace)
+        summary = "Ruff automated fixes applied"
+        detail = (check_res.stdout or "").strip()
+        if check_res.returncode != 0 and detail:
+            summary += " (unresolved findings remain)"
+        changes = "no changes" if pre_diff == post_diff else "workspace modified"
+        return (
+            True,
+            f"{summary} — {changes}. Pre-state diff:\n{pre_diff.strip() or '(clean)'}",
+        )
 
     def run_static_analysis(self, workspace: Path) -> Tuple[bool, List[str]]:
         """Run AST syntax checks and concise Ruff linter analysis."""
@@ -115,6 +155,14 @@ class PythonAdapter(ProjectAdapter):
             or any(workspace.glob("*_test.py"))
             or (workspace / "pyproject.toml").exists()
         )
+
+    def get_test_command(self, workspace: Path) -> str:
+        """Return the shell command to execute the pytest suite."""
+        if (workspace / "pyproject.toml").exists():
+            return "pytest -v"
+        elif (workspace / "tests").exists():
+            return "pytest tests/ -v"
+        return "pytest -v"
 
     def parse_test_failures(self, stdout: str, stderr: str) -> str:
         """Parse Pytest failure outputs into a minimal compact prompt snippet."""
@@ -175,3 +223,18 @@ class PythonAdapter(ProjectAdapter):
             "top_files": file_metrics[:10],
             "language": "Python",
         }
+
+
+def _git_diff_stat(workspace: Path) -> str:
+    """Return a compact `git diff --stat` snapshot of *workspace*, or '' if unavailable."""
+    try:
+        res = subprocess.run(
+            ["git", "diff", "--stat"],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return res.stdout + res.stderr
+    except Exception:
+        return ""

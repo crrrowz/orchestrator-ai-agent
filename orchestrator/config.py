@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional, Union
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pydantic import SecretStr
@@ -90,16 +90,6 @@ class OrchestratorConfig(BaseModel):
     )
     max_retained_reports: int = Field(
         default=int(os.environ.get("MAX_RETAINED_REPORTS", "20"))
-    )
-    allowed_commands: Set[str] = Field(
-        default_factory=lambda: set(
-            c.strip().lower()
-            for c in os.environ.get(
-                "ALLOWED_COMMANDS",
-                "pytest,python,py,pip,uv,git,ruff,mypy,graft,ls,dir,cat,type,echo,pwd,tree,find,cd,where",
-            ).split(",")
-            if c.strip()
-        )
     )
 
     # Provider keys
@@ -213,10 +203,22 @@ class SkillManager:
         return resolved
 
     def build_agent_context(
-        self, skill_names: list[str], compact: bool = True
+        self,
+        skill_names: list[str],
+        compact: bool = True,
+        task_text: str = "",
     ) -> AgentContext:
-        """Construct an AgentContext loaded with the specified skills (optionally compressed to save tokens)."""
-        role_skills = self.get_skills_for_role(skill_names)
+        """Construct an AgentContext loaded with specified skills (optionally compressed and task-filtered to save tokens)."""
+        filtered_names = list(skill_names)
+        if task_text:
+            text_lower = task_text.lower()
+            if "docker" not in text_lower and "container" not in text_lower and "dockerfile" not in text_lower:
+                filtered_names = [n for n in filtered_names if n != "docker-devops-containerization"]
+            if "graft" not in text_lower and "graph" not in text_lower and "dependency" not in text_lower:
+                if len(filtered_names) > 2:
+                    filtered_names = [n for n in filtered_names if n != "graft-architecture-intelligence"]
+
+        role_skills = self.get_skills_for_role(filtered_names)
         if compact:
             from orchestrator.utils.skill_compressor import CompactSkillInjector
 
