@@ -1,7 +1,17 @@
 """CLI entry point for Antigravity Multi-Agent Orchestrator."""
 
-import argparse
+import os
 import sys
+import logging
+
+# Suppress OpenHands banner box & debug spam immediately before any SDK import
+os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
+os.environ["LITELLM_LOG"] = "ERROR"
+
+for _logger_name in ["openhands", "litellm", "httpx", "httpcore", "urllib3", "asyncio"]:
+    logging.getLogger(_logger_name).setLevel(logging.ERROR)
+
+import argparse
 from pathlib import Path
 
 from orchestrator.config import OrchestratorConfig, SkillManager
@@ -45,6 +55,11 @@ def parse_args() -> argparse.Namespace:
         "--self-audit",
         action="store_true",
         help="Run offline self-evolution analysis on historical execution reports.",
+    )
+    parser.add_argument(
+        "--logs",
+        action="store_true",
+        help="Open the interactive collapsible log explorer (arrow keys / dropdowns) for the latest session.",
     )
     return parser.parse_args()
 
@@ -115,6 +130,26 @@ def handle_self_audit() -> None:
         print("\n" + report_file.read_text(encoding="utf-8"))
 
 
+def handle_view_logs() -> None:
+    from orchestrator.utils import SessionLogStore, InteractiveLogExplorer
+    from orchestrator.utils.visualizer import LogStep
+    import json
+
+    log_file = Path("diagnostics/logs/latest_session.json")
+    if not log_file.exists():
+        ConsoleOutput.warning("No session log found at diagnostics/logs/latest_session.json. Run a development task first.")
+        return
+
+    try:
+        data = json.loads(log_file.read_text(encoding="utf-8"))
+        store = SessionLogStore()
+        for step_dict in data.get("steps", []):
+            store.steps.append(LogStep(**step_dict))
+        InteractiveLogExplorer(store).run()
+    except Exception as e:
+        ConsoleOutput.error(f"Error loading session log: {str(e)}")
+
+
 def main() -> None:
     args = parse_args()
     config = OrchestratorConfig()
@@ -130,6 +165,10 @@ def main() -> None:
 
     if args.self_audit:
         handle_self_audit()
+        sys.exit(0)
+
+    if args.logs:
+        handle_view_logs()
         sys.exit(0)
 
     # If no task is provided, run the friendly interactive wizard

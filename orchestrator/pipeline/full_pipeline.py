@@ -17,7 +17,13 @@ from orchestrator.tools import (
     WorkspaceTerminalAction,
     execute_terminal_action,
 )
-from orchestrator.utils import ConsoleOutput, GitOps
+from orchestrator.utils import (
+    ConsoleOutput,
+    GitOps,
+    OrchestratorLiveVisualizer,
+    SessionLogStore,
+    InteractiveLogExplorer,
+)
 
 
 class FullPipeline:
@@ -44,6 +50,9 @@ class FullPipeline:
             circuit_breaker_threshold=self.config.circuit_breaker_threshold,
         )
 
+        log_store = SessionLogStore(self.workspace_path)
+        visualizer = OrchestratorLiveVisualizer(log_store)
+
         ConsoleOutput.banner(
             "Starting Full 4-Agent Pipeline",
             f"Workspace: {self.workspace_path} | Max Iterations: {self.config.max_iterations}"
@@ -60,8 +69,9 @@ class FullPipeline:
         # Phase 1: Architectural Decomposition
         # -------------------------------------------------------------------
         t0 = time.perf_counter()
+        log_store.set_agent_context("Architect", "Decomposition")
         ConsoleOutput.agent_step("Architect", "Designing modular blueprint and PLAN.md...")
-        arch_conv = Conversation(agent=architect_agent, workspace=str(self.workspace_path))
+        arch_conv = Conversation(agent=architect_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         arch_conv.send_message(
             f"User Task:\n{task_description}\n\n"
             "Decompose this task according to architectural-decomposition skill. "
@@ -76,8 +86,9 @@ class FullPipeline:
         # Phase 2: Implementation & Rigorous Testing Loop
         # -------------------------------------------------------------------
         t_dev = time.perf_counter()
+        log_store.set_agent_context("Developer", "Implementation")
         ConsoleOutput.agent_step("Developer", "Implementing specification from PLAN.md...")
-        dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path))
+        dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         dev_conv.send_message(
             f"Task: {task_description}\n\n"
             "Read PLAN.md and implement the complete solution adhering to clean-python-architecture."
@@ -94,7 +105,8 @@ class FullPipeline:
         while iteration <= self.config.max_iterations:
             ConsoleOutput.agent_step("Tester", f"Verifying test suite (Iteration {iteration}/{self.config.max_iterations})...")
             t_test = time.perf_counter()
-            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path))
+            log_store.set_agent_context("Tester", f"Test Iteration {iteration}")
+            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
             tester_conv.send_message(
                 f"Task: {task_description}\n\n"
                 "Read PLAN.md and source files. Write and execute complete pytest tests as per pytest-rigorous-testing."
@@ -110,12 +122,14 @@ class FullPipeline:
             if test_run.exit_code == 0:
                 tests_passed = True
                 recorder.record_step("tester", "pytest_verification", iteration, dur_test, True)
+                log_store.add_step(f"All pytest tests passed in iteration {iteration}.", is_error=False, observation=test_run.stdout)
                 ConsoleOutput.success(f"All tests passed in iteration {iteration}!")
                 break
             else:
                 error_output = f"{test_run.stdout}\n{test_run.stderr}".strip()
                 recorder.record_step("tester", "pytest_verification", iteration, dur_test, False, error_summary=error_output[:500])
                 recorder.record_incident(f"Iteration_{iteration}_Pytest", "test_failure", error_output[:300])
+                log_store.add_step(f"Tests failed in iteration {iteration} (Exit code {test_run.exit_code})", is_error=True, observation=error_output[:600])
 
                 curr_diff = self.git.get_diff() or self.git.get_status()
                 if recorder.check_circuit_breaker(curr_diff, error_output):
@@ -128,7 +142,8 @@ class FullPipeline:
 
                 ConsoleOutput.warning(f"Tests failed in iteration {iteration}. Requesting fix.")
                 t_fix = time.perf_counter()
-                dev_fix = Conversation(agent=developer_agent, workspace=str(self.workspace_path))
+                log_store.set_agent_context("Developer", f"Fix Iteration {iteration}")
+                dev_fix = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
                 dev_fix.send_message(
                     f"Pytest output:\n{test_run.stdout}\n{test_run.stderr}\n"
                     "Fix issues following systematic-debugging protocol."
@@ -143,15 +158,18 @@ class FullPipeline:
         if not tests_passed:
             diag_report = recorder.finalize(completed_successfully=False)
             ConsoleOutput.error("Pipeline aborted: Tests failed.")
+            log_store.save_to_file()
+            InteractiveLogExplorer(log_store).run()
             return {"status": "FAILED_TESTS", "iterations": iteration, "report_id": diag_report.report_id}
 
         # -------------------------------------------------------------------
         # Phase 3: Independent Review
         # -------------------------------------------------------------------
         t_rev = time.perf_counter()
+        log_store.set_agent_context("Reviewer", "Code Audit")
         ConsoleOutput.agent_step("Reviewer", f"Auditing code with independent model '{self.config.reviewer.model}'...")
         git_diff = self.git.get_diff() or self.git.get_status()
-        reviewer_conv = Conversation(agent=reviewer_agent, workspace=str(self.workspace_path))
+        reviewer_conv = Conversation(agent=reviewer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         reviewer_conv.send_message(
             f"Task: {task_description}\n\n"
             f"Git Changes:\n{git_diff}\n\n"
@@ -192,6 +210,10 @@ class FullPipeline:
 
         status_str = "SUCCESS" if review_approved else "REVIEW_REJECTED"
         ConsoleOutput.summary_table(iteration, status_str, commit_hash)
+
+        # Save session logs and present interactive explorer
+        log_store.save_to_file()
+        InteractiveLogExplorer(log_store).run()
 
         return {
             "status": status_str,

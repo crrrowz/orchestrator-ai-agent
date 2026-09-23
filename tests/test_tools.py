@@ -20,7 +20,7 @@ def test_file_tool_write_and_read(tmp_path: Path):
     read_act = WorkspaceFileAction(operation="read", path="test.py")
     res_r = execute_file_action(read_act, base_dir=tmp_path)
     assert res_r.success is True
-    assert res_r.content == "print('hello')"
+    assert res_r.file_content == "print('hello')"
 
 
 def test_file_tool_edit(tmp_path: Path):
@@ -41,7 +41,7 @@ def test_file_tool_edit(tmp_path: Path):
     # Verify content
     read_act = WorkspaceFileAction(operation="read", path="mod.py")
     res_r = execute_file_action(read_act, base_dir=tmp_path)
-    assert "return 42" in (res_r.content or "")
+    assert "return 42" in (res_r.file_content or "")
 
 
 def test_file_tool_path_traversal_blocked(tmp_path: Path):

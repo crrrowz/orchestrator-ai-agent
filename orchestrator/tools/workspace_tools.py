@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal, Optional, Sequence, Any
 from openhands.sdk.tool import Tool, ToolDefinition, register_tool, Action, Observation, ToolExecutor
+from openhands.sdk.tool.schema import TextContent
 
 
 # ==========================================
@@ -26,7 +27,7 @@ class WorkspaceFileObservation(Observation):
     """Observation resulting from workspace file manipulation."""
     success: bool
     message: str
-    content: Optional[str] = None
+    file_content: Optional[str] = None
     files: Optional[list[str]] = None
 
 
@@ -39,79 +40,109 @@ def execute_file_action(
     workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve()
     workspace_root.mkdir(parents=True, exist_ok=True)
 
-    target_path = (workspace_root / action.path).resolve()
+    target_path = (workspace_root / action.path.lstrip("/\\")).resolve()
 
     # Sandboxing check
     if not str(target_path).startswith(str(workspace_root)):
+        err_msg = f"Access denied: path '{action.path}' escapes workspace directory."
         return WorkspaceFileObservation(
+            content=[TextContent(text=err_msg)],
+            is_error=True,
             success=False,
-            message=f"Access denied: path '{action.path}' escapes workspace directory."
+            message=err_msg
         )
 
     try:
         if action.operation == "read":
             if not target_path.exists():
+                err_msg = f"File '{action.path}' does not exist."
                 return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
                     success=False,
-                    message=f"File '{action.path}' does not exist."
+                    message=err_msg
                 )
             lines = target_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
             start = (action.start_line - 1) if action.start_line and action.start_line > 0 else 0
             end = action.end_line if action.end_line and action.end_line <= len(lines) else len(lines)
             selected_content = "".join(lines[start:end])
             return WorkspaceFileObservation(
+                content=[TextContent(text=selected_content)],
+                is_error=False,
                 success=True,
                 message=f"Read {len(lines[start:end])} lines from '{action.path}'.",
-                content=selected_content
+                file_content=selected_content
             )
 
         elif action.operation == "write":
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(action.content or "", encoding="utf-8")
+            msg = f"File '{action.path}' written successfully ({len(action.content or '')} chars)."
             return WorkspaceFileObservation(
+                content=[TextContent(text=msg)],
+                is_error=False,
                 success=True,
-                message=f"File '{action.path}' written successfully ({len(action.content or '')} chars)."
+                message=msg
             )
 
         elif action.operation == "edit":
             if not target_path.exists():
+                err_msg = f"File '{action.path}' not found for editing."
                 return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
                     success=False,
-                    message=f"File '{action.path}' not found for editing."
+                    message=err_msg
                 )
             existing = target_path.read_text(encoding="utf-8", errors="replace")
             if not action.target_text:
+                err_msg = "Missing 'target_text' required for editing."
                 return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
                     success=False,
-                    message="Missing 'target_text' required for editing."
+                    message=err_msg
                 )
             if action.target_text not in existing:
+                err_msg = f"Target text was not found in '{action.path}'."
                 return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
                     success=False,
-                    message=f"Target text was not found in '{action.path}'."
+                    message=err_msg
                 )
             new_content = existing.replace(action.target_text, action.replacement_text or "", 1)
             target_path.write_text(new_content, encoding="utf-8")
+            msg = f"Successfully edited '{action.path}'."
             return WorkspaceFileObservation(
+                content=[TextContent(text=msg)],
+                is_error=False,
                 success=True,
-                message=f"Successfully edited '{action.path}'."
+                message=msg
             )
 
         elif action.operation == "list":
             search_dir = target_path if target_path.is_dir() else workspace_root
             if not search_dir.exists():
+                err_msg = f"Directory '{search_dir}' does not exist."
                 return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
                     success=False,
-                    message=f"Directory '{search_dir}' does not exist."
+                    message=err_msg
                 )
             file_list = [
                 str(p.relative_to(workspace_root))
                 for p in search_dir.rglob("*")
                 if p.is_file() and not any(part.startswith(".") for part in p.parts)
             ]
+            files_str = "\n".join(file_list) if file_list else "(No files found in directory)"
+            msg = f"Found {len(file_list)} files:\n{files_str}"
             return WorkspaceFileObservation(
+                content=[TextContent(text=msg)],
+                is_error=False,
                 success=True,
-                message=f"Found {len(file_list)} files.",
+                message=msg,
                 files=file_list
             )
 
@@ -122,24 +153,36 @@ def execute_file_action(
                 else:
                     import shutil
                     shutil.rmtree(target_path)
+                msg = f"Deleted '{action.path}'."
                 return WorkspaceFileObservation(
+                    content=[TextContent(text=msg)],
+                    is_error=False,
                     success=True,
-                    message=f"Deleted '{action.path}'."
+                    message=msg
                 )
+            err_msg = f"File '{action.path}' does not exist."
             return WorkspaceFileObservation(
+                content=[TextContent(text=err_msg)],
+                is_error=True,
                 success=False,
-                message=f"File '{action.path}' does not exist."
+                message=err_msg
             )
 
+        err_msg = f"Unknown operation: {action.operation}"
         return WorkspaceFileObservation(
+            content=[TextContent(text=err_msg)],
+            is_error=True,
             success=False,
-            message=f"Unknown operation: {action.operation}"
+            message=err_msg
         )
 
     except Exception as e:
+        err_msg = f"Error performing '{action.operation}' on '{action.path}': {str(e)}"
         return WorkspaceFileObservation(
+            content=[TextContent(text=err_msg)],
+            is_error=True,
             success=False,
-            message=f"Error performing '{action.operation}' on '{action.path}': {str(e)}"
+            message=err_msg
         )
 
 
@@ -226,24 +269,33 @@ def execute_terminal_action(
             timeout=action.timeout_seconds,
             env=env
         )
+        output_text = f"Exit code: {proc.returncode}\nStdout:\n{proc.stdout}\nStderr:\n{proc.stderr}"
         return WorkspaceTerminalObservation(
+            content=[TextContent(text=output_text)],
+            is_error=(proc.returncode != 0),
             exit_code=proc.returncode,
             stdout=proc.stdout,
             stderr=proc.stderr,
             timed_out=False
         )
     except subprocess.TimeoutExpired as te:
+        timeout_msg = "Command timed out after specified seconds."
         return WorkspaceTerminalObservation(
+            content=[TextContent(text=timeout_msg)],
+            is_error=True,
             exit_code=-1,
             stdout=te.stdout.decode() if te.stdout else "",
-            stderr="Command timed out after specified seconds.",
+            stderr=timeout_msg,
             timed_out=True
         )
     except Exception as e:
+        err_msg = f"Execution error: {str(e)}"
         return WorkspaceTerminalObservation(
+            content=[TextContent(text=err_msg)],
+            is_error=True,
             exit_code=-1,
             stdout="",
-            stderr=f"Execution error: {str(e)}",
+            stderr=err_msg,
             timed_out=False
         )
 

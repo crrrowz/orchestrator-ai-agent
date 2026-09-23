@@ -12,7 +12,13 @@ from orchestrator.tools import (
     WorkspaceTerminalAction,
     execute_terminal_action,
 )
-from orchestrator.utils import ConsoleOutput, GitOps
+from orchestrator.utils import (
+    ConsoleOutput,
+    GitOps,
+    OrchestratorLiveVisualizer,
+    SessionLogStore,
+    InteractiveLogExplorer,
+)
 
 
 class DevTestLoop:
@@ -40,6 +46,9 @@ class DevTestLoop:
             circuit_breaker_threshold=self.config.circuit_breaker_threshold,
         )
 
+        log_store = SessionLogStore(self.workspace_path)
+        visualizer = OrchestratorLiveVisualizer(log_store)
+
         ConsoleOutput.banner(
             "Starting Developer-Tester Pipeline",
             f"Workspace: {self.workspace_path} | Max Iterations: {self.config.max_iterations}"
@@ -51,8 +60,9 @@ class DevTestLoop:
 
         # Step 1: Initial Implementation by Developer
         t0 = time.perf_counter()
+        log_store.set_agent_context("Developer", "Initial Implementation")
         ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", task_description)
-        dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path))
+        dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         dev_conv.send_message(
             f"Implement the following software task:\n\n{task_description}\n\n"
             "Ensure full implementation, type safety, and adhere to clean-python-architecture."
@@ -71,7 +81,8 @@ class DevTestLoop:
             ConsoleOutput.agent_step("Tester", f"Running test verification (Iteration {iteration}/{self.config.max_iterations})...")
             
             t_test = time.perf_counter()
-            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path))
+            log_store.set_agent_context("Tester", f"Test Iteration {iteration}")
+            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
             tester_conv.send_message(
                 f"Task: {task_description}\n\n"
                 "Write comprehensive pytest tests in tests/ directory and run pytest. "
@@ -89,12 +100,14 @@ class DevTestLoop:
             if test_run.exit_code == 0:
                 tests_passed = True
                 recorder.record_step("tester", "pytest_verification", iteration, dur_test, True)
+                log_store.add_step(f"All pytest tests passed in iteration {iteration}.", is_error=False, observation=test_run.stdout)
                 ConsoleOutput.success(f"All tests passed in iteration {iteration}!")
                 break
             else:
                 error_output = f"{test_run.stdout}\n{test_run.stderr}".strip()
                 recorder.record_step("tester", "pytest_verification", iteration, dur_test, False, error_summary=error_output[:500])
                 recorder.record_incident(f"Iteration_{iteration}_Pytest", "test_failure", error_output[:300])
+                log_store.add_step(f"Tests failed in iteration {iteration} (Exit code {test_run.exit_code})", is_error=True, observation=error_output[:600])
 
                 # Check Circuit Breaker before proceeding to fix
                 curr_diff = self.git.get_diff() or self.git.get_status()
@@ -110,7 +123,8 @@ class DevTestLoop:
 
                 # Step 3: Developer receives test output and fixes
                 t_fix = time.perf_counter()
-                dev_fix_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path))
+                log_store.set_agent_context("Developer", f"Fix Iteration {iteration}")
+                dev_fix_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
                 failure_summary = (
                     f"Pytest execution failed with exit code {test_run.exit_code}.\n"
                     f"STDOUT:\n{test_run.stdout}\n"
@@ -140,6 +154,10 @@ class DevTestLoop:
 
         status_str = "SUCCESS" if tests_passed else ("CIRCUIT_BREAKER_ABORT" if recorder.circuit_breaker_triggered else "FAILED")
         ConsoleOutput.summary_table(iteration, status_str, commit_hash)
+
+        # Save session logs and present interactive explorer
+        log_store.save_to_file()
+        InteractiveLogExplorer(log_store).run()
 
         return {
             "status": status_str,

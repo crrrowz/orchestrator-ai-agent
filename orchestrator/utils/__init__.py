@@ -3,5 +3,13 @@
 from .connectivity import ConnectivityChecker
 from .git_ops import GitOps
 from .output import ConsoleOutput
+from .visualizer import OrchestratorLiveVisualizer, SessionLogStore, InteractiveLogExplorer
 
-__all__ = ["GitOps", "ConsoleOutput", "ConnectivityChecker"]
+__all__ = [
+    "GitOps",
+    "ConsoleOutput",
+    "ConnectivityChecker",
+    "OrchestratorLiveVisualizer",
+    "SessionLogStore",
+    "InteractiveLogExplorer",
+]
