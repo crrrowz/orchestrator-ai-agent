@@ -44,7 +44,7 @@ class OrchestratorConfig(BaseModel):
         role="developer",
         model=os.environ.get("DEVELOPER_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "anthropic/claude-sonnet-4-5-20250929"),
         temperature=0.2,
-        skills=["clean-python-architecture", "systematic-debugging", "docker-devops-containerization"],
+        skills=["clean-python-architecture", "systematic-debugging", "docker-devops-containerization", "graft-architecture-intelligence"],
     ))
     tester: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="tester",
@@ -62,7 +62,7 @@ class OrchestratorConfig(BaseModel):
         role="architect",
         model=os.environ.get("ARCHITECT_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "anthropic/claude-sonnet-4-5-20250929"),
         temperature=0.3,
-        skills=["architectural-decomposition", "api-design-contract"],
+        skills=["architectural-decomposition", "api-design-contract", "graft-architecture-intelligence"],
     ))
 
 
@@ -84,18 +84,19 @@ class SkillManager:
         return list(self._skills_cache.keys())
 
     def get_skill(self, name: str) -> Optional[Skill]:
+        """Fetch a validated skill by name."""
         return self._skills_cache.get(name)
 
-    def get_skills_for_role(self, role_names: List[str]) -> List[Skill]:
-        """Fetch matching skill objects for designated role skill names."""
-        selected: List[Skill] = []
-        for name in role_names:
+    def get_skills_for_role(self, role_skill_names: list[str]) -> list[Skill]:
+        """Resolve a list of skill names to loaded Skill instances."""
+        resolved = []
+        for name in role_skill_names:
             skill = self.get_skill(name)
             if skill:
-                selected.append(skill)
-        return selected
+                resolved.append(skill)
+        return resolved
 
-    def build_agent_context(self, skill_names: List[str]) -> AgentContext:
+    def build_agent_context(self, skill_names: list[str]) -> AgentContext:
         """Construct an AgentContext loaded with the specified skills."""
         role_skills = self.get_skills_for_role(skill_names)
         return AgentContext(
@@ -107,10 +108,12 @@ class SkillManager:
 
 
 def normalize_model_slug(model: str) -> str:
-    """Normalize model slug to include :free suffix for free-tier models."""
-    resolved = model or "openrouter/qwen/qwen3.8-27b:free"
+    """Normalize model slug to include :free suffix for free-tier models and route openrouter/free."""
+    resolved = (model or "openrouter/qwen/qwen3.8-27b:free").strip()
+    if resolved in ("free", "openrouter/free"):
+        return "openrouter/openrouter/free"
     if resolved == "qwen/qwen3.8-27b":
-        resolved = "qwen/qwen3.8-27b:free"
+        resolved = "openrouter/qwen/qwen3.8-27b:free"
     elif resolved == "openrouter/qwen/qwen3.8-27b":
         resolved = "openrouter/qwen/qwen3.8-27b:free"
     return resolved
@@ -153,9 +156,21 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
         model_slug = model[len("openrouter/"):]
         fallback_models = (
             [model_slug, "openrouter/free"]
-            if ":free" in model_slug and model_slug != "openrouter/free"
+            if ":free" in model_slug and model_slug not in ("free", "openrouter/free")
             else [model_slug]
         )
         llm_kwargs["litellm_extra_body"] = {"models": fallback_models}
+
+        # Native OpenHands SDK FallbackStrategy to openrouter/openrouter/free
+        if model != "openrouter/openrouter/free":
+            from openhands.sdk.llm import FallbackStrategy
+            fb_kwargs = dict(llm_kwargs)
+            fb_kwargs["model"] = "openrouter/openrouter/free"
+            fb_kwargs["usage_id"] = f"{role_config.role}-fallback-free"
+            fb_kwargs["litellm_extra_body"] = {"models": ["openrouter/free"]}
+            fallback_llm = LLM(**fb_kwargs)
+            strat = FallbackStrategy(fallback_llms=["openrouter-free-fallback"])
+            strat._resolved = [fallback_llm]
+            llm_kwargs["fallback_strategy"] = strat
 
     return LLM(**llm_kwargs)

@@ -14,15 +14,16 @@ def test_discover_skills():
     assert "code-review-standards" in available
     assert "architectural-decomposition" in available
     assert "systematic-debugging" in available
+    assert "graft-architecture-intelligence" in available
 
 
 def test_get_skills_for_role():
     manager = SkillManager(Path.cwd())
-    dev_skills = manager.get_skills_for_role(["clean-python-architecture", "systematic-debugging"])
+    dev_skills = manager.get_skills_for_role(["clean-python-architecture", "graft-architecture-intelligence"])
     assert len(dev_skills) == 2
     names = [s.name for s in dev_skills]
     assert "clean-python-architecture" in names
-    assert "systematic-debugging" in names
+    assert "graft-architecture-intelligence" in names
 
 
 def test_build_agent_context():
@@ -31,3 +32,21 @@ def test_build_agent_context():
     assert context is not None
     skill_names = [s.name for s in context.skills]
     assert "pytest-rigorous-testing" in skill_names
+
+
+def test_openrouter_model_normalization_and_fallback():
+    from orchestrator.config import normalize_model_slug, OrchestratorConfig, create_llm_for_role, AgentRoleConfig
+    
+    assert normalize_model_slug("openrouter/free") == "openrouter/openrouter/free"
+    assert normalize_model_slug("free") == "openrouter/openrouter/free"
+    assert normalize_model_slug("openrouter/qwen/qwen3.8-27b") == "openrouter/qwen/qwen3.8-27b:free"
+
+    cfg = OrchestratorConfig(openrouter_api_key="sk-test-fake")
+    role_cfg = AgentRoleConfig(role="developer", model="openrouter/qwen/qwen3.8-27b:free")
+    llm = create_llm_for_role(cfg, role_cfg)
+    
+    assert llm.model == "openrouter/qwen/qwen3.8-27b:free"
+    assert llm.fallback_strategy is not None
+    assert len(llm.fallback_strategy._resolved) == 1
+    assert llm.fallback_strategy._resolved[0].model == "openrouter/openrouter/free"
+
