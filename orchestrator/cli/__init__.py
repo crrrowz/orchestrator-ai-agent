@@ -1,4 +1,4 @@
-"""CLI entry point for Antigravity Multi-Agent Orchestrator (delegates to orchestrator.cli)."""
+"""Command line interface layer for the Antigravity Multi-Agent Orchestrator."""
 
 from orchestrator.cli.app import main, parse_args
 from orchestrator.cli.handlers import (
@@ -22,6 +22,3 @@ __all__ = [
     "handle_view_logs",
     "interactive_wizard",
 ]
-
-if __name__ == "__main__":
-    main()

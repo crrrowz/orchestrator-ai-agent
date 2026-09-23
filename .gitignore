@@ -18,6 +18,7 @@ workspace/
 diagnostics/logs/
 diagnostics/reports/
 diagnostics/memory/
+diagnostics/sessions/
 diagnostics/*.json
 html page/
 .env

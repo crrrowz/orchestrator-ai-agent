@@ -5,13 +5,14 @@ from typing import Literal, Optional
 
 from orchestrator.config import ORCHESTRATOR_ROOT, OrchestratorConfig, SkillManager
 from orchestrator.pipeline import (
-    DevTestLoop,
-    FullPipeline,
-    AuditPipeline,
     AuditFixPipeline,
+    AuditPipeline,
+    DevTestLoop,
+    DocumentationPipeline,
+    FullPipeline,
 )
 from orchestrator.pipeline.checkpoint import PipelineCheckpoint
-from orchestrator.utils import ConsoleOutput
+from orchestrator.rendering.output import ConsoleOutput
 
 
 class Orchestrator:
@@ -25,7 +26,7 @@ class Orchestrator:
     def run_task(
         self,
         task: str,
-        mode: Literal["dev-test", "full", "audit", "audit-fix"] = "dev-test",
+        mode: Literal["dev-test", "full", "audit", "audit-fix", "docs"] = "dev-test",
         workspace_override: Optional[Path] = None,
         checkpoint: Optional[PipelineCheckpoint] = None,
     ) -> dict:
@@ -44,6 +45,8 @@ class Orchestrator:
             pipeline = AuditPipeline(self.config, self.skill_manager, ws)
         elif mode == "audit-fix":
             pipeline = AuditFixPipeline(self.config, self.skill_manager, ws)
+        elif mode == "docs":
+            pipeline = DocumentationPipeline(self.config, self.skill_manager, ws)
         elif mode == "full":
             pipeline = FullPipeline(
                 self.config, self.skill_manager, ws, checkpoint=checkpoint

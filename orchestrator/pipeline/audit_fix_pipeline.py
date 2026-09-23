@@ -124,7 +124,6 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
                     }
                 )
 
-
     findings.sort(key=lambda x: (x["weight"], x["id"]))
     return findings
 

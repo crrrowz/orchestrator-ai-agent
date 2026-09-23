@@ -219,7 +219,6 @@ class AuditPipeline(BasePipeline):
             )
             report_file.write_text(fallback_content, encoding="utf-8")
 
-
         telemetry.record_step(
             "auditor",
             "codebase_audit",

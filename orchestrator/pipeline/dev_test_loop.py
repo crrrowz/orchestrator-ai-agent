@@ -110,22 +110,10 @@ class DevTestLoop(BasePipeline):
                     model=developer_agent.llm.model,
                 )
 
-                graft_part = (
-                    f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}"
-                    if graft_map
-                    else ""
-                )
-                memory_part = ""
-                if self.config.enable_memory:
-                    memory_ctx = memory_store.format_memory_context(task_description)
-                    if memory_ctx:
-                        memory_part = f"\n\n{memory_ctx}"
-
-                dev_prompt = (
-                    f"Implement the following software task:\n\n{task_description}\n\n"
-                    "Ensure full implementation, type safety, and adhere to clean-python-architecture."
-                    f"{graft_part}"
-                    f"{memory_part}"
+                dev_prompt = self.build_prompt(
+                    task=task_description,
+                    role="developer",
+                    extra_instructions="Ensure full implementation, type safety, and adhere to clean-python-architecture.",
                 )
                 dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
                 self._run_conv(dev_conv, "Developer")

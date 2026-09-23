@@ -1,0 +1,315 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OrchestratorConfig",
+  "description": "Central configuration schema for Multi-Agent Orchestrator",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0.0"
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "max_iterations": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 4
+        },
+        "max_budget_usd": {
+          "type": "number",
+          "minimum": 0.0,
+          "default": 0.5
+        },
+        "max_tokens_budget": {
+          "type": "integer",
+          "minimum": 1000,
+          "default": 350000
+        },
+        "max_agent_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 12
+        },
+        "max_tokens_per_call": {
+          "type": "integer",
+          "minimum": 512,
+          "default": 8192
+        },
+        "circuit_breaker_threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2
+        },
+        "conversation_timeout_seconds": {
+          "type": "integer",
+          "minimum": 10,
+          "default": 300
+        },
+        "auto_commit": {
+          "type": "boolean",
+          "default": true
+        },
+        "auto_chain_audit": {
+          "type": "boolean",
+          "default": true
+        },
+        "workspace_path": {
+          "type": "string",
+          "default": "./workspace"
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "properties": {
+        "architect": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "default": "architect"
+            },
+            "model": {
+              "type": "string"
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 2.0
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "api_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "developer": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "default": "developer"
+            },
+            "model": {
+              "type": "string"
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 2.0
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "api_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "tester": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "default": "tester"
+            },
+            "model": {
+              "type": "string"
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 2.0
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "api_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "reviewer": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "default": "reviewer"
+            },
+            "model": {
+              "type": "string"
+            },
+            "temperature": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 2.0
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "api_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "relevance_min_score": {
+          "type": "number",
+          "default": 3.0
+        },
+        "max_memory_results": {
+          "type": "integer",
+          "default": 3
+        },
+        "max_memory_chars": {
+          "type": "integer",
+          "default": 1500
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "max_retained_reports": {
+          "type": "integer",
+          "default": 20
+        },
+        "max_retained_sessions_per_project": {
+          "type": "integer",
+          "default": 10
+        },
+        "log_save_debounce_seconds": {
+          "type": "integer",
+          "default": 5
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "terminal_command_allowlist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocked_write_prefixes_developer": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowed_write_prefixes_architect": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowed_write_prefixes_auditor": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "graft": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "max_age_seconds": {
+          "type": "number",
+          "default": 300.0
+        },
+        "max_map_chars": {
+          "type": "integer",
+          "default": 1500
+        }
+      }
+    },
+    "rendering": {
+      "type": "object",
+      "properties": {
+        "verbosity": {
+          "type": "string",
+          "enum": [
+            "quiet",
+            "normal",
+            "verbose"
+          ],
+          "default": "normal"
+        },
+        "show_diff_preview": {
+          "type": "boolean",
+          "default": true
+        },
+        "diff_max_lines_per_file": {
+          "type": "integer",
+          "default": 50
+        },
+        "diff_max_chars": {
+          "type": "integer",
+          "default": 4000
+        }
+      }
+    },
+    "human_in_the_loop": {
+      "type": "object",
+      "properties": {
+        "interactive": {
+          "type": "boolean",
+          "default": false
+        },
+        "approval_gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

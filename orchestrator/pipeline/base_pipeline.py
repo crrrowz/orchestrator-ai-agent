@@ -34,6 +34,8 @@ from orchestrator.tools import (
     WorkspaceTerminalObservation,
     execute_terminal_action,
 )
+from orchestrator.context import ContextManager, FilePathResolver
+from orchestrator.skills import SkillResolver
 from orchestrator.utils import (
     ConsoleOutput,
     GitOps,
@@ -68,6 +70,23 @@ class BasePipeline(ABC):
             enabled=config.interactive or bool(config.approval_gates),
         )
         self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
+        self.context_manager = ContextManager.create_default(self.config)
+
+    def build_prompt(
+        self,
+        task: str,
+        role: str,
+        extra_instructions: str = "",
+        max_tokens: int = 6000,
+    ) -> str:
+        """Central prompt assembly delegated to ContextManager."""
+        return self.context_manager.build_prompt(
+            task=task,
+            role=role,
+            workspace=self.workspace_path,
+            max_tokens=max_tokens,
+            extra_instructions=extra_instructions,
+        )
 
     def _setup_run(
         self,
@@ -88,6 +107,17 @@ class BasePipeline(ABC):
             and self.state_machine.can_transition(PipelinePhase.INIT)
         ):
             self.state_machine.transition_to(PipelinePhase.INIT)
+
+        # Dynamic skill auto-discovery
+        auto_skills = SkillResolver.resolve(
+            task_description, self.skill_manager.available_skills
+        )
+        for role_name in ("developer", "architect"):
+            role_cfg = getattr(self.config, role_name, None)
+            if role_cfg:
+                for s in auto_skills:
+                    if s not in role_cfg.skills:
+                        role_cfg.skills.append(s)
 
         # 1. Git task branch isolation
         self.git.init_if_needed()

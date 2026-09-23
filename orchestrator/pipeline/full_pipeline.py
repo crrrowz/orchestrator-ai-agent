@@ -108,27 +108,15 @@ class FullPipeline(BasePipeline):
                     model=architect_agent.llm.model,
                 )
 
-                graft_part = (
-                    f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}"
-                    if graft_map
-                    else ""
-                )
-                memory_part = ""
-                if self.config.enable_memory:
-                    memory_ctx = memory_store.format_memory_context(task_description)
-                    if memory_ctx:
-                        memory_part = f"\n\n{memory_ctx}"
-
                 architect_conv = Conversation(
                     agent=architect_agent,
                     workspace=str(self.workspace_path),
                     visualizer=visualizer,
                 )
-                architect_prompt = (
-                    f"User Task: {task_description}\n\n"
-                    "Decompose this task into a clean technical design and write `PLAN.md` into the workspace."
-                    f"{graft_part}"
-                    f"{memory_part}"
+                architect_prompt = self.build_prompt(
+                    task=task_description,
+                    role="architect",
+                    extra_instructions="Decompose this task into a clean technical design and write `PLAN.md` into the workspace.",
                 )
                 architect_conv.send_message(
                     self.human_channel.inject_into_prompt(architect_prompt)
@@ -208,6 +196,13 @@ class FullPipeline(BasePipeline):
                 if plan_path.exists()
                 else ""
             )
+            if not plan_path.exists() or not plan_content.strip():
+                ConsoleOutput.warning(
+                    "PLAN.md not found or empty. Developer will implement from raw task description."
+                )
+                recorder.record_incident(
+                    "PLAN.md", "missing_plan", "Architect did not produce PLAN.md"
+                )
             milestones = MilestoneParser.parse_plan(plan_content)
 
             # -------------------------------------------------------------------
@@ -276,15 +271,10 @@ class FullPipeline(BasePipeline):
                         "Implementing specification from PLAN.md...",
                         model=developer_agent.llm.model,
                     )
-                    graft_part = (
-                        f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}"
-                        if graft_map
-                        else ""
-                    )
-                    dev_prompt = (
-                        f"Task: {task_description}\n\n"
-                        "Read PLAN.md and implement the complete solution adhering to clean-python-architecture."
-                        f"{graft_part}"
+                    dev_prompt = self.build_prompt(
+                        task=task_description,
+                        role="developer",
+                        extra_instructions="Read PLAN.md and implement the complete solution adhering to clean-python-architecture.",
                     )
                     dev_conv.send_message(
                         self.human_channel.inject_into_prompt(dev_prompt)

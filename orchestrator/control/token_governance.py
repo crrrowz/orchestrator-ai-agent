@@ -157,7 +157,6 @@ class DynamicTokenGovernor:
         governor.suggested_max_steps = max_agent_steps
         return governor
 
-
     @staticmethod
     def classify_action(
         action_type: Optional[str], arguments: Optional[Dict[str, Any]] = None
@@ -217,4 +216,3 @@ class DynamicTokenGovernor:
             and self.allocation.investigation_consumed
             >= self.allocation.investigation_budget
         )
-
