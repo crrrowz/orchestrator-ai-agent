@@ -189,6 +189,86 @@ DEFAULT_AUDIT_FIX_TASKS = {
 }
 
 
+def check_and_rotate_stale_reports(
+    workspace_path: Path,
+) -> Tuple[str, set[str]]:
+    """Inspect AUDIT_FIX_REPORT.md against AUDIT_REPORT.md.
+    If all prior findings were resolved (CONVERGED_CLEAN), auto-archive both to diagnostics/reports/archive/
+    and signal a fresh audit pass. If partially resolved, return set of already resolved finding titles.
+    """
+    docs_dir = workspace_path / "docs"
+    audit_file = docs_dir / "AUDIT_REPORT.md"
+    if not audit_file.exists():
+        audit_file = workspace_path / "AUDIT_REPORT.md"
+
+    fix_file = docs_dir / "AUDIT_FIX_REPORT.md"
+    if not fix_file.exists():
+        fix_file = workspace_path / "AUDIT_FIX_REPORT.md"
+
+    if not audit_file.exists():
+        return "", set()
+
+    if not fix_file.exists():
+        return audit_file.read_text(encoding="utf-8", errors="replace").strip(), set()
+
+    try:
+        fix_content = fix_file.read_text(encoding="utf-8", errors="replace")
+        audit_content = audit_file.read_text(encoding="utf-8", errors="replace").strip()
+
+        outcome_m = re.search(r"\*\*Final Outcome\*\*:\s*`([^`]+)`", fix_content)
+        outcome = outcome_m.group(1).strip() if outcome_m else ""
+
+        resolved_titles: set[str] = set()
+        rem_sec = re.search(
+            r"##\s*Remediated Audit Findings([\s\S]*?)(?=\n##|\Z)",
+            fix_content,
+            re.IGNORECASE,
+        )
+        if rem_sec:
+            for line in rem_sec.group(1).splitlines():
+                m = re.search(r"-\s*\[x\]\s*(?:\[[^\]]+\]\s*)?([^\n]+)", line)
+                if m:
+                    resolved_titles.add(m.group(1).strip().lower())
+
+        is_post_fix = fix_file.stat().st_mtime >= (audit_file.stat().st_mtime - 5)
+        has_remaining_backlog = bool(
+            re.search(
+                r"##\s*Remaining Audit Backlog\s*\n\s*-\s*\[\s*\]",
+                fix_content,
+                re.IGNORECASE,
+            )
+        )
+
+        if (
+            outcome == "CONVERGED_CLEAN"
+            and is_post_fix
+            and not has_remaining_backlog
+            and resolved_titles
+        ):
+            archive_dir = workspace_path / "diagnostics" / "reports" / "archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            import shutil
+
+            shutil.move(str(audit_file), str(archive_dir / f"{ts}_{audit_file.name}"))
+            shutil.move(str(fix_file), str(archive_dir / f"{ts}_{fix_file.name}"))
+            ConsoleOutput.info(
+                f"Previous audit cycle was fully resolved (CONVERGED_CLEAN). "
+                f"Auto-archived reports to {archive_dir.relative_to(workspace_path)} to initiate fresh diagnostic pass."
+            )
+            return "", set()
+
+        return audit_content, resolved_titles
+    except Exception as e:
+        ConsoleOutput.warning(f"Error inspecting prior fix report: {e}")
+        try:
+            return audit_file.read_text(
+                encoding="utf-8", errors="replace"
+            ).strip(), set()
+        except Exception:
+            return "", set()
+
+
 class AuditFixPipeline(BasePipeline):
     """Autonomous self-healing loop: audits defects/optimizations, applies fixes via Developer,
     and validates with Tester and static checks in a continuous loop without any Git operations.
@@ -297,29 +377,56 @@ class AuditFixPipeline(BasePipeline):
             else ""
         )
 
-        # Check for existing AUDIT_REPORT.md or explicit file in task
-        existing_report_content = ""
-        audit_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
-        if not audit_file.exists():
-            audit_file = self.workspace_path / "AUDIT_REPORT.md"
-        if audit_file.exists():
-            try:
-                existing_report_content = audit_file.read_text(
-                    encoding="utf-8", errors="replace"
-                ).strip()
-                ConsoleOutput.info(
-                    f"Loaded existing audit report from {audit_file.relative_to(self.workspace_path)} ({len(existing_report_content)} chars)."
-                )
-            except Exception:
-                pass
+        # Check for existing AUDIT_REPORT.md and sync with prior AUDIT_FIX_REPORT.md
+        existing_report_content, resolved_titles = check_and_rotate_stale_reports(
+            self.workspace_path
+        )
+        if existing_report_content:
+            ConsoleOutput.info(
+                f"Loaded active audit report ({len(existing_report_content)} chars)."
+            )
 
         audit_findings_queue: List[Dict[str, Any]] = []
         if existing_report_content:
-            audit_findings_queue = extract_audit_findings_list(existing_report_content)
-            if audit_findings_queue:
+            raw_findings = extract_audit_findings_list(existing_report_content)
+            # Filter out findings that were already resolved in prior iterations
+            if resolved_titles:
+                audit_findings_queue = [
+                    f
+                    for f in raw_findings
+                    if not any(
+                        r in f["title"].lower() or f["title"].lower() in r
+                        for r in resolved_titles
+                    )
+                ]
                 ConsoleOutput.info(
-                    f"Identified {len(audit_findings_queue)} prioritized actionable audit finding(s) in backlog."
+                    f"Resuming backlog: {len(resolved_titles)} finding(s) previously resolved, "
+                    f"{len(audit_findings_queue)} active finding(s) remaining."
                 )
+            else:
+                audit_findings_queue = raw_findings
+                if audit_findings_queue:
+                    ConsoleOutput.info(
+                        f"Identified {len(audit_findings_queue)} prioritized actionable audit finding(s) in backlog."
+                    )
+
+        # Determine dynamic or explicit iteration budget
+        raw_max_iter = getattr(self.config, "max_iterations", "auto")
+        if str(raw_max_iter).lower() == "auto":
+            # Dynamic scaling: 2 iterations per active finding, minimum 4, maximum 16
+            effective_max_iterations = (
+                max(min(len(audit_findings_queue) * 2, 16), 4)
+                if audit_findings_queue
+                else 4
+            )
+            ConsoleOutput.info(
+                f"Auto-iteration scaling engaged: dynamically allocated {effective_max_iterations} iteration(s) for {len(audit_findings_queue)} active backlog finding(s)."
+            )
+        else:
+            try:
+                effective_max_iterations = int(raw_max_iter)
+            except (ValueError, TypeError):
+                effective_max_iterations = 4
 
         developer_agent = create_developer_agent(
             self.config,
@@ -336,7 +443,7 @@ class AuditFixPipeline(BasePipeline):
         final_status = "IN_PROGRESS"
         last_issues: List[str] = []
 
-        for iteration in range(1, self.config.max_iterations + 1):
+        for iteration in range(1, effective_max_iterations + 1):
             if not self.controller.check_should_continue():
                 ConsoleOutput.warning(
                     f"Audit-fix loop stopped by controller at iteration {iteration}."
@@ -360,7 +467,7 @@ class AuditFixPipeline(BasePipeline):
 
             ConsoleOutput.agent_step(
                 "AUDIT",
-                f"Iteration {iteration}/{self.config.max_iterations}: Scanning workspace...",
+                f"Iteration {iteration}/{effective_max_iterations}: Scanning workspace...",
             )
 
             # 1. Run static checks
@@ -506,7 +613,7 @@ class AuditFixPipeline(BasePipeline):
             dev_prompt = (
                 f"Task: {user_directive}\n\n"
                 f"{state_directive}\n\n"
-                f"Iteration {iteration} of {self.config.max_iterations} - Auto-Fix Remediation Directive:\n"
+                f"Iteration {iteration} of {effective_max_iterations} - Auto-Fix Remediation Directive:\n"
                 f"The automated audit detected the following issues that must be solved in this {self.adapter.language_name.capitalize()} project:\n\n"
                 f"{issues_text}\n"
                 f"{test_status_note}\n\n"

@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Union
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pydantic import SecretStr
@@ -38,7 +38,21 @@ class OrchestratorConfig(BaseModel):
             os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))
         ).resolve()
     )
-    max_iterations: int = Field(default=int(os.environ.get("MAX_ITERATIONS", "4")))
+    max_iterations: Union[int, str] = Field(
+        default=int(os.environ["MAX_ITERATIONS"])
+        if os.environ.get("MAX_ITERATIONS", "").isdigit()
+        else os.environ.get("MAX_ITERATIONS", 4)
+    )
+
+    @property
+    def numeric_max_iterations(self) -> int:
+        if isinstance(self.max_iterations, int):
+            return self.max_iterations
+        try:
+            return int(self.max_iterations)
+        except (ValueError, TypeError):
+            return 4
+
     auto_commit: bool = Field(
         default=os.environ.get("AUTO_COMMIT", "true").lower() == "true"
     )

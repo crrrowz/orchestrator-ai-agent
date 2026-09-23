@@ -277,3 +277,57 @@ def test_structured_iteration_state_prompt_block():
     assert "- [ ] Unify _run_conv duplicate" in rendered
     assert "`base_pipeline.py`" in rendered
     assert len(rendered.splitlines()) < 10
+
+
+def test_check_and_rotate_stale_reports_converged_clean(tmp_path: Path):
+    """When AUDIT_FIX_REPORT indicates CONVERGED_CLEAN, both reports are auto-archived."""
+    from orchestrator.pipeline.audit_fix_pipeline import check_and_rotate_stale_reports
+
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    audit_file = docs_dir / "AUDIT_REPORT.md"
+    audit_file.write_text("### 1.1 [HIGH] Sample Bug\nFix it.", encoding="utf-8")
+
+    fix_file = docs_dir / "AUDIT_FIX_REPORT.md"
+    fix_file.write_text(
+        "# Report\n- **Final Outcome**: `CONVERGED_CLEAN`\n\n"
+        "## Remediated Audit Findings\n- [x] [HIGH] Sample Bug\n",
+        encoding="utf-8",
+    )
+
+    content, resolved = check_and_rotate_stale_reports(tmp_path)
+    # Stale reports should be rotated out
+    assert content == ""
+    assert not audit_file.exists()
+    assert not fix_file.exists()
+    archive_dir = tmp_path / "diagnostics" / "reports" / "archive"
+    assert archive_dir.exists()
+    assert len(list(archive_dir.glob("*_AUDIT_REPORT.md"))) == 1
+    assert len(list(archive_dir.glob("*_AUDIT_FIX_REPORT.md"))) == 1
+
+
+def test_check_and_rotate_stale_reports_backlog_resumption(tmp_path: Path):
+    """When AUDIT_FIX_REPORT has partial fixes, resolved titles are returned to filter queue."""
+    from orchestrator.pipeline.audit_fix_pipeline import check_and_rotate_stale_reports
+
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    audit_file = docs_dir / "AUDIT_REPORT.md"
+    audit_file.write_text(
+        "### 1.1 [HIGH] First Bug\nFix 1.\n### 1.2 [HIGH] Second Bug\nFix 2.",
+        encoding="utf-8",
+    )
+
+    fix_file = docs_dir / "AUDIT_FIX_REPORT.md"
+    fix_file.write_text(
+        "# Report\n- **Final Outcome**: `MAX_ITERATIONS_REACHED`\n\n"
+        "## Remediated Audit Findings\n- [x] [HIGH] First Bug\n\n"
+        "## Remaining Audit Backlog\n- [ ] [HIGH] Second Bug\n",
+        encoding="utf-8",
+    )
+
+    content, resolved = check_and_rotate_stale_reports(tmp_path)
+    assert "First Bug" in content
+    assert any("first bug" in r for r in resolved)
+    assert not any("second bug" in r for r in resolved)
+    assert audit_file.exists()

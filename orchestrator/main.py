@@ -129,6 +129,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pre-execution token & cost projection without invoking LLMs.",
     )
+    parser.add_argument(
+        "--max-iterations",
+        type=str,
+        default=None,
+        help="Maximum loop iterations: integer (e.g. 8) or 'auto' to scale dynamically with the audit backlog.",
+    )
     return parser.parse_args()
 
 
@@ -357,6 +363,12 @@ def main() -> None:
         config.verbosity = "verbose"
     elif args.quiet:
         config.verbosity = "quiet"
+    if args.max_iterations is not None:
+        clean_it = args.max_iterations.strip().lower()
+        if clean_it == "auto":
+            config.max_iterations = "auto"
+        elif clean_it.isdigit():
+            config.max_iterations = int(clean_it)
 
     from orchestrator.config import ORCHESTRATOR_ROOT
 

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 class ProjectAdapter(ABC):
@@ -39,10 +39,9 @@ class ProjectAdapter(ABC):
         """Return True if tests or test configurations exist in the workspace."""
         pass
 
-    @abstractmethod
-    def get_test_command(self, workspace: Path) -> Optional[str]:
-        """Return the shell command to execute the test suite, or None if no tests exist."""
-        pass
+    def get_test_command(self, workspace: Path) -> str:
+        """Return the shell command to execute the test suite."""
+        return "pytest -v"
 
     @abstractmethod
     def parse_test_failures(self, stdout: str, stderr: str) -> str:

@@ -172,6 +172,18 @@ class BasePipeline(ABC):
                 )
                 return
 
+            # Record initial token baseline for this specific conversation run
+            initial_tok = 0
+            llm_baseline = getattr(conv, "agent", None) and getattr(
+                conv.agent, "llm", None
+            )
+            if llm_baseline and hasattr(llm_baseline, "metrics"):
+                tu_base = getattr(llm_baseline.metrics, "accumulated_token_usage", None)
+                if tu_base:
+                    pt_b = getattr(tu_base, "prompt_tokens", 0) or 0
+                    ct_b = getattr(tu_base, "completion_tokens", 0) or 0
+                    initial_tok = int(pt_b + ct_b)
+
             stop_monitor = threading.Event()
 
             def monitor():
@@ -203,10 +215,10 @@ class BasePipeline(ABC):
                             if isinstance(pt, (int, float)) and isinstance(
                                 ct, (int, float)
                             ):
-                                total_tok = int(pt + ct)
-                                if token_limit > 0 and total_tok >= token_limit:
+                                delta_tok = int(pt + ct) - initial_tok
+                                if token_limit > 0 and delta_tok >= token_limit:
                                     ConsoleOutput.warning(
-                                        f"Agent {role_name} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
+                                        f"Agent {role_name} exceeded hard token cap for this turn ({delta_tok:,} >= {token_limit:,}). Halting execution."
                                     )
                                     if hasattr(conv, "interrupt"):
                                         conv.interrupt()
@@ -301,13 +313,6 @@ class BasePipeline(ABC):
     def _execute_tests(self, timeout_seconds: int = 60) -> WorkspaceTerminalObservation:
         """Execute project test suite using detected language adapter."""
         test_cmd = self.adapter.get_test_command(self.workspace_path)
-        if not test_cmd:
-            if (self.workspace_path / "pyproject.toml").exists():
-                test_cmd = "pytest -v"
-            elif (self.workspace_path / "tests").exists():
-                test_cmd = "pytest tests/ -v"
-            else:
-                test_cmd = "pytest -v"
 
         return execute_terminal_action(
             WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),

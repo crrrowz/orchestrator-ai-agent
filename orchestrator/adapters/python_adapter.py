@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from orchestrator.adapters.base import ProjectAdapter
 from orchestrator.guards.preflight import PreFlightGuard
@@ -115,15 +115,6 @@ class PythonAdapter(ProjectAdapter):
             or any(workspace.glob("*_test.py"))
             or (workspace / "pyproject.toml").exists()
         )
-
-    def get_test_command(self, workspace: Path) -> Optional[str]:
-        """Return the optimal command to execute Python pytest suite."""
-        if not self.has_test_suite(workspace):
-            return None
-
-        if shutil.which("uv") and (workspace / "uv.lock").exists():
-            return "uv run pytest -v"
-        return "python -m pytest -v"
 
     def parse_test_failures(self, stdout: str, stderr: str) -> str:
         """Parse Pytest failure outputs into a minimal compact prompt snippet."""
