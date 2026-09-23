@@ -1,5 +1,5 @@
 {
-  "$schema": "./orchestrator/config/config_schema.json",
+  "$schema": "./config_schema.json",
   "version": "1.0.0",
   "execution": {
     "max_iterations": 4,
@@ -16,7 +16,6 @@
   "agents": {
     "architect": {
       "role": "architect",
-      "model": "openrouter/z-ai/glm-5.2:free",
       "temperature": 0.3,
       "skills": [
         "architectural-decomposition",
@@ -26,7 +25,6 @@
     },
     "developer": {
       "role": "developer",
-      "model": "openrouter/z-ai/glm-5.2:free",
       "temperature": 0.2,
       "skills": [
         "clean-python-architecture",
@@ -37,7 +35,6 @@
     },
     "tester": {
       "role": "tester",
-      "model": "openrouter/z-ai/glm-5.2:free",
       "temperature": 0.0,
       "skills": [
         "pytest-rigorous-testing"
@@ -45,7 +42,6 @@
     },
     "reviewer": {
       "role": "reviewer",
-      "model": "openrouter/z-ai/glm-5.2:free",
       "temperature": 0.1,
       "skills": [
         "code-review-standards",

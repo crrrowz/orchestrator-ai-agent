@@ -1,5 +1,6 @@
 """LLM instance factory with OpenRouter failover and provider routing."""
 
+import os
 from typing import TYPE_CHECKING
 from pydantic import SecretStr
 
@@ -27,6 +28,18 @@ def create_llm_for_role(
             api_key_val = config.gemini_api_key
         elif model.startswith("openrouter/"):
             api_key_val = config.openrouter_api_key
+        elif model.startswith("groq/"):
+            api_key_val = getattr(config, "groq_api_key", None) or os.environ.get(
+                "GROQ_API_KEY"
+            )
+
+    if api_key_val:
+        if model.startswith("gemini/") or model.startswith("google/"):
+            os.environ["GEMINI_API_KEY"] = api_key_val
+        elif model.startswith("groq/"):
+            os.environ["GROQ_API_KEY"] = api_key_val
+        elif model.startswith("openrouter/"):
+            os.environ["OPENROUTER_API_KEY"] = api_key_val
 
     secret = SecretStr(api_key_val) if api_key_val else None
 

@@ -18,7 +18,7 @@ class AgentRoleConfig(BaseModel):
     """Configuration for a specific agent role."""
 
     role: str
-    model: str
+    model: Optional[str] = None
     temperature: float = 0.2
     skills: List[str] = Field(default_factory=list)
     api_key: Optional[str] = None
@@ -121,16 +121,27 @@ class OrchestratorConfig(BaseModel):
     openrouter_api_key: Optional[str] = Field(
         default_factory=lambda: os.environ.get("OPENROUTER_API_KEY")
     )
+    groq_api_key: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("GROQ_API_KEY")
+    )
+    provider: str = Field(
+        default_factory=lambda: (
+            os.environ.get("PROVIDER")
+            or os.environ.get("DEFAULT_PROVIDER")
+            or "openrouter"
+        )
+    )
 
     # Role configs
     developer: AgentRoleConfig = Field(
         default_factory=lambda: AgentRoleConfig(
             role="developer",
-            model=os.environ.get(
-                "DEVELOPER_MODEL",
+            model=os.environ.get("DEVELOPER_MODEL")
+            or os.environ.get("MODEL")
+            or (
                 "openrouter/qwen/qwen3.8-27b:free"
                 if os.environ.get("OPENROUTER_API_KEY")
-                else "anthropic/claude-sonnet-4-5-20250929",
+                else "anthropic/claude-sonnet-4-5-20250929"
             ),
             temperature=0.2,
             skills=[
@@ -144,11 +155,12 @@ class OrchestratorConfig(BaseModel):
     tester: AgentRoleConfig = Field(
         default_factory=lambda: AgentRoleConfig(
             role="tester",
-            model=os.environ.get(
-                "TESTER_MODEL",
+            model=os.environ.get("TESTER_MODEL")
+            or os.environ.get("MODEL")
+            or (
                 "openrouter/qwen/qwen3.8-27b:free"
                 if os.environ.get("OPENROUTER_API_KEY")
-                else "openai/gpt-4o-mini",
+                else "openai/gpt-4o-mini"
             ),
             temperature=0.0,
             skills=["pytest-rigorous-testing"],
@@ -157,11 +169,12 @@ class OrchestratorConfig(BaseModel):
     reviewer: AgentRoleConfig = Field(
         default_factory=lambda: AgentRoleConfig(
             role="reviewer",
-            model=os.environ.get(
-                "REVIEWER_MODEL",
+            model=os.environ.get("REVIEWER_MODEL")
+            or os.environ.get("MODEL")
+            or (
                 "openrouter/google/gemini-2.0-flash-exp:free"
                 if os.environ.get("OPENROUTER_API_KEY")
-                else "openai/gpt-4o",
+                else "openai/gpt-4o"
             ),
             temperature=0.1,
             skills=["code-review-standards", "security-audit-hardening"],
@@ -170,11 +183,12 @@ class OrchestratorConfig(BaseModel):
     architect: AgentRoleConfig = Field(
         default_factory=lambda: AgentRoleConfig(
             role="architect",
-            model=os.environ.get(
-                "ARCHITECT_MODEL",
+            model=os.environ.get("ARCHITECT_MODEL")
+            or os.environ.get("MODEL")
+            or (
                 "openrouter/qwen/qwen3.8-27b:free"
                 if os.environ.get("OPENROUTER_API_KEY")
-                else "anthropic/claude-sonnet-4-5-20250929",
+                else "anthropic/claude-sonnet-4-5-20250929"
             ),
             temperature=0.3,
             skills=[
@@ -187,11 +201,12 @@ class OrchestratorConfig(BaseModel):
     documentation: AgentRoleConfig = Field(
         default_factory=lambda: AgentRoleConfig(
             role="documentation",
-            model=os.environ.get(
-                "DOCUMENTATION_MODEL",
+            model=os.environ.get("DOCUMENTATION_MODEL")
+            or os.environ.get("MODEL")
+            or (
                 "openrouter/qwen/qwen3.8-27b:free"
                 if os.environ.get("OPENROUTER_API_KEY")
-                else "openai/gpt-4o-mini",
+                else "openai/gpt-4o-mini"
             ),
             temperature=0.2,
             skills=[

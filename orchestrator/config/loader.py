@@ -49,12 +49,22 @@ class ConfigLoader:
 
         # Check current / start directory
         if start_dir:
+            p_pkg = (
+                start_dir / "orchestrator" / "config" / "orchestrator.config.json"
+            ).resolve()
+            if p_pkg.is_file():
+                return p_pkg
             p = (start_dir / "orchestrator.config.json").resolve()
             if p.is_file():
                 return p
 
-        # Check ORCHESTRATOR_ROOT
+        # Check organized package config directory first
         root = cls.get_orchestrator_root()
+        pkg_config = root / "orchestrator" / "config" / "orchestrator.config.json"
+        if pkg_config.is_file():
+            return pkg_config
+
+        # Check ORCHESTRATOR_ROOT fallback
         root_config = root / "orchestrator.config.json"
         if root_config.is_file():
             return root_config
@@ -267,9 +277,31 @@ class ConfigLoader:
             if v is not None:
                 merged_kwargs[k] = v
 
-        # Allow concise model overrides from .env (e.g. MODEL=... or DEVELOPER_MODEL=...) for default workspace runs
+        # Allow concise provider & model overrides from .env for default workspace runs
         if config_path is None:
-            env_model = os.environ.get("MODEL") or os.environ.get("DEFAULT_MODEL")
+            active_provider = (
+                (os.environ.get("PROVIDER") or os.environ.get("DEFAULT_PROVIDER") or "")
+                .strip()
+                .lower()
+            )
+
+            provider_defaults = {
+                "gemini": "gemini/gemini-2.0-flash",
+                "google": "gemini/gemini-2.0-flash",
+                "groq": "groq/llama-3.3-70b-versatile",
+                "openai": "openai/gpt-4o-mini",
+                "anthropic": "anthropic/claude-3-5-sonnet-20241022",
+                "openrouter": None,
+            }
+
+            global_model = os.environ.get("MODEL") or os.environ.get("DEFAULT_MODEL")
+            if (
+                not global_model
+                and active_provider in provider_defaults
+                and provider_defaults[active_provider]
+            ):
+                global_model = provider_defaults[active_provider]
+
             for role_name in (
                 "developer",
                 "tester",
@@ -277,15 +309,33 @@ class ConfigLoader:
                 "architect",
                 "documentation",
             ):
-                role_env_model = (
-                    os.environ.get(f"{role_name.upper()}_MODEL") or env_model
-                )
-                if role_env_model and role_name in merged_kwargs:
+                # 1. Role-specific override takes top priority (e.g. DEVELOPER_MODEL)
+                role_env_model = os.environ.get(f"{role_name.upper()}_MODEL")
+                # 2. Global model override applies if role-specific is not set
+                target_model = role_env_model or global_model
+
+                if target_model and role_name in merged_kwargs:
                     existing_role_cfg = merged_kwargs[role_name]
                     if hasattr(existing_role_cfg, "model"):
-                        existing_role_cfg.model = role_env_model
+                        existing_role_cfg.model = target_model
                     elif isinstance(existing_role_cfg, dict):
-                        existing_role_cfg["model"] = role_env_model
+                        existing_role_cfg["model"] = target_model
+
+        # Ensure all roles have a valid model even if omitted from JSON
+        fallback_model = os.environ.get("MODEL") or "openrouter/z-ai/glm-5.2:free"
+        for role_name in (
+            "developer",
+            "tester",
+            "reviewer",
+            "architect",
+            "documentation",
+        ):
+            if role_name in merged_kwargs:
+                r_cfg = merged_kwargs[role_name]
+                if hasattr(r_cfg, "model") and not r_cfg.model:
+                    r_cfg.model = fallback_model
+                elif isinstance(r_cfg, dict) and not r_cfg.get("model"):
+                    r_cfg["model"] = fallback_model
 
         config = OrchestratorConfig(**merged_kwargs)
         if resolved_file:
