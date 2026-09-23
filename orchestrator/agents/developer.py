@@ -33,7 +33,7 @@ def create_developer_agent(
     llm = create_llm_for_role(config, config.developer)
     context = skill_manager.build_agent_context(config.developer.skills)
 
-    file_tool = create_workspace_file_tool(workspace)
+    file_tool = create_workspace_file_tool(workspace, blocked_write_prefixes=["tests/"])
     terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(

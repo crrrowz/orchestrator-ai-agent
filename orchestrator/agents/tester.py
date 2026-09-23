@@ -33,7 +33,7 @@ def create_tester_agent(
     llm = create_llm_for_role(config, config.tester)
     context = skill_manager.build_agent_context(config.tester.skills)
 
-    file_tool = create_workspace_file_tool(workspace)
+    file_tool = create_workspace_file_tool(workspace, allowed_write_prefixes=["tests/"])
     terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(

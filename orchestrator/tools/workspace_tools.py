@@ -34,7 +34,10 @@ class WorkspaceFileObservation(Observation):
 def execute_file_action(
     action: WorkspaceFileAction,
     conversation=None,
-    base_dir: Optional[Path] = None
+    base_dir: Optional[Path] = None,
+    read_only: bool = False,
+    allowed_write_prefixes: Optional[Sequence[str]] = None,
+    blocked_write_prefixes: Optional[Sequence[str]] = None,
 ) -> WorkspaceFileObservation:
     """Safely execute file operation within workspace."""
     workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve()
@@ -57,6 +60,38 @@ def execute_file_action(
             success=False,
             message=err_msg
         )
+
+    # RBAC Permission Enforcement
+    if action.operation in ("write", "edit", "delete"):
+        if read_only:
+            err_msg = "Permission denied: Agent role has strictly read-only access to workspace files."
+            return WorkspaceFileObservation(
+                content=[TextContent(text=err_msg)],
+                is_error=True,
+                success=False,
+                message=err_msg
+            )
+
+        rel_posix = target_path.relative_to(workspace_root).as_posix()
+        if allowed_write_prefixes:
+            if not any(rel_posix.startswith(p.lstrip("/")) or rel_posix == p for p in allowed_write_prefixes):
+                err_msg = f"Permission denied: Writing to '{action.path}' is outside permitted role scope {list(allowed_write_prefixes)}."
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg
+                )
+
+        if blocked_write_prefixes:
+            if any(rel_posix.startswith(p.lstrip("/")) or rel_posix == p for p in blocked_write_prefixes):
+                err_msg = f"Permission denied: Modifying '{action.path}' is restricted for this agent role."
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg
+                )
 
     try:
         if action.operation == "read":
@@ -137,11 +172,14 @@ def execute_file_action(
                     success=False,
                     message=err_msg
                 )
-            file_list = [
-                str(p.relative_to(workspace_root))
-                for p in search_dir.rglob("*")
-                if p.is_file() and not any(part.startswith(".") for part in p.parts)
-            ]
+            ignored_dirs = {".git", ".venv", "__pycache__", ".pytest_cache", "node_modules", "dist", "build"}
+            file_list = []
+            for p in search_dir.rglob("*"):
+                if p.is_file() and not any(part in ignored_dirs or part.startswith(".") for part in p.parts):
+                    file_list.append(str(p.relative_to(workspace_root)))
+                    if len(file_list) >= 100:
+                        file_list.append("... [Additional files omitted for brevity]")
+                        break
             files_str = "\n".join(file_list) if file_list else "(No files found in directory)"
             msg = f"Found {len(file_list)} files:\n{files_str}"
             return WorkspaceFileObservation(
@@ -149,7 +187,7 @@ def execute_file_action(
                 is_error=False,
                 success=True,
                 message=msg,
-                files=file_list
+                files=[f for f in file_list if not f.startswith("...")]
             )
 
         elif action.operation == "delete":
@@ -193,15 +231,31 @@ def execute_file_action(
 
 
 class WorkspaceFileExecutor(ToolExecutor[WorkspaceFileAction, WorkspaceFileObservation]):
-    def __init__(self, workspace_path: Optional[Path] = None):
+    def __init__(
+        self,
+        workspace_path: Optional[Path] = None,
+        read_only: bool = False,
+        allowed_write_prefixes: Optional[Sequence[str]] = None,
+        blocked_write_prefixes: Optional[Sequence[str]] = None,
+    ):
         self.workspace_path = workspace_path
+        self.read_only = read_only
+        self.allowed_write_prefixes = allowed_write_prefixes
+        self.blocked_write_prefixes = blocked_write_prefixes
 
     def __call__(
         self,
         action: WorkspaceFileAction,
         conversation: Any = None,
     ) -> WorkspaceFileObservation:
-        return execute_file_action(action, conversation, self.workspace_path)
+        return execute_file_action(
+            action,
+            conversation,
+            self.workspace_path,
+            read_only=self.read_only,
+            allowed_write_prefixes=self.allowed_write_prefixes,
+            blocked_write_prefixes=self.blocked_write_prefixes,
+        )
 
 
 class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObservation]):
@@ -212,6 +266,9 @@ class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObserva
         cls,
         conv_state: Optional[Any] = None,
         workspace_path: Optional[str] = None,
+        read_only: bool = False,
+        allowed_write_prefixes: Optional[Sequence[str]] = None,
+        blocked_write_prefixes: Optional[Sequence[str]] = None,
         **params,
     ) -> Sequence["WorkspaceFileTool"]:
         target_path: Optional[Path] = None
@@ -229,7 +286,12 @@ class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObserva
                 description="Read, write, edit, list, and delete files inside the project workspace.",
                 action_type=WorkspaceFileAction,
                 observation_type=WorkspaceFileObservation,
-                executor=WorkspaceFileExecutor(target_path),
+                executor=WorkspaceFileExecutor(
+                    target_path,
+                    read_only=read_only,
+                    allowed_write_prefixes=allowed_write_prefixes,
+                    blocked_write_prefixes=blocked_write_prefixes,
+                ),
             )
         ]
 
@@ -261,7 +323,15 @@ def execute_terminal_action(
     workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve()
     workspace_root.mkdir(parents=True, exist_ok=True)
 
-    env = os.environ.copy()
+    # Sanitize env to prevent leaking sensitive API keys / secrets to commands or child processes
+    sensitive_keywords = {"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CREDENTIAL"}
+    env = {}
+    for k, v in os.environ.items():
+        k_upper = k.upper()
+        if any(keyword in k_upper for keyword in sensitive_keywords):
+            continue
+        env[k] = v
+
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
 
@@ -360,10 +430,21 @@ register_tool("WorkspaceTerminalTool", WorkspaceTerminalTool)
 
 
 # Factory functions to build tool specifications for Agents
-def create_workspace_file_tool(workspace_path: Optional[Path] = None) -> Tool:
-    params = {}
+def create_workspace_file_tool(
+    workspace_path: Optional[Path] = None,
+    read_only: bool = False,
+    allowed_write_prefixes: Optional[Sequence[str]] = None,
+    blocked_write_prefixes: Optional[Sequence[str]] = None,
+) -> Tool:
+    params: dict[str, Any] = {
+        "read_only": read_only,
+    }
     if workspace_path:
         params["workspace_path"] = str(Path(workspace_path).resolve())
+    if allowed_write_prefixes:
+        params["allowed_write_prefixes"] = list(allowed_write_prefixes)
+    if blocked_write_prefixes:
+        params["blocked_write_prefixes"] = list(blocked_write_prefixes)
     return Tool(name="WorkspaceFileTool", params=params)
 
 

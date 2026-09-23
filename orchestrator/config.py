@@ -32,6 +32,9 @@ class OrchestratorConfig(BaseModel):
     max_budget_usd: float = Field(default=float(os.environ.get("MAX_BUDGET_USD", "0.50")))
     max_tokens_per_call: int = Field(default=int(os.environ.get("MAX_TOKENS_PER_CALL", "4096")))
     circuit_breaker_threshold: int = Field(default=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "2")))
+    approval_gates: List[str] = Field(default_factory=lambda: [g.strip() for g in os.environ.get("APPROVAL_GATES", "").split(",") if g.strip()])
+    interactive: bool = Field(default_factory=lambda: os.environ.get("INTERACTIVE", "false").lower() == "true")
+    verbosity: str = Field(default_factory=lambda: os.environ.get("VERBOSITY", "normal"))
     
     # Provider keys
     anthropic_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY"))
@@ -96,12 +99,15 @@ class SkillManager:
                 resolved.append(skill)
         return resolved
 
-    def build_agent_context(self, skill_names: list[str]) -> AgentContext:
-        """Construct an AgentContext loaded with the specified skills."""
+    def build_agent_context(self, skill_names: list[str], compact: bool = True) -> AgentContext:
+        """Construct an AgentContext loaded with the specified skills (optionally compressed to save tokens)."""
         role_skills = self.get_skills_for_role(skill_names)
+        if compact:
+            from orchestrator.utils.skill_compressor import CompactSkillInjector
+            role_skills = [CompactSkillInjector.create_compact_skill(s) for s in role_skills]
         return AgentContext(
             skills=role_skills,
-            load_project_skills=True,
+            load_project_skills=False,
             load_user_skills=False,
             load_memory=True
         )

@@ -75,3 +75,37 @@ class GitOps:
         """Get recent commit logs."""
         proc = self._run_git("log", f"-n{max_count}", "--oneline")
         return proc.stdout.strip()
+
+    def create_task_branch(self, task_name: str) -> Optional[str]:
+        """Create and switch to an isolated task branch slug."""
+        if not self.is_git_repo():
+            self.init_repo()
+
+        import re
+        import time
+
+        clean_slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", task_name.strip().lower()).strip("-")[:25]
+        if not clean_slug:
+            clean_slug = "task"
+        timestamp = int(time.time())
+        branch_name = f"agent/{clean_slug}-{timestamp}"
+
+        proc = self._run_git("checkout", "-b", branch_name)
+        if proc.returncode == 0:
+            return branch_name
+
+        proc_switch = self._run_git("switch", "-c", branch_name)
+        if proc_switch.returncode == 0:
+            return branch_name
+
+        return None
+
+    def get_current_branch(self) -> Optional[str]:
+        """Return the active git branch name."""
+        proc = self._run_git("branch", "--show-current")
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout.strip()
+        proc_head = self._run_git("rev-parse", "--abbrev-ref", "HEAD")
+        if proc_head.returncode == 0 and proc_head.stdout.strip():
+            return proc_head.stdout.strip()
+        return None

@@ -37,7 +37,7 @@ def create_architect_agent(
     workspace = workspace_path or config.workspace_path
     llm = create_llm_for_role(config, config.architect)
     context = skill_manager.build_agent_context(config.architect.skills)
-    file_tool = create_workspace_file_tool(workspace)
+    file_tool = create_workspace_file_tool(workspace, allowed_write_prefixes=["PLAN.md"])
     terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(

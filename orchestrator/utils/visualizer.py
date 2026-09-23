@@ -111,10 +111,16 @@ class SessionLogStore:
 class OrchestratorLiveVisualizer(ConversationVisualizerBase):
     """Quiet, informative live visualizer showing agent, model, execution time, and tokens in real time."""
 
-    def __init__(self, log_store: SessionLogStore, console: Optional[Console] = None):
+    def __init__(
+        self,
+        log_store: SessionLogStore,
+        console: Optional[Console] = None,
+        verbosity: str = "normal",
+    ):
         super().__init__()
         self.store = log_store
         self.console = console or Console()
+        self.verbosity = (verbosity or "normal").lower()
         self._last_thought: Optional[str] = None
 
     def on_event(self, event: Event) -> None:
@@ -180,11 +186,14 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 f"[yellow]⏱ {elapsed}s[/yellow]"
                 f"{tokens_str}"
             )
-            if self._last_thought:
-                thought_preview = self._last_thought.replace("\n", " ").strip()
-                if len(thought_preview) > 110:
-                    thought_preview = thought_preview[:107] + "..."
-                self.console.print(f"       [dim italic]💭 {thought_preview}[/dim italic]")
+            if self._last_thought and self.verbosity != "quiet":
+                if self.verbosity in ("verbose", "debug"):
+                    self.console.print(f"       [dim italic]💭 {self._last_thought}[/dim italic]")
+                else:
+                    thought_preview = self._last_thought.replace("\n", " ").strip()
+                    if len(thought_preview) > 110:
+                        thought_preview = thought_preview[:107] + "..."
+                    self.console.print(f"       [dim italic]💭 {thought_preview}[/dim italic]")
 
         # 2. Capture Tool Observations
         elif event_name == "ObservationEvent":
@@ -206,11 +215,16 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     last_step.observation = str(text_res).strip()
                     last_step.is_error = is_err
 
-            obs_preview = str(text_res).replace("\n", " ").strip()
-            if len(obs_preview) > 95:
-                obs_preview = obs_preview[:92] + "..."
-            icon = "[bold red]✗ ERR[/bold red]" if is_err else "[bold green]✓ OK[/bold green]"
-            self.console.print(f"       {icon} [dim]{obs_preview}[/dim]")
+            if self.verbosity != "quiet" or is_err:
+                if self.verbosity == "debug":
+                    icon = "[bold red]✗ ERR[/bold red]" if is_err else "[bold green]✓ OK[/bold green]"
+                    self.console.print(f"       {icon} [dim]{text_res}[/dim]")
+                else:
+                    obs_preview = str(text_res).replace("\n", " ").strip()
+                    if len(obs_preview) > 95:
+                        obs_preview = obs_preview[:92] + "..."
+                    icon = "[bold red]✗ ERR[/bold red]" if is_err else "[bold green]✓ OK[/bold green]"
+                    self.console.print(f"       {icon} [dim]{obs_preview}[/dim]")
 
         # 3. Capture General Messages & Errors
         elif event_name in ("ConversationErrorEvent", "AgentErrorEvent"):

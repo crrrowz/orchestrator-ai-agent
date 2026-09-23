@@ -45,7 +45,7 @@ def create_reviewer_agent(
 
     llm = create_llm_for_role(config, config.reviewer)
     context = skill_manager.build_agent_context(config.reviewer.skills)
-    file_tool = create_workspace_file_tool(workspace)
+    file_tool = create_workspace_file_tool(workspace, read_only=True)
 
     return Agent(
         llm=llm,

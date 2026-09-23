@@ -68,6 +68,32 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Open the interactive collapsible log explorer (arrow keys / dropdowns) for the latest session.",
     )
+    parser.add_argument(
+        "--interactive", "-i",
+        action="store_true",
+        help="Enable Human-in-the-Loop (HITL) interactive guidance and approval checkpoints.",
+    )
+    parser.add_argument(
+        "--approval-gates",
+        type=str,
+        default=None,
+        help="Comma-separated approval checkpoints (e.g. 'after_architect,after_developer,before_commit').",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Verbose stream showing full agent thoughts and detailed action parameters.",
+    )
+    parser.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help="Quiet mode showing only milestone transitions and errors.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume pipeline execution from previous checkpoint in .orchestrator_state.json.",
+    )
     return parser.parse_args()
 
 
@@ -95,6 +121,9 @@ def handle_check_config(config: OrchestratorConfig) -> None:
     print(f"  Max Budget (USD):      ${config.max_budget_usd:.2f}")
     print(f"  Circuit Breaker:       Trigger on {config.circuit_breaker_threshold} identical consecutive failures")
     print(f"  Auto Git Commit:       {config.auto_commit}")
+    print(f"  Interactive (HITL):    {config.interactive}")
+    print(f"  Approval Gates:        {config.approval_gates or 'None'}")
+    print(f"  Verbosity Level:       {config.verbosity}")
     print("=" * 50)
 
 
@@ -160,6 +189,15 @@ def handle_view_logs() -> None:
 def main() -> None:
     args = parse_args()
     config = OrchestratorConfig()
+    if args.interactive:
+        config.interactive = True
+    if args.approval_gates:
+        config.approval_gates = [g.strip() for g in args.approval_gates.split(",") if g.strip()]
+    if args.verbose:
+        config.verbosity = "verbose"
+    elif args.quiet:
+        config.verbosity = "quiet"
+
     skill_manager = SkillManager(Path.cwd())
 
     if args.list_skills:
@@ -178,8 +216,25 @@ def main() -> None:
         handle_view_logs()
         sys.exit(0)
 
-    # If no task is provided, run the friendly interactive wizard
-    if not args.task:
+    # Check for --resume or run wizard / command line arguments
+    if args.resume:
+        from orchestrator.pipeline.checkpoint import PipelineCheckpointManager
+        target_ws = args.workspace or config.workspace_path
+        cp = PipelineCheckpointManager.load(target_ws)
+        if cp:
+            ConsoleOutput.banner("Resuming Pipeline Execution", f"Phase: {cp.current_phase} | Run: {cp.run_id}")
+            task = cp.task
+            mode = cp.mode
+            workspace = target_ws
+        else:
+            ConsoleOutput.warning(f"No checkpoint file found at {target_ws}. Starting fresh.")
+            if not args.task:
+                task, mode, workspace = interactive_wizard(config, skill_manager)
+            else:
+                task = args.task
+                mode = args.mode
+                workspace = target_ws
+    elif not args.task:
         task, mode, workspace = interactive_wizard(config, skill_manager)
     else:
         task = args.task
