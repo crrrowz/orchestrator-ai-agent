@@ -26,7 +26,11 @@
   - Added `.agents/skills/graft-architecture-intelligence/SKILL.md` (zero-token `graft map`, `graft skeleton`, `graft callers`, `graft blast`).
   - Equipped Architect agent with `WorkspaceTerminalTool` and updated system prompt for Graft-first orientation.
   - Integrated `graft-architecture-intelligence` into Architect and Developer skill profiles.
-- [DONE] Unit Test Verification: 12/12 unit tests passing (`uv run pytest`) across git ops, skills discovery, tool executors, and visualizer.
+- [DONE] Windows Subprocess UTF-8 & Observation Resilience:
+  - Enforced `encoding="utf-8", errors="replace"` on `subprocess.run` across `WorkspaceTerminalTool` and `GitOps`, resolving Windows `UnicodeDecodeError` (`charmap` codec decoding byte `0x8f`/`0x9d` from UTF-8 terminal outputs like `INDEX.md`).
+  - Added robust default fallback strings (`stdout: str = ""`, `stderr: str = ""`) in `WorkspaceTerminalObservation` to prevent Pydantic string validation errors when subprocess threads fail.
+  - Hardened workspace path sandboxing using `Path.relative_to(workspace_root)` for both absolute and relative paths.
+- [DONE] Unit Test Verification: 14/14 unit tests passing (`uv run pytest`) across git ops, skills discovery, tool executors, visualizer, UTF-8 execution, and observation defaults.
 
 ## System Architecture
 - Stack: Python 3.12+, OpenHands SDK v1.49.4, LiteLLM, Pydantic v2, Rich, msvcrt (Windows keyboard nav), Graft CLI.
