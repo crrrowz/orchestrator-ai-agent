@@ -12,7 +12,6 @@ from orchestrator.config import (
     SkillManager,
 )
 from orchestrator.agents import (
-    create_auditor_agent,
     create_developer_agent,
     create_tester_agent,
 )
@@ -348,67 +347,18 @@ class AuditFixPipeline:
             if not tests_clean:
                 all_issues.append(test_feedback)
 
-            # 3. On iteration 1: If static and tests are clean but an existing audit report exists, include it.
-            # If nothing was found and no audit report, run Auditor agent once to find subtle logic / architectural flaws.
-            auditor_findings = ""
+            # 3. On iteration 1: If static and tests are clean, check for existing audit report or explicit user directive
             if iteration == 1 and not all_issues:
                 if existing_report_content:
                     auditor_findings = f"[Existing Audit Report Recommendations]\n{existing_report_content[:3000]}"
                     all_issues.append(auditor_findings)
-                else:
-                    auditor_agent = create_auditor_agent(
-                        self.config, self.skill_manager, self.workspace_path
+                elif task_description and task_description.strip() not in (
+                    "Autonomous Codebase Audit & Fix Loop",
+                    "",
+                ):
+                    all_issues.append(
+                        f"[User Optimization Directive]\n{task_description.strip()}"
                     )
-                    ConsoleOutput.agent_step(
-                        "Auditor",
-                        "Running deep semantic inspection...",
-                        model=auditor_agent.llm.model,
-                    )
-                    t_audit = time.perf_counter()
-                    aud_conv = Conversation(
-                        agent=auditor_agent,
-                        workspace=str(self.workspace_path),
-                        visualizer=visualizer,
-                    )
-                    aud_conv.human_channel = self.human_channel
-                    aud_prompt = (
-                        "Perform an immediate semantic inspection of the codebase in the workspace. "
-                        "Identify any logic bugs, unhandled exceptions, missing type annotations, or performance bottlenecks. "
-                        "List specific, actionable defects that need fixing."
-                    )
-                    aud_conv.send_message(
-                        self.human_channel.inject_into_prompt(aud_prompt)
-                    )
-                    self._run_conv(aud_conv, "Auditor")
-                    dur_audit = time.perf_counter() - t_audit
-                    u_aud = get_llm_usage(auditor_agent.llm)
-                    telemetry.record_step(
-                        "auditor",
-                        "semantic_scan",
-                        iteration,
-                        dur_audit,
-                        True,
-                        prompt_tokens=u_aud["prompt_tokens"],
-                        completion_tokens=u_aud["completion_tokens"],
-                        total_tokens=u_aud["total_tokens"],
-                        estimated_cost_usd=u_aud["estimated_cost_usd"],
-                    )
-                    # Check if auditor produced AUDIT_REPORT.md
-                    if audit_file.exists():
-                        try:
-                            fresh_report = audit_file.read_text(
-                                encoding="utf-8", errors="replace"
-                            ).strip()
-                            if (
-                                "## Key Recommendations" in fresh_report
-                                or "###" in fresh_report
-                            ):
-                                auditor_findings = fresh_report[:3000]
-                                all_issues.append(
-                                    f"[Auditor Findings]\n{auditor_findings}"
-                                )
-                        except Exception:
-                            pass
 
             last_issues = all_issues
 
