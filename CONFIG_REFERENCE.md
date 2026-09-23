@@ -34,7 +34,6 @@ The Multi-Agent Orchestrator adopts a strict **4-Tier Priority Cascade**. Settin
 2. Path provided via `ORCHESTRATOR_CONFIG_PATH` environment variable
 3. Current working directory `./orchestrator.config.json`
 4. Repository root `<ORCHESTRATOR_ROOT>/orchestrator.config.json`
-5. Internal fallback `<ORCHESTRATOR_ROOT>/orchestrator/config/orchestrator.config.json`
 
 ---
 

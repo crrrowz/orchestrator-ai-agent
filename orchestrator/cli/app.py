@@ -5,7 +5,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Force UTF-8 encoding for standard streams on Windows to prevent UnicodeEncodeError
 if sys.platform == "win32":
@@ -49,7 +48,7 @@ from orchestrator.cli.handlers import (  # noqa: E402
     resolve_workspace_dir,
 )
 from orchestrator.cli.wizard import interactive_wizard  # noqa: E402
-from orchestrator.config import ConfigLoader, OrchestratorConfig  # noqa: E402
+from orchestrator.config import ConfigLoader  # noqa: E402
 from orchestrator.core.constants import ORCHESTRATOR_ROOT  # noqa: E402
 from orchestrator.orchestrator import Orchestrator  # noqa: E402
 from orchestrator.rendering.diff_renderer import DiffRenderer  # noqa: E402

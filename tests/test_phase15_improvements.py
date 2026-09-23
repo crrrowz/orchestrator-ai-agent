@@ -7,32 +7,29 @@ import pytest
 from rich.panel import Panel
 
 from orchestrator.agents.base import BaseAgentFactory
-from orchestrator.agents.documentation import DocumentationAgentFactory, create_documentation_agent
-from orchestrator.analysis import ConnectivityChecker, GraftContextProvider, PytestOutputParser
+from orchestrator.agents.documentation import create_documentation_agent
 from orchestrator.core import (
     AgentFactoryProtocol,
-    AgentRoleConfig,
     BudgetExhaustedError,
     CircuitBreakerTrippedError,
     ContextInjectorProtocol,
     DomainProfile,
     HumanRejectedError,
-    LogStoreProtocol,
     OrchestratorConfig,
     OrchestratorException,
     PipelineAbortedError,
-    PipelineProtocol,
     PreflightCheckError,
 )
 from orchestrator.rendering import DiffRenderer, MarkdownReportGenerator
-from orchestrator.skills import CompactSkillInjector, SkillManager, SkillRegistry
-from orchestrator.ui import InteractiveLogExplorer, LogStep, OrchestratorLiveVisualizer, SessionLogStore
+from orchestrator.skills import SkillManager, SkillRegistry
+from orchestrator.ui import LogStep, SessionLogStore
 from orchestrator.vcs import GitOps
 
 
 # ---------------------------------------------------------------------------
 # 1. Core Module, Exceptions, Protocols & Models
 # ---------------------------------------------------------------------------
+
 
 def test_core_exceptions_hierarchy():
     """Custom exceptions must inherit cleanly from OrchestratorException."""
@@ -48,9 +45,11 @@ def test_core_exceptions_hierarchy():
 
 def test_core_protocols_runtime_checkable():
     """Core typing protocols must be runtime checkable."""
+
     class DummyInjector:
         def should_inject(self, role: str, task: str) -> bool:
             return True
+
         def get_context(self, task: str, workspace: Path) -> str:
             return "context"
 
@@ -84,6 +83,7 @@ def test_domain_profile_model():
 # ---------------------------------------------------------------------------
 # 2. BaseAgentFactory & DocumentationAgent
 # ---------------------------------------------------------------------------
+
 
 def test_base_agent_factory_lifecycle(tmp_path: Path):
     """BaseAgentFactory must resolve workspace, LLM, context, and build agent properly."""
@@ -122,6 +122,7 @@ def test_documentation_agent_creation(tmp_path: Path):
 # 3. DiffRenderer & ReportGenerator
 # ---------------------------------------------------------------------------
 
+
 def test_diff_renderer_render_file_change():
     """DiffRenderer must generate rich Panel with unified diff highlighting."""
     old_code = "def hello():\n    return 'old'\n"
@@ -141,7 +142,14 @@ def test_markdown_report_generator():
         duration_seconds=12.5,
         total_tokens=15000,
         total_cost_usd=0.0125,
-        steps=[{"agent_role": "developer", "action_type": "code", "iteration": 1, "duration_seconds": 5.0}],
+        steps=[
+            {
+                "agent_role": "developer",
+                "action_type": "code",
+                "iteration": 1,
+                "duration_seconds": 5.0,
+            }
+        ],
     )
     assert "# 🚀 Orchestrator Pipeline Run Report" in md
     assert "Test Task" in md
@@ -152,6 +160,7 @@ def test_markdown_report_generator():
 # ---------------------------------------------------------------------------
 # 4. Modular VCS, Analysis, and UI packages
 # ---------------------------------------------------------------------------
+
 
 def test_vcs_git_ops_isolated_import(tmp_path: Path):
     """GitOps in orchestrator.vcs must initialize cleanly and report status."""
@@ -175,8 +184,16 @@ def test_skills_registry(tmp_path: Path):
     """SkillRegistry should index skills and support search queries."""
     from openhands.sdk.skills import Skill
 
-    s1 = Skill(name="clean-python-architecture", content="Write clean code", description="Python clean code rules")
-    s2 = Skill(name="docker-devops-containerization", content="Write Dockerfile", description="Docker containerization")
+    s1 = Skill(
+        name="clean-python-architecture",
+        content="Write clean code",
+        description="Python clean code rules",
+    )
+    s2 = Skill(
+        name="docker-devops-containerization",
+        content="Write Dockerfile",
+        description="Docker containerization",
+    )
 
     registry = SkillRegistry([s1, s2])
     assert len(registry.list_all()) == 2

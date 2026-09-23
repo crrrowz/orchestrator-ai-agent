@@ -1,9 +1,9 @@
 """Typing protocols defining clean architectural boundaries without tight coupling."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Optional, Protocol, runtime_checkable
 
-from openhands.sdk import Agent, LLM
+from openhands.sdk import Agent
 
 
 @runtime_checkable
@@ -54,8 +54,6 @@ class LogStoreProtocol(Protocol):
         content: str = "",
         is_error: bool = False,
         observation: str = "",
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    def save_to_file(self) -> Optional[Path]:
-        ...
+    def save_to_file(self) -> Optional[Path]: ...

@@ -3,22 +3,17 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
-from orchestrator.config import AgentRoleConfig, OrchestratorConfig
+from orchestrator.config import OrchestratorConfig
 from orchestrator.context import (
     ContextInjector,
     ContextManager,
     FilePathResolver,
-    GraftInjector,
-    MemoryInjector,
-    PlanInjector,
     PromptBuilder,
 )
 from orchestrator.llm import (
     LLMManager,
     get_pricing_rates,
-    normalize_model_slug,
 )
 from orchestrator.skills import SkillResolver
 
@@ -26,6 +21,7 @@ from orchestrator.skills import SkillResolver
 # ---------------------------------------------------------------------------
 # 1. SkillResolver Tests
 # ---------------------------------------------------------------------------
+
 
 def test_skill_resolver_semantic_matching():
     """SkillResolver must match keyword patterns in task specifications to relevant skills."""
@@ -42,14 +38,18 @@ def test_skill_resolver_semantic_matching():
     ]
 
     # Task requiring containerization & testing
-    task_docker_test = "Build a Dockerfile and docker-compose setup, then run pytest test coverage."
+    task_docker_test = (
+        "Build a Dockerfile and docker-compose setup, then run pytest test coverage."
+    )
     resolved = SkillResolver.resolve(task_docker_test, available)
     assert "docker-devops-containerization" in resolved
     assert "pytest-rigorous-testing" in resolved
     assert "clean-python-architecture" in resolved
 
     # Task requiring security & API
-    task_security_api = "Implement OAuth2 JWT authentication for the FastAPI rest endpoint."
+    task_security_api = (
+        "Implement OAuth2 JWT authentication for the FastAPI rest endpoint."
+    )
     resolved = SkillResolver.resolve(task_security_api, available)
     assert "security-audit-hardening" in resolved
     assert "api-design-contract" in resolved
@@ -64,13 +64,20 @@ def test_skill_resolver_semantic_matching():
 # 2. FilePathResolver Tests
 # ---------------------------------------------------------------------------
 
+
 def test_file_path_resolver_embedded_extraction(tmp_path: Path):
     """FilePathResolver should detect relative and absolute file paths in text and inline their content."""
     spec_file = tmp_path / "auth_spec.md"
-    spec_file.write_text("# Authentication Specification\nMust use JWT bearer tokens.", encoding="utf-8")
+    spec_file.write_text(
+        "# Authentication Specification\nMust use JWT bearer tokens.", encoding="utf-8"
+    )
 
-    task = f"Please implement feature according to {spec_file.name} and ensure compliance."
-    enriched_task, resolved_paths = FilePathResolver.extract_and_resolve(task, workspace=tmp_path)
+    task = (
+        f"Please implement feature according to {spec_file.name} and ensure compliance."
+    )
+    enriched_task, resolved_paths = FilePathResolver.extract_and_resolve(
+        task, workspace=tmp_path
+    )
 
     assert len(resolved_paths) == 1
     assert str(spec_file.resolve()) in resolved_paths[0]
@@ -97,6 +104,7 @@ def test_file_path_resolver_nonexistent_and_truncation(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 3. ContextManager & Injectors Tests
 # ---------------------------------------------------------------------------
+
 
 class CustomTestInjector(ContextInjector):
     def __init__(self, tag: str):
@@ -128,7 +136,9 @@ def test_context_manager_assembly_and_priority(tmp_path: Path):
     pos_10 = prompt.find("[Custom Block: PRIORITY_10]")
     pos_80 = prompt.find("[Custom Block: PRIORITY_80]")
     assert pos_10 != -1 and pos_80 != -1
-    assert pos_10 < pos_80, "Higher priority (lower integer) must precede lower priority blocks"
+    assert pos_10 < pos_80, (
+        "Higher priority (lower integer) must precede lower priority blocks"
+    )
 
 
 def test_context_manager_token_budget_truncation(tmp_path: Path):
@@ -156,7 +166,9 @@ def test_prompt_builder_fluent_api(tmp_path: Path):
     """PromptBuilder should fluently combine directives and sections with ContextManager."""
     pb = PromptBuilder(role="developer")
     pb.add_directive("Adhere strictly to clean-python-architecture.")
-    pb.add_section("Requirements", "1. Unit test coverage > 90%\n2. Full type annotations")
+    pb.add_section(
+        "Requirements", "1. Unit test coverage > 90%\n2. Full type annotations"
+    )
 
     prompt = pb.build(task="Create billing endpoint", workspace=tmp_path)
     assert "Adhere strictly to clean-python-architecture." in prompt
@@ -167,6 +179,7 @@ def test_prompt_builder_fluent_api(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 4. LLMManager Tests
 # ---------------------------------------------------------------------------
+
 
 def test_llm_manager_singleton_and_pool():
     """LLMManager must act as a singleton and pool LLM instances per role."""

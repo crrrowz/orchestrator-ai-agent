@@ -53,11 +53,14 @@ class LLMManager:
 
     def __init__(self, config: Optional["OrchestratorConfig"] = None):
         from orchestrator.config import OrchestratorConfig
+
         self._config: OrchestratorConfig = config or OrchestratorConfig()
         self._pool: Dict[str, LLM] = {}
 
     @classmethod
-    def get_instance(cls, config: Optional["OrchestratorConfig"] = None) -> "LLMManager":
+    def get_instance(
+        cls, config: Optional["OrchestratorConfig"] = None
+    ) -> "LLMManager":
         """Access the singleton LLMManager instance."""
         if cls._instance is None:
             cls._instance = cls(config)
@@ -76,7 +79,10 @@ class LLMManager:
             role_config = getattr(self._config, role, None)
             if not role_config:
                 from orchestrator.config import AgentRoleConfig
-                role_config = AgentRoleConfig(role=role, model="openrouter/qwen/qwen3.8-27b:free")
+
+                role_config = AgentRoleConfig(
+                    role=role, model="openrouter/qwen/qwen3.8-27b:free"
+                )
             self._pool[role] = create_llm_for_role(self._config, role_config)
         return self._pool[role]
 
@@ -84,11 +90,18 @@ class LLMManager:
         """Fetch usage stats for a specific agent role."""
         if role in self._pool:
             return get_llm_usage(self._pool[role])
-        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}
+        return {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+        }
 
     def get_total_cost(self) -> float:
         """Aggregate total estimated cost (USD) across all active LLM pool instances."""
-        return sum(get_llm_usage(llm)["estimated_cost_usd"] for llm in self._pool.values())
+        return sum(
+            get_llm_usage(llm)["estimated_cost_usd"] for llm in self._pool.values()
+        )
 
     def get_total_tokens(self) -> int:
         """Aggregate total token consumption across all active LLM pool instances."""

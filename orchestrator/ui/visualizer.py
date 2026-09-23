@@ -2,7 +2,7 @@
 
 import sys
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from rich.console import Console
 from rich.live import Live

@@ -2,9 +2,8 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from orchestrator.config import (
     ORCHESTRATOR_ROOT,
@@ -13,7 +12,6 @@ from orchestrator.config import (
     ConfigSchema,
     OrchestratorConfig,
     SkillManager,
-    create_llm_for_role,
     normalize_model_slug,
 )
 from orchestrator.telemetry.recorder import TelemetryRecorder
@@ -24,7 +22,9 @@ def test_backward_compatibility_exports():
     assert ORCHESTRATOR_ROOT.is_dir()
     cfg = OrchestratorConfig()
     assert isinstance(cfg.developer, AgentRoleConfig)
-    assert normalize_model_slug("qwen/qwen3.8-27b") == "openrouter/qwen/qwen3.8-27b:free"
+    assert (
+        normalize_model_slug("qwen/qwen3.8-27b") == "openrouter/qwen/qwen3.8-27b:free"
+    )
     sm = SkillManager(ORCHESTRATOR_ROOT)
     assert isinstance(sm.available_skills, list)
 
@@ -141,7 +141,9 @@ def test_config_loader_priority_cascade(tmp_path: Path):
     )
 
     # Override max_iterations and max_budget_usd explicitly
-    cfg = ConfigLoader.load(config_path=cfg_file, max_iterations=10, max_budget_usd=2.00)
+    cfg = ConfigLoader.load(
+        config_path=cfg_file, max_iterations=10, max_budget_usd=2.00
+    )
 
     assert cfg.max_iterations == 10
     assert cfg.max_budget_usd == 2.00

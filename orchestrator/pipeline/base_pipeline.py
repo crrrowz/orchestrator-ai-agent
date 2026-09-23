@@ -34,7 +34,7 @@ from orchestrator.tools import (
     WorkspaceTerminalObservation,
     execute_terminal_action,
 )
-from orchestrator.context import ContextManager, FilePathResolver
+from orchestrator.context import ContextManager
 from orchestrator.skills import SkillResolver
 from orchestrator.utils import (
     ConsoleOutput,

@@ -7,9 +7,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from orchestrator.core.constants import (
-    DEFAULT_DIAGNOSTICS_DIR,
     DEFAULT_WORKSPACE_DIR,
-    ORCHESTRATOR_ROOT,
 )
 
 # Load environment variables from .env if present
@@ -291,9 +289,7 @@ class OrchestratorConfig(BaseModel):
     diff_max_lines_per_file: int = Field(
         default=int(os.environ.get("DIFF_MAX_LINES_PER_FILE", "50"))
     )
-    diff_max_chars: int = Field(
-        default=int(os.environ.get("DIFF_MAX_CHARS", "4000"))
-    )
+    diff_max_chars: int = Field(default=int(os.environ.get("DIFF_MAX_CHARS", "4000")))
 
     # Memory settings
     memory_relevance_min_score: float = Field(
@@ -310,9 +306,12 @@ class OrchestratorConfig(BaseModel):
     _loaded_from_path: Optional[Path] = None
 
     @classmethod
-    def from_file(cls, path: Union[str, Path], **overrides: Any) -> "OrchestratorConfig":
+    def from_file(
+        cls, path: Union[str, Path], **overrides: Any
+    ) -> "OrchestratorConfig":
         """Convenience loader from a JSON configuration file."""
         from orchestrator.config.loader import ConfigLoader
+
         return ConfigLoader.load(config_path=path, **overrides)
 
     def get_current_domain_profile(self) -> DomainProfile:

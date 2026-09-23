@@ -1,7 +1,6 @@
 """Skill registry and metadata index for discovered project skills."""
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Dict, List, Optional
 from openhands.sdk.skills import Skill
 
@@ -58,6 +57,10 @@ class SkillRegistry:
         q = query.lower()
         results = []
         for name, meta in self._metadata.items():
-            if q in meta.name.lower() or q in meta.description.lower() or any(q in t for t in meta.tags):
+            if (
+                q in meta.name.lower()
+                or q in meta.description.lower()
+                or any(q in t for t in meta.tags)
+            ):
                 results.append(self._skills[name])
         return results

@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import List, Optional
 
 from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.table import Table
 
 from orchestrator.rendering.output import console
 from orchestrator.vcs.git_ops import GitOps
@@ -27,9 +25,21 @@ class DiffRenderer:
         old_lines = old_content.splitlines()
         new_lines = new_content.splitlines()
 
-        diff = list(difflib.unified_diff(old_lines, new_lines, lineterm="", fromfile="original", tofile="modified"))
+        diff = list(
+            difflib.unified_diff(
+                old_lines,
+                new_lines,
+                lineterm="",
+                fromfile="original",
+                tofile="modified",
+            )
+        )
         if not diff:
-            return Panel(f"[dim]No changes in {filepath}[/dim]", title=title or f"📄 {filepath}", border_style="dim")
+            return Panel(
+                f"[dim]No changes in {filepath}[/dim]",
+                title=title or f"📄 {filepath}",
+                border_style="dim",
+            )
 
         diff_lines: List[str] = []
         for line in diff:
@@ -111,7 +121,9 @@ class DiffRenderer:
 
             panel_text = "\n".join(colored_lines)
             if len(panel_text) > max_chars:
-                panel_text = panel_text[:max_chars] + "\n[dim]... [content truncated][/dim]"
+                panel_text = (
+                    panel_text[:max_chars] + "\n[dim]... [content truncated][/dim]"
+                )
 
             panel = Panel(
                 panel_text,

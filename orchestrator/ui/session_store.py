@@ -1,7 +1,6 @@
 """Structured session log store and step tracking for interactive analysis."""
 
 import json
-import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -77,7 +76,11 @@ class SessionLogStore:
         duration_s: Optional[float] = None,
     ) -> LogStep:
         t_str = time.strftime("%H:%M:%S")
-        calc_dur = round(time.time() - self.start_time, 2) if duration_s is None else duration_s
+        calc_dur = (
+            round(time.time() - self.start_time, 2)
+            if duration_s is None
+            else duration_s
+        )
         step = LogStep(
             index=len(self.steps) + 1,
             role=self.current_role,

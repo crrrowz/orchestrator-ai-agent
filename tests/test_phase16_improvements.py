@@ -2,15 +2,13 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from orchestrator.cli.app import parse_args
 from orchestrator.cli.handlers import (
     handle_check_config,
     handle_list_skills,
-    resolve_task_input,
     resolve_workspace_dir,
 )
 from orchestrator.core.config import DomainProfile, OrchestratorConfig
@@ -22,6 +20,7 @@ from orchestrator.skills.manager import SkillManager
 # ---------------------------------------------------------------------------
 # 1. CLI Package Tests
 # ---------------------------------------------------------------------------
+
 
 def test_cli_parse_args_domain_and_diff():
     """CLI argument parser must support --domain and --diff flags."""
@@ -56,7 +55,9 @@ def test_cli_handlers_smoke(tmp_path: Path, capsys):
     handle_list_skills(sm)
 
     # 2. check config
-    with patch("orchestrator.analysis.connectivity.ConnectivityChecker.run_zero_token_audit"):
+    with patch(
+        "orchestrator.analysis.connectivity.ConnectivityChecker.run_zero_token_audit"
+    ):
         handle_check_config(cfg)
         captured = capsys.readouterr()
         assert "Environment & Cost Safety Controls:" in captured.out
@@ -66,6 +67,7 @@ def test_cli_handlers_smoke(tmp_path: Path, capsys):
 # ---------------------------------------------------------------------------
 # 2. Domain Profile System
 # ---------------------------------------------------------------------------
+
 
 def test_domain_profile_switching(tmp_path: Path):
     """OrchestratorConfig must support dynamic domain profile switching."""
@@ -92,11 +94,14 @@ def test_domain_profile_switching(tmp_path: Path):
 # 3. Documentation Pipeline & Orchestrator Dispatch
 # ---------------------------------------------------------------------------
 
+
 def test_documentation_pipeline_instantiation(tmp_path: Path):
     """DocumentationPipeline must initialize with DocumentationAgent."""
     cfg = OrchestratorConfig(workspace_path=tmp_path)
     sm = SkillManager(tmp_path)
-    pipeline = DocumentationPipeline(config=cfg, skill_manager=sm, workspace_path=tmp_path)
+    pipeline = DocumentationPipeline(
+        config=cfg, skill_manager=sm, workspace_path=tmp_path
+    )
     assert pipeline.workspace_path == tmp_path
 
 
@@ -105,7 +110,11 @@ def test_orchestrator_routes_docs_mode(tmp_path: Path):
     cfg = OrchestratorConfig(workspace_path=tmp_path)
     orc = Orchestrator(cfg)
 
-    with patch.object(DocumentationPipeline, "run", return_value={"status": "SUCCESS"}) as mock_run:
-        res = orc.run_task("Generate documentation", mode="docs", workspace_override=tmp_path)
+    with patch.object(
+        DocumentationPipeline, "run", return_value={"status": "SUCCESS"}
+    ) as mock_run:
+        res = orc.run_task(
+            "Generate documentation", mode="docs", workspace_override=tmp_path
+        )
         assert res == {"status": "SUCCESS"}
         mock_run.assert_called_once_with("Generate documentation")

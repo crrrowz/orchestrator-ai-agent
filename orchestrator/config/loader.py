@@ -59,11 +59,6 @@ class ConfigLoader:
         if root_config.is_file():
             return root_config
 
-        # Check internal package config
-        pkg_config = root / "orchestrator" / "config" / "orchestrator.config.json"
-        if pkg_config.is_file():
-            return pkg_config
-
         return None
 
     @classmethod
@@ -72,7 +67,9 @@ class ConfigLoader:
         content = path.read_text(encoding="utf-8")
         data = json.loads(content)
         if not isinstance(data, dict):
-            raise ValueError(f"Configuration file at {path} must contain a JSON object.")
+            raise ValueError(
+                f"Configuration file at {path} must contain a JSON object."
+            )
         return data
 
     @classmethod
@@ -94,9 +91,13 @@ class ConfigLoader:
             if "max_tokens_per_call" in exec_sec:
                 kwargs["max_tokens_per_call"] = int(exec_sec["max_tokens_per_call"])
             if "circuit_breaker_threshold" in exec_sec:
-                kwargs["circuit_breaker_threshold"] = int(exec_sec["circuit_breaker_threshold"])
+                kwargs["circuit_breaker_threshold"] = int(
+                    exec_sec["circuit_breaker_threshold"]
+                )
             if "conversation_timeout_seconds" in exec_sec:
-                kwargs["conversation_timeout_seconds"] = int(exec_sec["conversation_timeout_seconds"])
+                kwargs["conversation_timeout_seconds"] = int(
+                    exec_sec["conversation_timeout_seconds"]
+                )
             if "auto_commit" in exec_sec:
                 kwargs["auto_commit"] = bool(exec_sec["auto_commit"])
             if "auto_chain_audit" in exec_sec:
@@ -132,7 +133,9 @@ class ConfigLoader:
             if "enabled" in mem_sec:
                 kwargs["enable_memory"] = bool(mem_sec["enabled"])
             if "relevance_min_score" in mem_sec:
-                kwargs["memory_relevance_min_score"] = float(mem_sec["relevance_min_score"])
+                kwargs["memory_relevance_min_score"] = float(
+                    mem_sec["relevance_min_score"]
+                )
             if "max_memory_results" in mem_sec:
                 kwargs["max_memory_results"] = int(mem_sec["max_memory_results"])
             if "max_memory_chars" in mem_sec:
@@ -144,21 +147,33 @@ class ConfigLoader:
             if "max_retained_reports" in telem_sec:
                 kwargs["max_retained_reports"] = int(telem_sec["max_retained_reports"])
             if "max_retained_sessions_per_project" in telem_sec:
-                kwargs["max_retained_sessions_per_project"] = int(telem_sec["max_retained_sessions_per_project"])
+                kwargs["max_retained_sessions_per_project"] = int(
+                    telem_sec["max_retained_sessions_per_project"]
+                )
             if "log_save_debounce_seconds" in telem_sec:
-                kwargs["log_save_debounce_seconds"] = int(telem_sec["log_save_debounce_seconds"])
+                kwargs["log_save_debounce_seconds"] = int(
+                    telem_sec["log_save_debounce_seconds"]
+                )
 
         # 5. Safety section
         safety_sec = data.get("safety", {})
         if isinstance(safety_sec, dict):
             if "terminal_command_allowlist" in safety_sec:
-                kwargs["terminal_command_allowlist"] = list(safety_sec["terminal_command_allowlist"])
+                kwargs["terminal_command_allowlist"] = list(
+                    safety_sec["terminal_command_allowlist"]
+                )
             if "blocked_write_prefixes_developer" in safety_sec:
-                kwargs["blocked_write_prefixes_developer"] = list(safety_sec["blocked_write_prefixes_developer"])
+                kwargs["blocked_write_prefixes_developer"] = list(
+                    safety_sec["blocked_write_prefixes_developer"]
+                )
             if "allowed_write_prefixes_architect" in safety_sec:
-                kwargs["allowed_write_prefixes_architect"] = list(safety_sec["allowed_write_prefixes_architect"])
+                kwargs["allowed_write_prefixes_architect"] = list(
+                    safety_sec["allowed_write_prefixes_architect"]
+                )
             if "allowed_write_prefixes_auditor" in safety_sec:
-                kwargs["allowed_write_prefixes_auditor"] = list(safety_sec["allowed_write_prefixes_auditor"])
+                kwargs["allowed_write_prefixes_auditor"] = list(
+                    safety_sec["allowed_write_prefixes_auditor"]
+                )
 
         # 6. Graft section
         graft_sec = data.get("graft", {})
@@ -178,7 +193,9 @@ class ConfigLoader:
             if "show_diff_preview" in rend_sec:
                 kwargs["show_diff_preview"] = bool(rend_sec["show_diff_preview"])
             if "diff_max_lines_per_file" in rend_sec:
-                kwargs["diff_max_lines_per_file"] = int(rend_sec["diff_max_lines_per_file"])
+                kwargs["diff_max_lines_per_file"] = int(
+                    rend_sec["diff_max_lines_per_file"]
+                )
             if "diff_max_chars" in rend_sec:
                 kwargs["diff_max_chars"] = int(rend_sec["diff_max_chars"])
 
@@ -228,7 +245,9 @@ class ConfigLoader:
         """
         from orchestrator.config import OrchestratorConfig
 
-        resolved_file = cls.find_config_file(custom_path=config_path, start_dir=start_dir)
+        resolved_file = cls.find_config_file(
+            custom_path=config_path, start_dir=start_dir
+        )
         json_kwargs: Dict[str, Any] = {}
 
         if resolved_file:
@@ -237,6 +256,7 @@ class ConfigLoader:
                 json_kwargs = cls.parse_json_to_config_kwargs(raw_data)
             except Exception as e:
                 import logging
+
                 logging.getLogger("orchestrator.config").warning(
                     f"Failed to load config from {resolved_file}: {e}. Falling back to env/defaults."
                 )
@@ -266,7 +286,9 @@ class ConfigLoader:
                 "max_agent_steps": config.max_agent_steps,
                 "max_tokens_per_call": config.max_tokens_per_call,
                 "circuit_breaker_threshold": config.circuit_breaker_threshold,
-                "conversation_timeout_seconds": getattr(config, "conversation_timeout_seconds", 300),
+                "conversation_timeout_seconds": getattr(
+                    config, "conversation_timeout_seconds", 300
+                ),
                 "auto_commit": config.auto_commit,
                 "auto_chain_audit": config.auto_chain_audit,
                 "workspace_path": str(config.workspace_path),
@@ -299,25 +321,51 @@ class ConfigLoader:
             },
             "memory": {
                 "enabled": config.enable_memory,
-                "relevance_min_score": getattr(config, "memory_relevance_min_score", 3.0),
+                "relevance_min_score": getattr(
+                    config, "memory_relevance_min_score", 3.0
+                ),
                 "max_memory_results": getattr(config, "max_memory_results", 3),
                 "max_memory_chars": getattr(config, "max_memory_chars", 1500),
             },
             "telemetry": {
                 "max_retained_reports": config.max_retained_reports,
-                "max_retained_sessions_per_project": getattr(config, "max_retained_sessions_per_project", 10),
-                "log_save_debounce_seconds": getattr(config, "log_save_debounce_seconds", 5),
+                "max_retained_sessions_per_project": getattr(
+                    config, "max_retained_sessions_per_project", 10
+                ),
+                "log_save_debounce_seconds": getattr(
+                    config, "log_save_debounce_seconds", 5
+                ),
             },
             "safety": {
                 "terminal_command_allowlist": getattr(
                     config,
                     "terminal_command_allowlist",
-                    ["pytest", "python", "pip", "uv", "git", "ruff", "mypy", "graft", "ls", "dir", "cat", "type", "echo"],
+                    [
+                        "pytest",
+                        "python",
+                        "pip",
+                        "uv",
+                        "git",
+                        "ruff",
+                        "mypy",
+                        "graft",
+                        "ls",
+                        "dir",
+                        "cat",
+                        "type",
+                        "echo",
+                    ],
                 ),
-                "blocked_write_prefixes_developer": getattr(config, "blocked_write_prefixes_developer", ["tests/"]),
-                "allowed_write_prefixes_architect": getattr(config, "allowed_write_prefixes_architect", ["PLAN.md"]),
+                "blocked_write_prefixes_developer": getattr(
+                    config, "blocked_write_prefixes_developer", ["tests/"]
+                ),
+                "allowed_write_prefixes_architect": getattr(
+                    config, "allowed_write_prefixes_architect", ["PLAN.md"]
+                ),
                 "allowed_write_prefixes_auditor": getattr(
-                    config, "allowed_write_prefixes_auditor", ["AUDIT_REPORT.md", "audit_report.md"]
+                    config,
+                    "allowed_write_prefixes_auditor",
+                    ["AUDIT_REPORT.md", "audit_report.md"],
                 ),
             },
             "graft": {
@@ -328,7 +376,9 @@ class ConfigLoader:
             "rendering": {
                 "verbosity": config.verbosity,
                 "show_diff_preview": getattr(config, "show_diff_preview", True),
-                "diff_max_lines_per_file": getattr(config, "diff_max_lines_per_file", 50),
+                "diff_max_lines_per_file": getattr(
+                    config, "diff_max_lines_per_file", 50
+                ),
                 "diff_max_chars": getattr(config, "diff_max_chars", 4000),
             },
             "human_in_the_loop": {

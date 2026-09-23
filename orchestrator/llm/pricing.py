@@ -8,11 +8,7 @@ def get_pricing_rates(model: str) -> Tuple[float, float]:
     m = (model or "").lower()
     if ":free" in m or "openrouter/free" in m:
         return 0.0, 0.0
-    if (
-        "claude-sonnet-4-5" in m
-        or "claude-3-5-sonnet" in m
-        or "claude-3.5-sonnet" in m
-    ):
+    if "claude-sonnet-4-5" in m or "claude-3-5-sonnet" in m or "claude-3.5-sonnet" in m:
         return 3.0, 15.0
     if "gpt-4o-mini" in m:
         return 0.15, 0.60

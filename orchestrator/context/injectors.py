@@ -35,7 +35,10 @@ class GraftInjector(ContextInjector):
     def get_context(self, task: str, workspace: Path) -> Optional[str]:
         try:
             from orchestrator.utils.graft_context import GraftContextProvider
-            graft_map = GraftContextProvider.get_condensed_map(workspace, max_chars=self.max_chars)
+
+            graft_map = GraftContextProvider.get_condensed_map(
+                workspace, max_chars=self.max_chars
+            )
             if graft_map and graft_map.strip():
                 return f"[Codebase Architecture Map (Graft)]:\n{graft_map.strip()}"
         except Exception:
@@ -57,6 +60,7 @@ class MemoryInjector(ContextInjector):
     def get_context(self, task: str, workspace: Path) -> Optional[str]:
         try:
             from orchestrator.memory.conversation_store import SessionMemoryStore
+
             store = SessionMemoryStore(workspace_path=workspace)
             mem_text = store.format_memory_context(task)
             if mem_text and mem_text.strip():
@@ -77,7 +81,9 @@ class PlanInjector(ContextInjector):
         plan_file = workspace / "PLAN.md"
         if plan_file.is_file():
             try:
-                content = plan_file.read_text(encoding="utf-8", errors="replace").strip()
+                content = plan_file.read_text(
+                    encoding="utf-8", errors="replace"
+                ).strip()
                 if content:
                     return f"[System Blueprint (PLAN.md)]:\n{content}"
             except Exception:

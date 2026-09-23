@@ -43,7 +43,9 @@ class DocumentationAgentFactory(BaseAgentFactory):
         workspace = cls.resolve_workspace(config, workspace_path)
         llm = cls.resolve_llm(config, "documentation")
         skills = getattr(config, "documentation", config.developer).skills
-        context = cls.resolve_context(config, skill_manager, skills=skills, task_text=task_text)
+        context = cls.resolve_context(
+            config, skill_manager, skills=skills, task_text=task_text
+        )
 
         tools = cls.resolve_tools(
             workspace,

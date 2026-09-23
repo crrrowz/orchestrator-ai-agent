@@ -27,11 +27,19 @@ class ContextManager:
         self._injectors.sort(key=lambda x: x[0])
 
     @classmethod
-    def create_default(cls, config: Optional[OrchestratorConfig] = None) -> "ContextManager":
+    def create_default(
+        cls, config: Optional[OrchestratorConfig] = None
+    ) -> "ContextManager":
         """Instantiate a ContextManager populated with standard enterprise injectors."""
         cfg = config or OrchestratorConfig()
         mgr = cls(cfg)
-        mgr.register(GraftInjector(max_chars=getattr(cfg, "graft_max_map_chars", 1500), enabled=getattr(cfg, "graft_enabled", True)), priority=30)
+        mgr.register(
+            GraftInjector(
+                max_chars=getattr(cfg, "graft_max_map_chars", 1500),
+                enabled=getattr(cfg, "graft_enabled", True),
+            ),
+            priority=30,
+        )
         mgr.register(MemoryInjector(enabled=cfg.enable_memory), priority=40)
         mgr.register(PlanInjector(), priority=50)
         return mgr
@@ -72,7 +80,10 @@ class ContextManager:
             if current_chars + block_len > max_chars:
                 remaining_chars = max_chars - current_chars
                 if remaining_chars > 200:
-                    truncated = block_clean[:remaining_chars] + "\n... [Context Truncated to fit token budget]"
+                    truncated = (
+                        block_clean[:remaining_chars]
+                        + "\n... [Context Truncated to fit token budget]"
+                    )
                     blocks.append(truncated)
                 break
 

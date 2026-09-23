@@ -39,7 +39,10 @@ class DocumentationPipeline(BasePipeline):
         )
 
         doc_agent = create_documentation_agent(
-            self.config, self.skill_manager, self.workspace_path, task_text=task_description
+            self.config,
+            self.skill_manager,
+            self.workspace_path,
+            task_text=task_description,
         )
 
         log_store.set_agent_context(

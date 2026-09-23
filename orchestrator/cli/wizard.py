@@ -38,7 +38,10 @@ def interactive_wizard(
         elif default_mode == "docs":
             task_prompt = "\n📝 Documentation Directive [Default: Generate full codebase documentation]: "
             task_in = input(task_prompt).strip()
-            task = task_in or "Generate comprehensive project architecture and API documentation."
+            task = (
+                task_in
+                or "Generate comprehensive project architecture and API documentation."
+            )
             mode = "docs"
         else:
             print("\nEnter the software task you want the multi-agent team to build.")

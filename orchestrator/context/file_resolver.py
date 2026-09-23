@@ -9,11 +9,11 @@ class FilePathResolver:
     """Detects and resolves file paths embedded within task descriptions and inlines their content."""
 
     PATH_PATTERNS = [
-        r'(?:[A-Za-z]:\\[^\s"\'<>|\n\r]+?\.\w{1,5})',          # Windows absolute: D:\specs\auth.md
-        r'(?:/[a-zA-Z0-9_\-.]+/[a-zA-Z0-9_\-/.]+\.\w{1,5})',    # Unix absolute: /etc/config.json
-        r'(?:\./[a-zA-Z0-9_\-/.]+\.\w{1,5})',                   # Explicit relative: ./specs/auth.md
-        r'(?:(?<![a-zA-Z0-9_\-.])[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-/.]+\.\w{1,5})',  # Bare relative: specs/auth.md
-        r'(?:(?<![a-zA-Z0-9_\-.])[a-zA-Z0-9_\-]+\.(?:md|py|json|yaml|yml|txt|toml|cfg|ini|html|css|js|ts|sh|sql|xml|csv))\b',  # Bare filename
+        r'(?:[A-Za-z]:\\[^\s"\'<>|\n\r]+?\.\w{1,5})',  # Windows absolute: D:\specs\auth.md
+        r"(?:/[a-zA-Z0-9_\-.]+/[a-zA-Z0-9_\-/.]+\.\w{1,5})",  # Unix absolute: /etc/config.json
+        r"(?:\./[a-zA-Z0-9_\-/.]+\.\w{1,5})",  # Explicit relative: ./specs/auth.md
+        r"(?:(?<![a-zA-Z0-9_\-.])[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-/.]+\.\w{1,5})",  # Bare relative: specs/auth.md
+        r"(?:(?<![a-zA-Z0-9_\-.])[a-zA-Z0-9_\-]+\.(?:md|py|json|yaml|yml|txt|toml|cfg|ini|html|css|js|ts|sh|sql|xml|csv))\b",  # Bare filename
     ]
 
     @classmethod
@@ -46,10 +46,15 @@ class FilePathResolver:
 
                 if target.is_file():
                     try:
-                        content = target.read_text(encoding="utf-8", errors="replace").strip()
+                        content = target.read_text(
+                            encoding="utf-8", errors="replace"
+                        ).strip()
                         if content:
                             if len(content) > max_chars_per_file:
-                                content = content[:max_chars_per_file] + "\n... [Content Truncated]"
+                                content = (
+                                    content[:max_chars_per_file]
+                                    + "\n... [Content Truncated]"
+                                )
                             already_seen.add(target)
                             resolved_files.append(str(target))
                             injected_blocks.append(

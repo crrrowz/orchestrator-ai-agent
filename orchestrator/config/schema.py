@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 CONFIG_JSON_SCHEMA: Dict[str, Any] = {
@@ -18,11 +18,27 @@ CONFIG_JSON_SCHEMA: Dict[str, Any] = {
             "properties": {
                 "max_iterations": {"type": ["integer", "string"], "default": 4},
                 "max_budget_usd": {"type": "number", "minimum": 0.0, "default": 0.50},
-                "max_tokens_budget": {"type": "integer", "minimum": 1000, "default": 350000},
+                "max_tokens_budget": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "default": 350000,
+                },
                 "max_agent_steps": {"type": "integer", "minimum": 1, "default": 12},
-                "max_tokens_per_call": {"type": "integer", "minimum": 512, "default": 8192},
-                "circuit_breaker_threshold": {"type": "integer", "minimum": 1, "default": 2},
-                "conversation_timeout_seconds": {"type": "integer", "minimum": 10, "default": 300},
+                "max_tokens_per_call": {
+                    "type": "integer",
+                    "minimum": 512,
+                    "default": 8192,
+                },
+                "circuit_breaker_threshold": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 2,
+                },
+                "conversation_timeout_seconds": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "default": 300,
+                },
                 "auto_commit": {"type": "boolean", "default": True},
                 "auto_chain_audit": {"type": "boolean", "default": True},
                 "workspace_path": {"type": "string", "default": "./workspace"},
@@ -36,7 +52,11 @@ CONFIG_JSON_SCHEMA: Dict[str, Any] = {
                     "properties": {
                         "role": {"type": "string", "default": "architect"},
                         "model": {"type": "string"},
-                        "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+                        "temperature": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 2.0,
+                        },
                         "skills": {"type": "array", "items": {"type": "string"}},
                         "api_key": {"type": ["string", "null"]},
                     },
@@ -46,7 +66,11 @@ CONFIG_JSON_SCHEMA: Dict[str, Any] = {
                     "properties": {
                         "role": {"type": "string", "default": "developer"},
                         "model": {"type": "string"},
-                        "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+                        "temperature": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 2.0,
+                        },
                         "skills": {"type": "array", "items": {"type": "string"}},
                         "api_key": {"type": ["string", "null"]},
                     },
@@ -56,7 +80,11 @@ CONFIG_JSON_SCHEMA: Dict[str, Any] = {
                     "properties": {
                         "role": {"type": "string", "default": "tester"},
                         "model": {"type": "string"},
-                        "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+                        "temperature": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 2.0,
+                        },
                         "skills": {"type": "array", "items": {"type": "string"}},
                         "api_key": {"type": ["string", "null"]},
                     },
@@ -66,7 +94,11 @@ CONFIG_JSON_SCHEMA: Dict[str, Any] = {
                     "properties": {
                         "role": {"type": "string", "default": "reviewer"},
                         "model": {"type": "string"},
-                        "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+                        "temperature": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 2.0,
+                        },
                         "skills": {"type": "array", "items": {"type": "string"}},
                         "api_key": {"type": ["string", "null"]},
                     },
@@ -122,7 +154,11 @@ CONFIG_JSON_SCHEMA: Dict[str, Any] = {
         "rendering": {
             "type": "object",
             "properties": {
-                "verbosity": {"type": "string", "enum": ["quiet", "normal", "verbose"], "default": "normal"},
+                "verbosity": {
+                    "type": "string",
+                    "enum": ["quiet", "normal", "verbose"],
+                    "default": "normal",
+                },
                 "show_diff_preview": {"type": "boolean", "default": True},
                 "diff_max_lines_per_file": {"type": "integer", "default": 50},
                 "diff_max_chars": {"type": "integer", "default": 4000},
@@ -173,7 +209,10 @@ class ConfigSchema:
                     errors.append("execution.max_budget_usd must be a numeric value.")
             if "max_iterations" in exec_sec:
                 it = exec_sec["max_iterations"]
-                if not (isinstance(it, int) or (isinstance(it, str) and (it.isdigit() or it.lower() == "auto"))):
+                if not (
+                    isinstance(it, int)
+                    or (isinstance(it, str) and (it.isdigit() or it.lower() == "auto"))
+                ):
                     errors.append("execution.max_iterations must be an int or 'auto'.")
 
         # Validate agents block
@@ -186,10 +225,16 @@ class ConfigSchema:
                     try:
                         t = float(role_data["temperature"])
                         if not (0.0 <= t <= 2.0):
-                            errors.append(f"agents.{role_name}.temperature must be between 0.0 and 2.0.")
+                            errors.append(
+                                f"agents.{role_name}.temperature must be between 0.0 and 2.0."
+                            )
                     except (ValueError, TypeError):
-                        errors.append(f"agents.{role_name}.temperature must be numeric.")
+                        errors.append(
+                            f"agents.{role_name}.temperature must be numeric."
+                        )
                 if "skills" in role_data and not isinstance(role_data["skills"], list):
-                    errors.append(f"agents.{role_name}.skills must be a list of skill names.")
+                    errors.append(
+                        f"agents.{role_name}.skills must be a list of skill names."
+                    )
 
         return errors

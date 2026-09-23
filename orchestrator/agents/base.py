@@ -56,7 +56,9 @@ class BaseAgentFactory:
         task_text: str = "",
     ) -> AgentContext:
         """Construct AgentContext loaded with role skills."""
-        skill_names = skills if skills is not None else cls.resolve_role_config(config).skills
+        skill_names = (
+            skills if skills is not None else cls.resolve_role_config(config).skills
+        )
         return skill_manager.build_agent_context(
             skill_names, compact=compact, task_text=task_text
         )

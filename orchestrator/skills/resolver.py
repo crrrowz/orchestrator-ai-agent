@@ -8,15 +8,31 @@ class SkillResolver:
     """Automatically resolves relevant skills from task descriptions using semantic keyword heuristics."""
 
     SKILL_TRIGGERS: Dict[str, List[str]] = {
-        r"(test|pytest|unittest|coverage|mock|fixture|assertion)": ["pytest-rigorous-testing"],
-        r"(docker|container|dockerfile|compose|k8s|kubernetes|deploy)": ["docker-devops-containerization"],
-        r"(security|auth|jwt|oauth|xss|injection|csrf|secret|hash|sanitize)": ["security-audit-hardening"],
-        r"(api|rest|endpoint|router|fastapi|contract|pydantic|openapi|schema)": ["api-design-contract"],
-        r"(architect|design|decompos|modul|structure|layer|pipeline)": ["architectural-decomposition"],
-        r"(debug|fix|error|crash|bug|traceback|exception|remedy)": ["systematic-debugging"],
-        r"(clean|refactor|solid|pattern|cohesion|decoupling|type)": ["clean-python-architecture"],
+        r"(test|pytest|unittest|coverage|mock|fixture|assertion)": [
+            "pytest-rigorous-testing"
+        ],
+        r"(docker|container|dockerfile|compose|k8s|kubernetes|deploy)": [
+            "docker-devops-containerization"
+        ],
+        r"(security|auth|jwt|oauth|xss|injection|csrf|secret|hash|sanitize)": [
+            "security-audit-hardening"
+        ],
+        r"(api|rest|endpoint|router|fastapi|contract|pydantic|openapi|schema)": [
+            "api-design-contract"
+        ],
+        r"(architect|design|decompos|modul|structure|layer|pipeline)": [
+            "architectural-decomposition"
+        ],
+        r"(debug|fix|error|crash|bug|traceback|exception|remedy)": [
+            "systematic-debugging"
+        ],
+        r"(clean|refactor|solid|pattern|cohesion|decoupling|type)": [
+            "clean-python-architecture"
+        ],
         r"(review|audit|quality|lint|standard|adherence)": ["code-review-standards"],
-        r"(graft|codebase|map|skeleton|dependency|graph|wiring)": ["graft-architecture-intelligence"],
+        r"(graft|codebase|map|skeleton|dependency|graph|wiring)": [
+            "graft-architecture-intelligence"
+        ],
     }
 
     @classmethod
