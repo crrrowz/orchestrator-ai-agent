@@ -6,23 +6,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from openhands.sdk import Conversation
-from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.config import (
     OrchestratorConfig,
     SkillManager,
 )
 from orchestrator.agents import (
     create_developer_agent,
-    create_tester_agent,
 )
 from orchestrator.control import (
-    BudgetGuard,
     HumanInterventionChannel,
     PipelineController,
 )
 from orchestrator.control.human_channel import set_active_channel
+from orchestrator.pipeline.base_pipeline import BasePipeline
+from orchestrator.pipeline.iteration_state import StructuredIterationState
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
+from orchestrator.tools.workspace_tools import reset_append_counts
 from orchestrator.utils import (
     ConsoleOutput,
     GraftContextProvider,
@@ -31,19 +31,68 @@ from orchestrator.utils import (
 )
 
 
+def extract_actionable_recommendations(report_content: str) -> str:
+    """Extract actionable recommendations sections (e.g. Section 6 Roadmap or Section 4 Key Recommendations),
+    deliberately stripping file metric tables to prevent false-positive scope locking on clean files."""
+    if not report_content:
+        return ""
+
+    # Priority 1: Section 6 "Actionable Prioritized Remediation Roadmap"
+    match_sec6 = re.search(
+        r"(##\s*6\.\s*Actionable Prioritized Remediation Roadmap[\s\S]*?)(?=\n##|\Z)",
+        report_content,
+        re.IGNORECASE,
+    )
+    if match_sec6 and match_sec6.group(1).strip():
+        return match_sec6.group(1).strip()
+
+    # Priority 2: Section 4 "Key Recommendations"
+    match_sec4 = re.search(
+        r"(##\s*(?:4\.\s*)?Key Recommendations[\s\S]*?)(?=\n##|\Z)",
+        report_content,
+        re.IGNORECASE,
+    )
+    if match_sec4 and match_sec4.group(1).strip():
+        return match_sec4.group(1).strip()
+
+    # Priority 3: Any "## Recommendations" or "## Actionable Tasks"
+    match_rec = re.search(
+        r"(##\s*.*(?:Recommendation|Actionable|Remediation).*[\s\S]*?)(?=\n##|\Z)",
+        report_content,
+        re.IGNORECASE,
+    )
+    if match_rec and match_rec.group(1).strip():
+        return match_rec.group(1).strip()
+
+    # Fallback: Strip lines that look like file metrics table (e.g. `path` (123 LOC))
+    lines = []
+    for line in report_content.splitlines():
+        if (
+            re.search(r"\(\d+\s*LOC\)", line)
+            or "Largest Modules" in line
+            or "Total Files" in line
+        ):
+            continue
+        lines.append(line)
+    return "\n".join(lines[:60])
+
+
 def extract_affected_files(issues: List[str], workspace_path: Path) -> List[str]:
-    """Extract distinct relative file paths mentioned in issues and error traces."""
+    """Extract distinct relative file paths mentioned in issues and error traces, capped to top priorities."""
     affected = set()
     for text in issues:
+        # Exclude documentation files (.md) from code fix scope
         matches = re.findall(
-            r"([\w\-./\\]+\.(?:py|ts|tsx|js|jsx|json|toml|yaml|yml|md))", text
+            r"([\w\-./\\]+\.(?:py|ts|tsx|js|jsx|json|toml|yaml|yml))", text
         )
         for m in matches:
             clean = m.replace("\\", "/").strip("./:")
             candidate = workspace_path / clean
             if candidate.exists() and candidate.is_file():
                 affected.add(clean)
-    return sorted(list(affected))
+    sorted_affected = sorted(list(affected))
+    # Cap to top 3 priority files per iteration to prevent context window explosion
+    return sorted_affected[:3]
 
 
 DEFAULT_AUDIT_FIX_TASKS = {
@@ -58,7 +107,7 @@ DEFAULT_AUDIT_FIX_TASKS = {
 }
 
 
-class AuditFixPipeline:
+class AuditFixPipeline(BasePipeline):
     """Autonomous self-healing loop: audits defects/optimizations, applies fixes via Developer,
     and validates with Tester and static checks in a continuous loop without any Git operations.
     """
@@ -72,119 +121,18 @@ class AuditFixPipeline:
         controller: Optional[PipelineController] = None,
         auto_chain_audit: Optional[bool] = None,
     ):
-        self.config = config
-        self.skill_manager = skill_manager
-        self.workspace_path = (workspace_path or config.workspace_path).resolve()
-        self.human_channel = human_channel or HumanInterventionChannel(
-            enabled=config.interactive or bool(config.approval_gates)
+        super().__init__(
+            config=config,
+            skill_manager=skill_manager,
+            workspace_path=workspace_path,
+            human_channel=human_channel,
+            controller=controller,
         )
-        self.controller = controller or PipelineController()
-        self.budget_guard = BudgetGuard(max_budget_usd=config.max_budget_usd)
-        self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
         self.auto_chain_audit = (
             auto_chain_audit
             if auto_chain_audit is not None
             else getattr(config, "auto_chain_audit", True)
         )
-
-    def _run_conv(
-        self,
-        conv: Conversation,
-        role: str,
-        max_retries: int = 2,
-        timeout_seconds: int = 180,
-        max_steps: Optional[int] = None,
-        max_tokens: Optional[int] = None,
-    ) -> None:
-        """Execute conversation with iteration limits, token cap monitor, timeout guard, and backoff retry."""
-        import threading
-
-        step_limit = max_steps or min(getattr(self.config, "max_agent_steps", 8), 8)
-        token_limit = max_tokens or min(
-            getattr(self.config, "max_tokens_budget", 80_000), 80_000
-        )
-
-        # Configure native OpenHands step limit
-        if hasattr(conv, "max_iteration_per_run"):
-            conv.max_iteration_per_run = step_limit
-
-        for attempt in range(max_retries + 1):
-            if not self.controller.check_should_continue():
-                ConsoleOutput.warning(
-                    f"Conversation execution halted by controller for {role}."
-                )
-                return
-
-            stop_monitor = threading.Event()
-
-            def monitor():
-                start_time = time.time()
-                while not stop_monitor.is_set():
-                    # Timeout check
-                    if (
-                        timeout_seconds > 0
-                        and (time.time() - start_time) >= timeout_seconds
-                    ):
-                        ConsoleOutput.warning(
-                            f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
-                        )
-                        if hasattr(conv, "interrupt"):
-                            conv.interrupt()
-                        elif hasattr(conv, "pause"):
-                            conv.pause()
-                        break
-
-                    # Token limit check
-                    llm = getattr(conv, "agent", None) and getattr(
-                        conv.agent, "llm", None
-                    )
-                    if llm and hasattr(llm, "metrics"):
-                        tu = getattr(llm.metrics, "accumulated_token_usage", None)
-                        if tu:
-                            pt = getattr(tu, "prompt_tokens", 0)
-                            ct = getattr(tu, "completion_tokens", 0)
-                            if isinstance(pt, (int, float)) and isinstance(
-                                ct, (int, float)
-                            ):
-                                total_tok = int(pt + ct)
-                                if token_limit > 0 and total_tok >= token_limit:
-                                    ConsoleOutput.warning(
-                                        f"Agent {role} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
-                                    )
-                                    if hasattr(conv, "interrupt"):
-                                        conv.interrupt()
-                                    elif hasattr(conv, "pause"):
-                                        conv.pause()
-                                    break
-
-                    # Controller abort check
-                    if not self.controller.check_should_continue():
-                        if hasattr(conv, "interrupt"):
-                            conv.interrupt()
-                        elif hasattr(conv, "pause"):
-                            conv.pause()
-                        break
-
-                    stop_monitor.wait(1.0)
-
-            monitor_thread = threading.Thread(target=monitor, daemon=True)
-            monitor_thread.start()
-
-            try:
-                conv.run()
-                return
-            except Exception as e:
-                if attempt < max_retries:
-                    delay = 2**attempt
-                    ConsoleOutput.warning(
-                        f"Agent {role} execution failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
-                        f"Retrying in {delay}s..."
-                    )
-                    time.sleep(delay)
-                else:
-                    raise
-            finally:
-                stop_monitor.set()
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
@@ -289,26 +237,9 @@ class AuditFixPipeline:
             self.workspace_path,
             allow_test_writes=True,
         )
-        tester_agent = create_tester_agent(
-            self.config,
-            self.skill_manager,
-            self.workspace_path,
-        )
 
-        dev_conv = Conversation(
-            agent=developer_agent,
-            workspace=str(self.workspace_path),
-            visualizer=visualizer,
-        )
-        dev_conv.human_channel = self.human_channel
-
-        tester_conv = Conversation(
-            agent=tester_agent,
-            workspace=str(self.workspace_path),
-            visualizer=visualizer,
-        )
-        tester_conv.human_channel = self.human_channel
-
+        reset_append_counts()
+        completed_fixes: List[str] = []
         fixes_applied_log: List[Dict[str, Any]] = []
         final_status = "IN_PROGRESS"
         last_issues: List[str] = []
@@ -320,6 +251,17 @@ class AuditFixPipeline:
                 )
                 final_status = "STOPPED_BY_CONTROLLER"
                 break
+
+            # Reset append safeguards per iteration
+            reset_append_counts()
+
+            # Fresh, isolated developer conversation per iteration (eliminates context ballooning)
+            dev_conv = Conversation(
+                agent=developer_agent,
+                workspace=str(self.workspace_path),
+                visualizer=visualizer,
+            )
+            dev_conv.human_channel = self.human_channel
 
             # Run zero-token auto-fix before each inspection pass
             self.run_zero_token_autofix()
@@ -373,8 +315,12 @@ class AuditFixPipeline:
                             pass
 
                 if existing_report_content:
-                    auditor_findings = f"[Existing Audit Report Recommendations]\n{existing_report_content[:3000]}"
-                    all_issues.append(auditor_findings)
+                    actionable_recs = extract_actionable_recommendations(
+                        existing_report_content
+                    )
+                    if actionable_recs:
+                        auditor_findings = f"[Actionable Audit Recommendations]\n{actionable_recs[:2000]}"
+                        all_issues.append(auditor_findings)
                 elif (
                     task_description
                     and task_description.strip().lower() not in DEFAULT_AUDIT_FIX_TASKS
@@ -385,7 +331,7 @@ class AuditFixPipeline:
 
             last_issues = all_issues
 
-            # 4. Check Convergence
+            # 4. Check Initial Convergence
             if not all_issues:
                 ConsoleOutput.success(
                     f"Audit-Fix Loop Converged in iteration {iteration}! Zero defects detected."
@@ -444,8 +390,19 @@ class AuditFixPipeline:
 
             effective_graft = graft_part if len(graft_part) < 1500 else ""
 
+            # Structured Iteration State (Replaces raw conversation history with compact JSON block)
+            iter_state = StructuredIterationState(
+                iteration=iteration,
+                affected_files=affected_files,
+                completed_fixes=completed_fixes,
+                remaining_findings=all_issues[:3],
+                tests_status="PASSED" if tests_clean else "FAILURES_DETECTED",
+            )
+            state_directive = iter_state.render_prompt_block()
+
             dev_prompt = (
                 f"Task: {user_directive}\n\n"
+                f"{state_directive}\n\n"
                 f"Iteration {iteration} of {self.config.max_iterations} - Auto-Fix Remediation Directive:\n"
                 f"The automated audit detected the following issues that must be solved in this {self.adapter.language_name.capitalize()} project:\n\n"
                 f"{issues_text}\n"
@@ -455,13 +412,45 @@ class AuditFixPipeline:
                 f"{self.adapter.get_developer_prompt_guidance()}"
             )
 
+            # Capture workspace pre-execution snapshot to verify code modifications
+            pre_mtimes = {
+                p: p.stat().st_mtime
+                for p in self.workspace_path.rglob("*.py")
+                if ".git" not in p.parts and ".venv" not in p.parts
+            }
+
             t_dev = time.perf_counter()
             dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
-            self._run_conv(dev_conv, "Developer")
+            self._run_conv(
+                dev_conv,
+                "Developer",
+                max_steps=min(getattr(self.config, "max_agent_steps", 8), 8),
+                max_tokens=min(getattr(self.config, "max_tokens_budget", 80_000), 80_000),
+                task_complexity="medium",
+            )
             if hasattr(visualizer, "close"):
                 visualizer.close()
             dur_dev = time.perf_counter() - t_dev
             u_dev = get_llm_usage(developer_agent.llm)
+
+            # Detect modified files
+            post_mtimes = {
+                p: p.stat().st_mtime
+                for p in self.workspace_path.rglob("*.py")
+                if ".git" not in p.parts and ".venv" not in p.parts
+            }
+            files_modified = [
+                p
+                for p, mt in post_mtimes.items()
+                if p not in pre_mtimes or pre_mtimes[p] != mt
+            ]
+            if files_modified:
+                for p in files_modified:
+                    try:
+                        rel = str(p.relative_to(self.workspace_path))
+                        completed_fixes.append(f"Modified {rel}")
+                    except ValueError:
+                        completed_fixes.append(f"Modified {p.name}")
 
             telemetry.record_step(
                 "developer",
@@ -494,7 +483,7 @@ class AuditFixPipeline:
                 final_status = "BUDGET_EXHAUSTED"
                 break
 
-            # 6. Verification: Immediate check post-remediation
+            # 6. Verification: Strict Convergence Predicate post-remediation
             post_static_ok, post_static_issues = self.run_static_checks()
             post_tests_ok, post_test_feedback = self.run_test_suite()
 
@@ -510,17 +499,36 @@ class AuditFixPipeline:
                 tests_passed=(post_static_ok and post_tests_ok),
             )
 
-            if post_static_ok and post_tests_ok:
+            remaining_issues: List[str] = []
+            if not post_static_ok:
+                remaining_issues.extend(post_static_issues)
+            if not post_tests_ok:
+                remaining_issues.append(post_test_feedback)
+
+            made_progress = (not all_issues) or bool(files_modified)
+
+            if post_static_ok and post_tests_ok and not remaining_issues and made_progress:
                 ConsoleOutput.success(
-                    f"Verification successful in iteration {iteration}! All tests and static checks pass."
+                    f"Strict Verification Converged in iteration {iteration}! "
+                    f"Tests pass, static checks clean, and fixes verified."
                 )
                 final_status = "CONVERGED_CLEAN"
                 break
+            elif post_static_ok and post_tests_ok and not files_modified and all_issues:
+                ConsoleOutput.warning(
+                    f"Iteration {iteration}: Developer made 0 code modifications to address active findings. "
+                    "Refining directive for next iteration..."
+                )
+                all_issues = [
+                    "CRITICAL: 0 code modifications were applied in the previous attempt. "
+                    "You must open the locked file using `workspace_file` and implement the change."
+                ]
             else:
                 ConsoleOutput.warning(
                     f"Iteration {iteration} verification: Issues remain "
                     f"(Static Clean: {post_static_ok}, Tests Clean: {post_tests_ok}). Proceeding to next iteration."
                 )
+                all_issues = remaining_issues
 
         if final_status == "IN_PROGRESS":
             final_status = "MAX_ITERATIONS_REACHED"

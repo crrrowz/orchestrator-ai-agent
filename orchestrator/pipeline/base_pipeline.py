@@ -16,7 +16,12 @@ from orchestrator.config import (
     OrchestratorConfig,
     SkillManager,
 )
-from orchestrator.control import BudgetGuard, HumanChannel, PipelineController
+from orchestrator.control import (
+    BudgetGuard,
+    ContextBudgetManager,
+    HumanChannel,
+    PipelineController,
+)
 from orchestrator.guards.preflight import PreFlightGuard
 from orchestrator.memory import ConversationMemoryStore
 from orchestrator.pipeline.checkpoint import PipelineCheckpoint
@@ -137,13 +142,26 @@ class BasePipeline(ABC):
         max_retries: int = 2,
         max_steps: Optional[int] = None,
         max_tokens: Optional[int] = None,
+        timeout_seconds: float = 300.0,
+        task_complexity: str = "medium",
     ) -> None:
-        """Run agent conversation with iteration limits, token cap monitor, timeout guard, and backoff retry."""
-        timeout_seconds = 300.0
+        """Run agent conversation with dynamic task-aware output budgeting, token cap monitor, and timeout guard."""
         step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
         token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 350_000)
 
-        # Configure native OpenHands step limit
+        # 1. Dynamic Task-Aware Output Budgeting
+        hard_ceil = getattr(self.config, "max_tokens_per_call", 8192)
+        dynamic_output_budget = ContextBudgetManager.get_dynamic_output_budget(
+            role=role_name,
+            complexity=task_complexity,
+            hard_ceiling=hard_ceil,
+        )
+
+        llm = getattr(conv, "agent", None) and getattr(conv.agent, "llm", None)
+        if llm and hasattr(llm, "max_output_tokens"):
+            llm.max_output_tokens = dynamic_output_budget
+
+        # 2. Configure native OpenHands step limit
         if hasattr(conv, "max_iteration_per_run"):
             conv.max_iteration_per_run = step_limit
 

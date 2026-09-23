@@ -220,3 +220,54 @@ def test_cli_mode_audit_fix_parsing():
     with patch("sys.argv", ["orchestrator", "--mode", "audit-fix"]):
         args = parse_args()
         assert args.mode == "audit-fix"
+
+
+def test_extract_actionable_recommendations_strips_metrics_table():
+    """extract_actionable_recommendations extracts Section 6/4 and ignores file metrics tables."""
+    from orchestrator.pipeline.audit_fix_pipeline import (
+        extract_actionable_recommendations,
+        extract_affected_files,
+    )
+
+    report = (
+        "# Codebase Architecture & Security Audit Report\n\n"
+        "### Largest Modules\n"
+        "- `orchestrator/tools/workspace_tools.py` (883 LOC)\n"
+        "- `orchestrator/pipeline/full_pipeline.py` (684 LOC)\n"
+        "- `orchestrator/pipeline/audit_fix_pipeline.py` (614 LOC)\n\n"
+        "## 6. Actionable Prioritized Remediation Roadmap\n"
+        "- Target File: `orchestrator/pipeline/base_pipeline.py`\n"
+        "  Deduplicate _run_conv and unify timeout guards.\n"
+    )
+
+    extracted = extract_actionable_recommendations(report)
+    assert "Actionable Prioritized Remediation Roadmap" in extracted
+    assert "base_pipeline.py" in extracted
+    assert "Largest Modules" not in extracted
+    assert "883 LOC" not in extracted
+
+    # Ensure extract_affected_files only picks up the actionable file
+    workspace = Path(".").resolve()
+    affected = extract_affected_files([extracted], workspace)
+    assert "orchestrator/pipeline/base_pipeline.py" in affected
+    assert "orchestrator/tools/workspace_tools.py" not in affected
+
+
+def test_structured_iteration_state_prompt_block():
+    """StructuredIterationState renders compact state directive without conversation bloat."""
+    from orchestrator.pipeline.iteration_state import StructuredIterationState
+
+    state = StructuredIterationState(
+        iteration=2,
+        affected_files=["base_pipeline.py"],
+        completed_fixes=["Fixed timeout monitor"],
+        remaining_findings=["Unify _run_conv duplicate"],
+        tests_status="PASSED",
+    )
+    rendered = state.render_prompt_block()
+    assert "=== ITERATION STATE [Cycle 2] ===" in rendered
+    assert "- [x] Fixed timeout monitor" in rendered
+    assert "- [ ] Unify _run_conv duplicate" in rendered
+    assert "`base_pipeline.py`" in rendered
+    assert len(rendered.splitlines()) < 10
+

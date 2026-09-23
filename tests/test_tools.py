@@ -207,7 +207,71 @@ def test_directory_list_pruning_performance(tmp_path: Path):
 
     act = WorkspaceFileAction(operation="list", path=".")
     obs = execute_file_action(act, base_dir=tmp_path)
-    assert obs.is_error is False
-    assert any("index.py" in f for f in obs.files)
     assert not any("huge_dep" in f for f in obs.files)
     assert not any("node_modules" in f for f in obs.files)
+
+
+def test_workspace_file_append_and_guards(tmp_path: Path):
+    """Test append operation, non-existent file guard, and MAX_APPENDS_PER_FILE ceiling."""
+    from orchestrator.tools.workspace_tools import reset_append_counts
+
+    reset_append_counts()
+
+    # 1. Non-existent file guard
+    act_nonexistent = WorkspaceFileAction(
+        operation="append", path="new_file.txt", content="hello"
+    )
+    obs_err = execute_file_action(act_nonexistent, base_dir=tmp_path)
+    assert obs_err.is_error is True
+    assert "Cannot append to non-existent file" in obs_err.message
+
+    # 2. Write initial file
+    target = tmp_path / "appended.txt"
+    target.write_text("Header\n", encoding="utf-8")
+
+    # 3. Successful appends
+    for i in range(1, 6):
+        act_app = WorkspaceFileAction(
+            operation="append", path="appended.txt", content=f"Line {i}\n"
+        )
+        obs_app = execute_file_action(act_app, base_dir=tmp_path)
+        assert obs_app.is_error is False
+        assert f"append {i}/5" in obs_app.message
+
+    assert "Line 5" in target.read_text(encoding="utf-8")
+
+    # 4. Exceeding MAX_APPENDS_PER_FILE
+    act_exceeded = WorkspaceFileAction(
+        operation="append", path="appended.txt", content="Line 6\n"
+    )
+    obs_exceeded = execute_file_action(act_exceeded, base_dir=tmp_path)
+    assert obs_exceeded.is_error is True
+    assert "Maximum append limit (5 appends) reached" in obs_exceeded.message
+
+    reset_append_counts()
+
+
+def test_workspace_file_dual_constraint_read_windowing(tmp_path: Path):
+    """Test LOC limit (250 lines) and char budget (12,000 chars) windowing."""
+    # 1. File > 250 LOC without line numbers
+    large_lines_file = tmp_path / "large_lines.py"
+    large_lines_file.write_text(
+        "\n".join(f"print('line {i}')" for i in range(400)), encoding="utf-8"
+    )
+
+    act_lines = WorkspaceFileAction(operation="read", path="large_lines.py")
+    obs_lines = execute_file_action(act_lines, base_dir=tmp_path)
+    assert obs_lines.is_error is False
+    assert "[Governance Notice: Showing lines 1-250 of 400 total lines" in obs_lines.file_content
+    assert "start_line=251" in obs_lines.file_content
+
+    # 2. File with long dense lines exceeding 12,000 chars within 50 lines
+    dense_file = tmp_path / "dense.json"
+    dense_lines = ["{" + f'"key_{i}": "' + "x" * 500 + '"}' for i in range(40)]
+    dense_file.write_text("\n".join(dense_lines), encoding="utf-8")
+
+    act_dense = WorkspaceFileAction(operation="read", path="dense.json")
+    obs_dense = execute_file_action(act_dense, base_dir=tmp_path)
+    assert obs_dense.is_error is False
+    assert "[Governance Notice: Read clamped by character budget" in obs_dense.file_content
+

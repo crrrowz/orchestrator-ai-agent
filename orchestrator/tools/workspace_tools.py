@@ -25,11 +25,22 @@ from orchestrator.control.human_channel import get_active_channel
 # ==========================================
 
 
+_APPEND_COUNTS: dict[str, int] = {}
+MAX_APPENDS_PER_FILE: int = 5
+MAX_READ_LINES: int = 250
+MAX_READ_CHARS: int = 12_000  # ~3,000 tokens safe input ceiling
+
+
+def reset_append_counts() -> None:
+    """Reset session append counters across pipeline iterations."""
+    _APPEND_COUNTS.clear()
+
+
 class WorkspaceFileAction(Action):
     """File manipulation action within the workspace sandbox."""
 
     model_config = ConfigDict(extra="ignore")
-    operation: Literal["read", "write", "edit", "list", "delete"]
+    operation: Literal["read", "write", "edit", "list", "delete", "append"]
     path: str
     content: Optional[str] = None
     target_text: Optional[str] = None
@@ -156,7 +167,7 @@ def execute_file_action(
                 )
 
     # RBAC Permission Enforcement
-    if action.operation in ("write", "edit", "delete"):
+    if action.operation in ("write", "edit", "delete", "append"):
         rel_posix = target_path.relative_to(workspace_root).as_posix()
         violation_reason = None
 
@@ -219,22 +230,66 @@ def execute_file_action(
             lines = target_path.read_text(
                 encoding="utf-8", errors="replace"
             ).splitlines(keepends=True)
-            start = (
-                (action.start_line - 1)
-                if action.start_line and action.start_line > 0
-                else 0
-            )
-            end = (
-                action.end_line
-                if action.end_line and action.end_line <= len(lines)
-                else len(lines)
-            )
-            selected_content = sanitize_output_secrets("".join(lines[start:end]))
+            total_lines = len(lines)
+
+            # 1. Line Constraint: window max 250 LOC
+            if action.start_line is not None or action.end_line is not None:
+                start = max(
+                    0,
+                    (action.start_line - 1)
+                    if action.start_line and action.start_line > 0
+                    else 0,
+                )
+                req_end = (
+                    action.end_line
+                    if action.end_line and action.end_line <= total_lines
+                    else total_lines
+                )
+                if (req_end - start) > MAX_READ_LINES:
+                    end = start + MAX_READ_LINES
+                    clamped_by_lines = True
+                else:
+                    end = req_end
+                    clamped_by_lines = False
+            else:
+                start = 0
+                if total_lines > MAX_READ_LINES:
+                    end = MAX_READ_LINES
+                    clamped_by_lines = True
+                else:
+                    end = total_lines
+                    clamped_by_lines = False
+
+            # 2. Token / Byte Constraint: window max 12,000 chars (~3,000 tokens)
+            sliced_text = "".join(lines[start:end])
+            clamped_by_chars = False
+            if len(sliced_text) > MAX_READ_CHARS:
+                cut_point = sliced_text.rfind("\n", 0, MAX_READ_CHARS)
+                if cut_point < MAX_READ_CHARS // 2:
+                    cut_point = MAX_READ_CHARS
+                sliced_text = sliced_text[:cut_point]
+                clamped_by_chars = True
+
+            # 3. Dynamic Governance Guidance
+            if clamped_by_chars:
+                notice = (
+                    f"\n\n[Governance Notice: Read clamped by character budget ({MAX_READ_CHARS} chars max). "
+                    f"Showing partial lines {start+1}-{end} of {total_lines}. Specify start_line with next unread section to paginate.]"
+                )
+            elif clamped_by_lines:
+                notice = (
+                    f"\n\n[Governance Notice: Showing lines {start+1}-{end} of {total_lines} total lines in '{action.path}'. "
+                    f"To read further, specify start_line={end+1}, end_line={min(total_lines, end + MAX_READ_LINES)} in workspace_file]"
+                )
+            else:
+                notice = ""
+
+            selected_content = sanitize_output_secrets(sliced_text) + notice
             return WorkspaceFileObservation(
                 content=[TextContent(text=selected_content)],
                 is_error=False,
                 success=True,
-                message=f"Read {len(lines[start:end])} lines from '{action.path}'.",
+                message=f"Read lines {start+1}-{end} of {total_lines} from '{action.path}'.",
                 file_content=selected_content,
             )
 
@@ -242,6 +297,48 @@ def execute_file_action(
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(action.content or "", encoding="utf-8")
             msg = f"File '{action.path}' written successfully ({len(action.content or '')} chars)."
+            return WorkspaceFileObservation(
+                content=[TextContent(text=msg)],
+                is_error=False,
+                success=True,
+                message=msg,
+            )
+
+        elif action.operation == "append":
+            if not target_path.exists():
+                err_msg = (
+                    f"Append guard: Cannot append to non-existent file '{action.path}'. "
+                    "Use operation='write' to initialize the file first."
+                )
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg,
+                )
+
+            key = str(target_path.resolve())
+            current_appends = _APPEND_COUNTS.get(key, 0)
+            if current_appends >= MAX_APPENDS_PER_FILE:
+                err_msg = (
+                    f"Append guard: Maximum append limit ({MAX_APPENDS_PER_FILE} appends) reached for '{action.path}'. "
+                    "Use operation='edit' with target_text or overwrite with 'write'."
+                )
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg,
+                )
+
+            _APPEND_COUNTS[key] = current_appends + 1
+            content_to_append = action.content or ""
+            with target_path.open("a", encoding="utf-8") as f:
+                f.write(content_to_append)
+            msg = (
+                f"File '{action.path}' appended successfully "
+                f"({len(content_to_append)} chars added, append {current_appends + 1}/{MAX_APPENDS_PER_FILE})."
+            )
             return WorkspaceFileObservation(
                 content=[TextContent(text=msg)],
                 is_error=False,
@@ -412,7 +509,7 @@ class WorkspaceFileExecutor(
 
 
 class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObservation]):
-    """Tool for reading, writing, editing, listing, and deleting files inside the project workspace."""
+    """Tool for reading, writing, editing, appending, listing, and deleting files inside the project workspace."""
 
     @classmethod
     def create(
@@ -436,7 +533,7 @@ class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObserva
 
         return [
             cls(
-                description="Read, write, edit, list, and delete files inside the project workspace.",
+                description="Read, write, edit, append, list, and delete files inside the project workspace.",
                 action_type=WorkspaceFileAction,
                 observation_type=WorkspaceFileObservation,
                 executor=WorkspaceFileExecutor(

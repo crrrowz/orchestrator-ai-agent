@@ -50,7 +50,7 @@ class OrchestratorConfig(BaseModel):
     )
     max_agent_steps: int = Field(default=int(os.environ.get("MAX_AGENT_STEPS", "12")))
     max_tokens_per_call: int = Field(
-        default=int(os.environ.get("MAX_TOKENS_PER_CALL", "4096"))
+        default=int(os.environ.get("MAX_TOKENS_PER_CALL", "8192"))
     )
     circuit_breaker_threshold: int = Field(
         default=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "2"))

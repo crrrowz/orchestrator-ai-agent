@@ -1,7 +1,12 @@
 """Control layer public API."""
 
 from .budget_guard import BudgetGuard
-from .cost_estimator import CostEstimator, CostEstimateResult
+from .context_budget_manager import (
+    BudgetEvaluation,
+    CallDecision,
+    ContextBudgetManager,
+)
+from .cost_estimator import CostEstimateResult, CostEstimator
 from .human_channel import HumanInterventionChannel
 from .pipeline_controller import PipelineController
 
@@ -14,4 +19,8 @@ __all__ = [
     "BudgetGuard",
     "CostEstimator",
     "CostEstimateResult",
+    "ContextBudgetManager",
+    "CallDecision",
+    "BudgetEvaluation",
 ]
+

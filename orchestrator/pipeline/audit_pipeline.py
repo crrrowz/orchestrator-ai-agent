@@ -5,21 +5,21 @@ from pathlib import Path
 from typing import Optional
 
 from openhands.sdk import Conversation
-from orchestrator.adapters import ProjectAdapter, detect_adapter
-from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.agents import create_auditor_agent
-from orchestrator.control import PipelineController, HumanInterventionChannel
+from orchestrator.config import OrchestratorConfig, SkillManager
+from orchestrator.control import HumanInterventionChannel, PipelineController
 from orchestrator.control.human_channel import set_active_channel
+from orchestrator.pipeline.base_pipeline import BasePipeline
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.utils import (
     ConsoleOutput,
-    SessionLogStore,
     OrchestratorLiveVisualizer,
+    SessionLogStore,
 )
 from orchestrator.utils.graft_context import GraftContextProvider
 
 
-class AuditPipeline:
+class AuditPipeline(BasePipeline):
     """Hybrid Deep Code Analysis Pipeline: zero-token static analysis followed by LLM Auditor report synthesis."""
 
     def __init__(
@@ -30,111 +30,13 @@ class AuditPipeline:
         human_channel: Optional[HumanInterventionChannel] = None,
         controller: Optional[PipelineController] = None,
     ):
-        self.config = config
-        self.skill_manager = skill_manager
-        self.workspace_path = (workspace_path or config.workspace_path).resolve()
-        self.human_channel = human_channel or HumanInterventionChannel(
-            enabled=config.interactive or bool(config.approval_gates)
+        super().__init__(
+            config=config,
+            skill_manager=skill_manager,
+            workspace_path=workspace_path,
+            human_channel=human_channel,
+            controller=controller,
         )
-        self.controller = controller or PipelineController()
-        self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
-
-    def _run_conv(
-        self,
-        conv: Conversation,
-        role: str,
-        max_retries: int = 2,
-        timeout_seconds: int = 300,
-        max_steps: Optional[int] = None,
-        max_tokens: Optional[int] = None,
-    ) -> None:
-        """Execute conversation with iteration limits, token cap monitor, timeout guard, and backoff retry."""
-        import threading
-
-        step_limit = max_steps or getattr(self.config, "max_agent_steps", 8)
-        token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 250_000)
-
-        # Configure native OpenHands step limit
-        if hasattr(conv, "max_iteration_per_run"):
-            conv.max_iteration_per_run = step_limit
-
-        for attempt in range(max_retries + 1):
-            if not self.controller.check_should_continue():
-                ConsoleOutput.warning(
-                    f"Conversation execution halted by controller for {role}."
-                )
-                return
-
-            stop_monitor = threading.Event()
-
-            def monitor():
-                start_time = time.time()
-                while not stop_monitor.is_set():
-                    # Timeout check
-                    if (
-                        timeout_seconds > 0
-                        and (time.time() - start_time) >= timeout_seconds
-                    ):
-                        ConsoleOutput.warning(
-                            f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
-                        )
-                        if hasattr(conv, "interrupt"):
-                            conv.interrupt()
-                        elif hasattr(conv, "pause"):
-                            conv.pause()
-                        break
-
-                    # Token limit check
-                    llm = getattr(conv, "agent", None) and getattr(
-                        conv.agent, "llm", None
-                    )
-                    if llm and hasattr(llm, "metrics"):
-                        tu = getattr(llm.metrics, "accumulated_token_usage", None)
-                        if tu:
-                            pt = getattr(tu, "prompt_tokens", 0)
-                            ct = getattr(tu, "completion_tokens", 0)
-                            if isinstance(pt, (int, float)) and isinstance(
-                                ct, (int, float)
-                            ):
-                                total_tok = int(pt + ct)
-                                if token_limit > 0 and total_tok >= token_limit:
-                                    ConsoleOutput.warning(
-                                        f"Agent {role} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
-                                    )
-                                    if hasattr(conv, "interrupt"):
-                                        conv.interrupt()
-                                    elif hasattr(conv, "pause"):
-                                        conv.pause()
-                                    break
-
-                    # Controller abort check
-                    if not self.controller.check_should_continue():
-                        if hasattr(conv, "interrupt"):
-                            conv.interrupt()
-                        elif hasattr(conv, "pause"):
-                            conv.pause()
-                        break
-
-                    stop_monitor.wait(1.0)
-
-            monitor_thread = threading.Thread(target=monitor, daemon=True)
-            monitor_thread.start()
-
-            try:
-                conv.run()
-                return
-            except Exception as e:
-                if attempt < max_retries:
-                    delay = 2**attempt
-                    ConsoleOutput.warning(
-                        f"Agent {role} execution failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
-                        f"Retrying in {delay}s..."
-                    )
-                    time.sleep(delay)
-                else:
-                    raise
-            finally:
-                stop_monitor.set()
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
@@ -237,7 +139,8 @@ class AuditPipeline:
             f"{graft_part}\n\n"
             "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
             "1. Inspect 3-5 critical hotspot files identified above to verify key architecture, boundaries, and duplication.\n"
-            "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`) in a SINGLE comprehensive `write` operation.\n"
+            "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`).\n"
+            "   - You may write the report overview using `operation='write'` and append subsequent detailed sections with `operation='append'` if needed.\n"
             "3. Your report MUST follow this rigorous structure:\n"
             "   - # Codebase Architecture & Security Audit Report\n"
             "   - ## 1. Executive Summary & Architecture Health Score\n"
@@ -246,8 +149,8 @@ class AuditPipeline:
             "   - ## 4. Security, Secret Leak & Subprocess Vulnerability Audit\n"
             "   - ## 5. Error Handling, Edge Cases & Failure Recovery Gaps\n"
             "   - ## 6. Actionable Prioritized Remediation Roadmap (Specific code tasks for Developer agent)\n"
-            "4. NEVER re-read `docs/AUDIT_REPORT.md` or append to it across multiple calls.\n"
-            "5. Once `docs/AUDIT_REPORT.md` is written, call FinishAction to conclude your turn."
+            "4. For Section 6, define concrete target file paths and precise planned code changes.\n"
+            "5. Once `docs/AUDIT_REPORT.md` is complete, call FinishAction to conclude your turn."
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))
@@ -256,6 +159,7 @@ class AuditPipeline:
             "Auditor",
             max_steps=getattr(self.config, "max_agent_steps", 8),
             max_tokens=getattr(self.config, "max_tokens_budget", 250_000),
+            task_complexity="high",
         )
         dur = time.perf_counter() - t_start
         u_audit = get_llm_usage(auditor_agent.llm)
