@@ -15,9 +15,10 @@
   - Mutual Free-Model Cascade: `openrouter/free` routes through `qwen/qwen3.8-27b:free` first then general free pool, avoiding rate-limited Gemma endpoints.
   - Native OpenHands SDK `FallbackStrategy` attached with lazy-resolved mutual fallback LLM on transient exceptions (RateLimitError 429).
   - Rapid Retry: Reduced tenacity retry ceiling from 30s to 5s (`num_retries=2, retry_min_wait=1, retry_max_wait=5`) preventing terminal freezes.
-- [DONE] Terminal UI & Log Management:
+- [DONE] Terminal UI & Live Event Streaming:
   - Custom `OrchestratorLiveVisualizer` inheriting from `ConversationVisualizerBase`, suppressing raw prompt dumps and LiteLLM stack traces (`litellm.suppress_debug_info = True`, `LITELLM_LOG=CRITICAL`).
-  - `OPENHANDS_SUPPRESS_BANNER=1` configured.
+  - Active Role & Model Identification: Live stream displays current role (`[Developer]`, `[Tester]`, etc.) and active model (`openrouter/openrouter/free`, `qwen/qwen3.8-27b:free`) on every turn.
+  - Live Step Telemetry: Streams real-time elapsed seconds per phase (`⏱ 14.2s`) and token consumption from `agent.llm.metrics` (`🪙 X tok (In: Y Out: Z)`).
   - Real-time Log Auto-Flush: `log_store.add_step()` flushes immediately to `diagnostics/logs/latest_session.json` on each event and on `finally` block, ensuring `--logs` works even if a session is aborted with `KeyboardInterrupt` (Ctrl+C).
   - `InteractiveLogExplorer` supporting arrow-key step navigation, accordion expand/collapse (`Enter`/`Right`/`Left`/`A`), and `--logs` CLI review.
 - [DONE] Graft Codebase Intelligence Integration:
@@ -46,15 +47,15 @@
   - Git CLI (branch isolation per task run).
 
 ## Technical Decisions
+- Decision: Stream live execution status (role, model, tool, elapsed time, tokens) in `OrchestratorLiveVisualizer.on_event` while maintaining prompt suppression.
+  - Reason: Users previously saw static banners with zero feedback during multi-minute LLM code generation.
+  - Status: Implemented and active.
 - Decision: Use native OpenHands SDK `FallbackStrategy` with lazy-resolved mutual fallback between `openrouter/openrouter/free` and `openrouter/qwen/qwen3.8-27b:free`.
   - Reason: OpenRouter upstream free-tier models frequently encounter transient 429 concurrency throttles. Mutual fallback LLM prevents pipeline termination.
   - Status: Implemented and verified.
 - Decision: Immediate log auto-flush on every step and in pipeline `finally` block instead of deferred end-of-pipeline write.
   - Reason: Aborted sessions (Ctrl+C) previously left no log file, causing `--logs` to report missing logs.
-  - Status: Implemented.
-- Decision: Use `ConversationVisualizerBase` subclass with silenced LiteLLM logs.
-  - Reason: Default visualizer and LiteLLM retry mixin flood the console with multi-page raw prompt dumps and red tracebacks.
-  - Status: Implemented via `OrchestratorLiveVisualizer` and `litellm.suppress_debug_info = True`.
+  - Status: Implemented and verified (session logs active at 3.6MB+).
 - Decision: Graft CLI via `WorkspaceTerminalTool` rather than ad-hoc custom python AST parsers.
   - Reason: Graft already provides sub-second indexing, call graphs, hubs, hotspots, and blast radius calculations at zero token cost.
   - Status: Implemented with `graft-architecture-intelligence` skill.
@@ -65,24 +66,25 @@
 - Terminal output must remain concise and clean; raw system prompts must never flood stdout.
 
 ## Current State
-- Status: Live Execution Running.
-- Active Task: User initiated `uv run python -m orchestrator.main` with free-tier OpenRouter cascade.
+- Status: Live Execution Active (Step 36+ in progress).
+- Active Task: Developer agent autonomously implementing HTML Page clean architecture in `html page/`.
 - Working Files:
-  - `orchestrator/config.py`
-  - `orchestrator/main.py`
-  - `orchestrator/pipeline/dev_test_loop.py`
   - `orchestrator/utils/visualizer.py`
-  - `tests/test_skills.py`
+  - `orchestrator/pipeline/dev_test_loop.py`
+  - `orchestrator/pipeline/full_pipeline.py`
+  - `orchestrator/utils/output.py`
+  - `diagnostics/logs/latest_session.json`
 - Implemented:
   - Full multi-agent orchestration pipelines (Dev-Test loop, 4-agent full pipeline).
   - Resilient OpenRouter API routing with dual fallback (litellm body + SDK FallbackStrategy).
+  - Live streaming terminal progress with model, role, elapsed time, and token metrics.
   - Immediate log persistence on interrupt and `--logs` explorer.
   - Graft codebase intelligence skill and Architect terminal integration.
 - Known Bugs: None.
 - Blockers: None.
 
 ## Next Steps
-1. [HIGH] Verify completion of the running `uv run python -m orchestrator.main` task.
+1. [HIGH] Monitor completion of the running `uv run python -m orchestrator.main` task.
 2. [MEDIUM] Expose Graft MCP tools (`graft mcp`) directly as OpenHands native tools if stdio streaming is needed without subshell execution.
 3. [LOW] Add automated periodic `graft build` hook upon Git commit in `orchestrator/utils/git_ops.py`.
 
