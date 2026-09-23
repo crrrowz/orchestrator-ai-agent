@@ -267,6 +267,26 @@ class ConfigLoader:
             if v is not None:
                 merged_kwargs[k] = v
 
+        # Allow concise model overrides from .env (e.g. MODEL=... or DEVELOPER_MODEL=...) for default workspace runs
+        if config_path is None:
+            env_model = os.environ.get("MODEL") or os.environ.get("DEFAULT_MODEL")
+            for role_name in (
+                "developer",
+                "tester",
+                "reviewer",
+                "architect",
+                "documentation",
+            ):
+                role_env_model = (
+                    os.environ.get(f"{role_name.upper()}_MODEL") or env_model
+                )
+                if role_env_model and role_name in merged_kwargs:
+                    existing_role_cfg = merged_kwargs[role_name]
+                    if hasattr(existing_role_cfg, "model"):
+                        existing_role_cfg.model = role_env_model
+                    elif isinstance(existing_role_cfg, dict):
+                        existing_role_cfg["model"] = role_env_model
+
         config = OrchestratorConfig(**merged_kwargs)
         if resolved_file:
             config._loaded_from_path = resolved_file

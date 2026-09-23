@@ -165,6 +165,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path to custom orchestrator.config.json file.",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Override LLM model across all agents (e.g. 'openrouter/z-ai/glm-5.2:free', 'gemini/gemini-2.0-flash').",
+    )
     return parser.parse_args()
 
 
@@ -192,6 +198,19 @@ def main() -> None:
             config.max_iterations = "auto"
         elif clean_it.isdigit():
             config.max_iterations = int(clean_it)
+
+    if args.model:
+        clean_model = args.model.strip()
+        for role_attr in (
+            "developer",
+            "tester",
+            "reviewer",
+            "architect",
+            "documentation",
+        ):
+            role_cfg = getattr(config, role_attr, None)
+            if role_cfg and hasattr(role_cfg, "model"):
+                role_cfg.model = clean_model
 
     skill_manager = SkillManager(ORCHESTRATOR_ROOT)
 
