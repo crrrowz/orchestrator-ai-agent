@@ -1,12 +1,11 @@
 """Autonomous Codebase Audit & Fix Pipeline: Scan -> Remediate -> Verify Loop without Git."""
 
-import shutil
-import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from openhands.sdk import Conversation
+from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.config import (
     OrchestratorConfig,
     SkillManager,
@@ -21,14 +20,12 @@ from orchestrator.control import (
     PipelineController,
 )
 from orchestrator.control.human_channel import set_active_channel
-from orchestrator.guards import PreFlightGuard
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
 from orchestrator.utils import (
     ConsoleOutput,
     GraftContextProvider,
     OrchestratorLiveVisualizer,
-    PytestOutputParser,
     SessionLogStore,
 )
 
@@ -54,6 +51,7 @@ class AuditFixPipeline:
         )
         self.controller = controller or PipelineController()
         self.budget_guard = BudgetGuard(max_budget_usd=config.max_budget_usd)
+        self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
 
     def _run_conv(
         self,
@@ -101,140 +99,44 @@ class AuditFixPipeline:
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
-        excluded_dirs = {
-            ".git",
-            ".venv",
-            "venv",
-            "__pycache__",
-            "node_modules",
-            "site-packages",
-            ".pytest_cache",
-            ".agents",
-        }
-        total_py_files = 0
-        total_loc = 0
-        files_by_size: list[tuple[str, int]] = []
-
-        for p in self.workspace_path.rglob("*.py"):
-            if any(part in excluded_dirs for part in p.parts):
-                continue
-            try:
-                lines = len(
-                    p.read_text(encoding="utf-8", errors="replace").splitlines()
-                )
-                total_py_files += 1
-                total_loc += lines
-                files_by_size.append(
-                    (p.relative_to(self.workspace_path).as_posix(), lines)
-                )
-            except Exception:
-                continue
-
-        files_by_size.sort(key=lambda x: x[1], reverse=True)
-        return {
-            "total_files": total_py_files,
-            "total_loc": total_loc,
-            "avg_loc": (total_loc // total_py_files) if total_py_files > 0 else 0,
-            "top_files": files_by_size[:10],
-        }
+        return self.adapter.collect_codebase_metrics(self.workspace_path)
 
     def run_static_checks(self) -> Tuple[bool, List[str]]:
-        """Execute zero-token AST syntax validation and Ruff static analysis."""
-        issues: List[str] = []
-
-        # 1. AST Syntax validation
-        syntax_ok, syntax_err = PreFlightGuard.check_syntax(self.workspace_path)
-        if not syntax_ok and syntax_err:
-            issues.append(f"[Syntax Error]\n{syntax_err}")
-
-        # 2. Ruff analysis if installed
-        if shutil.which("ruff"):
-            try:
-                res = subprocess.run(
-                    ["ruff", "check", ".", "--output-format=concise"],
-                    cwd=str(self.workspace_path),
-                    capture_output=True,
-                    text=True,
-                    timeout=20,
-                )
-                if res.returncode != 0 and res.stdout.strip():
-                    lines = [
-                        line.strip() for line in res.stdout.splitlines() if line.strip()
-                    ]
-                    issues.append(
-                        f"[Ruff Lint Issues ({len(lines)})]\n" + "\n".join(lines[:15])
-                    )
-            except Exception:
-                pass
-
-        return (len(issues) == 0, issues)
+        """Execute zero-token syntax validation and static analysis via adapter."""
+        return self.adapter.run_static_analysis(self.workspace_path)
 
     def run_test_suite(self, timeout_seconds: int = 60) -> Tuple[bool, str]:
-        """Execute pytest suite if tests directory or test files exist."""
-        has_tests = (
-            (self.workspace_path / "tests").exists()
-            or list(self.workspace_path.glob("test_*.py"))
-            or list(self.workspace_path.glob("*_test.py"))
-            or (self.workspace_path / "pyproject.toml").exists()
-        )
-        if not has_tests:
-            return (True, "No test suite detected in workspace.")
+        """Execute test suite via detected language adapter."""
+        if not self.adapter.has_test_suite(self.workspace_path):
+            return (
+                True,
+                f"No test suite detected for {self.adapter.language_name} in workspace.",
+            )
 
-        pytest_cmd = (
-            "uv run pytest -v"
-            if (shutil.which("uv") and (self.workspace_path / "uv.lock").exists())
-            else "python -m pytest -v"
-        )
+        test_cmd = self.adapter.get_test_command(self.workspace_path)
+        if not test_cmd:
+            return (True, "No test command configured.")
+
         test_run = execute_terminal_action(
-            WorkspaceTerminalAction(
-                command=pytest_cmd, timeout_seconds=timeout_seconds
-            ),
+            WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),
             base_dir=self.workspace_path,
         )
 
         if test_run.exit_code == 0:
-            return (True, "All pytest unit tests passed successfully.")
+            return (
+                True,
+                f"All {self.adapter.language_name} unit tests passed successfully.",
+            )
 
-        compact = PytestOutputParser.extract_compact_failures(
-            test_run.stdout, test_run.stderr
+        compact = self.adapter.parse_test_failures(test_run.stdout, test_run.stderr)
+        return (
+            False,
+            f"[{self.adapter.language_name.capitalize()} Test Failures (Exit Code {test_run.exit_code})]\n{compact}",
         )
-        return (False, f"[Pytest Failures (Exit Code {test_run.exit_code})]\n{compact}")
 
     def run_zero_token_autofix(self) -> Tuple[bool, str]:
-        """Execute local deterministic code fixes (Ruff check --fix and format) in ~50ms with 0 tokens.
-
-        Fixes unused imports, basic syntax deprecations, formatting, and PEP 8 issues without LLM invocation.
-        """
-        if not shutil.which("ruff"):
-            return (False, "ruff not available")
-
-        try:
-            # 1. Automatic safe lint fixes (unused imports, syntax deprecations, etc.)
-            subprocess.run(
-                [
-                    "ruff",
-                    "check",
-                    "--fix",
-                    "--unsafe-fixes",
-                    "--output-format=concise",
-                    ".",
-                ],
-                cwd=str(self.workspace_path),
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            # 2. Deterministic code formatting
-            subprocess.run(
-                ["ruff", "format", "."],
-                cwd=str(self.workspace_path),
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            return (True, "Zero-token auto-fixes applied")
-        except Exception as e:
-            return (False, str(e))
+        """Execute local deterministic code fixes/formatting via adapter."""
+        return self.adapter.run_zero_token_autofix(self.workspace_path)
 
     def run(self, task_description: str = "") -> dict:
         """Run the continuous autonomous audit-and-fix loop without Git operations."""
@@ -244,12 +146,13 @@ class AuditFixPipeline:
 
         ConsoleOutput.banner(
             "Autonomous Audit & Auto-Fix Loop (Git-Free)",
-            f"Workspace: {self.workspace_path} | Max Iterations: {self.config.max_iterations}",
+            f"Workspace: {self.workspace_path} | Stack: {self.adapter.language_name.capitalize()} | Max Iterations: {self.config.max_iterations}",
         )
 
         # Step 0: Zero-Token Pre-Fix Strategy (Deterministic Local Linter & Formatter)
         ConsoleOutput.agent_step(
-            "PRE-FIX", "Running zero-token automated lint & format fixer (Ruff)..."
+            "PRE-FIX",
+            f"Running zero-token automated lint & format fixer ({self.adapter.language_name.capitalize()})...",
         )
         autofix_ok, _ = self.run_zero_token_autofix()
         if autofix_ok:
@@ -391,15 +294,16 @@ class AuditFixPipeline:
             dev_prompt = (
                 f"Task: {user_directive}\n\n"
                 f"Iteration {iteration} of {self.config.max_iterations} - Auto-Fix Remediation Directive:\n"
-                "The automated audit detected the following issues that must be solved:\n\n"
+                f"The automated audit detected the following issues that must be solved in this {self.adapter.language_name.capitalize()} project:\n\n"
                 f"{issues_text}\n"
                 f"{graft_part}\n\n"
                 "INSTRUCTIONS:\n"
                 "1. Inspect ONLY the specific affected files where errors/failures were reported.\n"
                 "2. Do NOT read unmentioned files or list unrelated directories to conserve token context.\n"
-                "3. Apply robust, production-grade fixes directly to the files adhering to clean-python-architecture.\n"
+                f"3. Apply robust, production-grade fixes directly to the files adhering to {self.adapter.language_name} best practices.\n"
                 "4. Ensure all syntax, type errors, lint issues, and test failures are completely resolved.\n"
-                "5. Do NOT use git commands (all changes must be made directly to the workspace files)."
+                "5. Do NOT use git commands (all changes must be made directly to the workspace files).\n\n"
+                f"{self.adapter.get_developer_prompt_guidance()}"
             )
 
             t_dev = time.perf_counter()

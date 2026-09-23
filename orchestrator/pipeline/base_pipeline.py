@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from openhands.sdk import Conversation
 
+from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.config import (
     DEFAULT_DIAGNOSTICS_DIR,
     OrchestratorConfig,
@@ -59,6 +60,7 @@ class BasePipeline(ABC):
         self.human_channel = human_channel or HumanChannel(
             enabled=config.interactive or bool(config.approval_gates),
         )
+        self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
 
     def _setup_run(
         self,
@@ -215,23 +217,27 @@ class BasePipeline(ABC):
             return False
         return True
 
+    def _execute_tests(self, timeout_seconds: int = 60) -> WorkspaceTerminalObservation:
+        """Execute project test suite using detected language adapter."""
+        test_cmd = self.adapter.get_test_command(self.workspace_path)
+        if not test_cmd:
+            if (self.workspace_path / "pyproject.toml").exists():
+                test_cmd = "pytest -v"
+            elif (self.workspace_path / "tests").exists():
+                test_cmd = "pytest tests/ -v"
+            else:
+                test_cmd = "pytest -v"
+
+        return execute_terminal_action(
+            WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),
+            base_dir=self.workspace_path,
+        )
+
     def _execute_pytest(
         self, timeout_seconds: int = 60
     ) -> WorkspaceTerminalObservation:
-        """Execute pytest against the workspace directory."""
-        if (self.workspace_path / "pyproject.toml").exists():
-            pytest_cmd = "pytest -v"
-        elif (self.workspace_path / "tests").exists():
-            pytest_cmd = "pytest tests/ -v"
-        else:
-            pytest_cmd = "pytest -v"
-
-        return execute_terminal_action(
-            WorkspaceTerminalAction(
-                command=pytest_cmd, timeout_seconds=timeout_seconds
-            ),
-            base_dir=self.workspace_path,
-        )
+        """Execute pytest against the workspace directory (backward-compatible alias)."""
+        return self._execute_tests(timeout_seconds=timeout_seconds)
 
     def _finalize_pipeline(
         self,

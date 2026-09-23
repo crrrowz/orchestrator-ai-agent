@@ -1,17 +1,15 @@
 """Deep Codebase Audit Pipeline: Static AST + Flake8/Ruff Lint + LLM Auditor Agent."""
 
-import shutil
-import subprocess
 import time
 from pathlib import Path
 from typing import Optional
 
 from openhands.sdk import Conversation
+from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.agents import create_auditor_agent
 from orchestrator.control import PipelineController, HumanInterventionChannel
 from orchestrator.control.human_channel import set_active_channel
-from orchestrator.guards import PreFlightGuard
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.utils import (
     ConsoleOutput,
@@ -39,6 +37,7 @@ class AuditPipeline:
             enabled=config.interactive or bool(config.approval_gates)
         )
         self.controller = controller or PipelineController()
+        self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
 
     def _run_conv(
         self,
@@ -86,85 +85,23 @@ class AuditPipeline:
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
-        excluded_dirs = {
-            ".git",
-            ".venv",
-            "venv",
-            "__pycache__",
-            "node_modules",
-            "site-packages",
-            ".pytest_cache",
-            ".agents",
-        }
-        total_py_files = 0
-        total_loc = 0
-        files_by_size: list[tuple[str, int]] = []
-
-        for p in self.workspace_path.rglob("*.py"):
-            if any(part in excluded_dirs for part in p.parts):
-                continue
-            try:
-                lines = len(
-                    p.read_text(encoding="utf-8", errors="replace").splitlines()
-                )
-                total_py_files += 1
-                total_loc += lines
-                files_by_size.append(
-                    (p.relative_to(self.workspace_path).as_posix(), lines)
-                )
-            except Exception:
-                continue
-
-        files_by_size.sort(key=lambda x: x[1], reverse=True)
-        return {
-            "total_files": total_py_files,
-            "total_loc": total_loc,
-            "avg_loc": (total_loc // total_py_files) if total_py_files > 0 else 0,
-            "top_files": files_by_size[:10],
-        }
+        return self.adapter.collect_codebase_metrics(self.workspace_path)
 
     def run_static_checks(self) -> str:
-        """Execute zero-token AST syntax validation and optional linter scans."""
+        """Execute zero-token syntax validation and static analysis via adapter."""
         lines: list[str] = []
-
-        # 1. Syntax Check via AST py_compile
-        syntax_ok, syntax_errors = PreFlightGuard.check_syntax(self.workspace_path)
-        if syntax_ok:
+        is_clean, issues = self.adapter.run_static_analysis(self.workspace_path)
+        if is_clean:
             lines.append(
-                "- AST Syntax Validation: [PASS] (No compilation errors detected)"
+                f"- {self.adapter.language_name.capitalize()} Static Analysis: [CLEAN] (0 defects detected)"
             )
         else:
-            lines.append("- AST Syntax Validation: [FAIL] Syntax errors detected:")
-            for err in syntax_errors[:5]:
-                lines.append(f"  * {err}")
-
-        # 2. Ruff linter if available
-        if shutil.which("ruff"):
-            try:
-                res = subprocess.run(
-                    ["ruff", "check", ".", "--output-format=concise"],
-                    cwd=str(self.workspace_path),
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                )
-                if res.returncode == 0:
-                    lines.append("- Ruff Static Analysis: [CLEAN] (0 lint errors)")
-                else:
-                    lint_sample = [
-                        line_text
-                        for line_text in res.stdout.splitlines()
-                        if line_text.strip()
-                    ][:8]
-                    lines.append(
-                        f"- Ruff Static Analysis: [ISSUES DETECTED] ({len(res.stdout.splitlines())} warnings/errors):"
-                    )
-                    for line_text in lint_sample:
-                        lines.append(f"  * {line_text.strip()}")
-            except Exception as e:
-                lines.append(f"- Ruff Static Analysis: [SKIPPED] ({e})")
-        else:
-            lines.append("- Ruff Static Analysis: [SKIPPED] (ruff CLI not installed)")
+            lines.append(
+                f"- {self.adapter.language_name.capitalize()} Static Analysis: [ISSUES DETECTED] ({len(issues)} warnings/errors):"
+            )
+            for iss in issues[:10]:
+                for line in iss.splitlines():
+                    lines.append(f"  * {line.strip()}")
 
         return "\n".join(lines)
 
