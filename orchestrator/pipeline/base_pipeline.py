@@ -120,7 +120,7 @@ class BasePipeline(ABC):
             max_budget_usd=self.config.max_budget_usd,
             max_retained_reports=getattr(self.config, "max_retained_reports", 20),
         )
-        memory_store = ConversationMemoryStore(DEFAULT_DIAGNOSTICS_DIR)
+        memory_store = ConversationMemoryStore(DEFAULT_DIAGNOSTICS_DIR / "memory")
         log_store = SessionLogStore(self.workspace_path)
         visualizer = OrchestratorLiveVisualizer(
             log_store=log_store, verbosity=self.config.verbosity

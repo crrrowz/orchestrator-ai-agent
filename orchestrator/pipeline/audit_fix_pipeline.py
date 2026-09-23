@@ -31,13 +31,91 @@ from orchestrator.utils import (
 )
 
 
+def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
+    """Extract discrete actionable audit findings, sorted by severity (CRITICAL, HIGH, MEDIUM, LOW)."""
+    if not report_content:
+        return []
+
+    severity_weights = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    findings: List[Dict[str, Any]] = []
+
+    # Pattern: ### X.Y [SEVERITY] Title ... up to next ### or ##
+    pattern = r"###\s*(\d+\.\d+)\s*\[(CRITICAL|HIGH|MEDIUM|LOW)\]\s*([^\n]+)([\s\S]*?)(?=\n###|\n##|\Z)"
+    for m in re.finditer(pattern, report_content, re.IGNORECASE):
+        num, sev, title, body = m.groups()
+        sev_upper = sev.upper()
+        clean_title = title.strip()
+        # Ignore sections indicating invariants or things NOT to break
+        if any(
+            skip in clean_title.lower() or skip in body[:150].lower()
+            for skip in ["invariant", "do not break", "keep", "health score"]
+        ):
+            continue
+
+        finding_text = f"### {num} [{sev_upper}] {clean_title}\n{body.strip()}"
+        findings.append(
+            {
+                "id": num,
+                "severity": sev_upper,
+                "weight": severity_weights.get(sev_upper, 99),
+                "title": clean_title,
+                "content": finding_text,
+            }
+        )
+
+    if not findings:
+        fallback_text = ""
+        # Priority 1: Section 6
+        m6 = re.search(
+            r"(##\s*6\.\s*Actionable Prioritized Remediation Roadmap[\s\S]*?)(?=\n##|\Z)",
+            report_content,
+            re.IGNORECASE,
+        )
+        if m6 and m6.group(1).strip():
+            fallback_text = m6.group(1).strip()
+        else:
+            # Priority 2: Section 4 Key Recommendations
+            m4 = re.search(
+                r"(##\s*(?:4\.\s*)?Key Recommendations[\s\S]*?)(?=\n##|\Z)",
+                report_content,
+                re.IGNORECASE,
+            )
+            if m4 and m4.group(1).strip():
+                fallback_text = m4.group(1).strip()
+            else:
+                m_rec = re.search(
+                    r"(^##\s+.*(?:Recommendation|Actionable Tasks).*[\s\S]*?)(?=\n##|\Z)",
+                    report_content,
+                    re.IGNORECASE | re.MULTILINE,
+                )
+                if m_rec and m_rec.group(1).strip():
+                    fallback_text = m_rec.group(1).strip()
+
+        if fallback_text:
+            findings.append(
+                {
+                    "id": "1.0",
+                    "severity": "HIGH",
+                    "weight": 1,
+                    "title": "Actionable Audit Recommendations",
+                    "content": fallback_text,
+                }
+            )
+
+    findings.sort(key=lambda x: (x["weight"], x["id"]))
+    return findings
+
+
 def extract_actionable_recommendations(report_content: str) -> str:
-    """Extract actionable recommendations sections (e.g. Section 6 Roadmap or Section 4 Key Recommendations),
-    deliberately stripping file metric tables to prevent false-positive scope locking on clean files."""
+    """Extract actionable recommendations sections, filtering out structural invariants."""
     if not report_content:
         return ""
 
-    # Priority 1: Section 6 "Actionable Prioritized Remediation Roadmap"
+    findings = extract_audit_findings_list(report_content)
+    if findings:
+        return "\n\n".join(f["content"] for f in findings[:3])
+
+    # Fallback Priority 1: Section 6 "Actionable Prioritized Remediation Roadmap"
     match_sec6 = re.search(
         r"(##\s*6\.\s*Actionable Prioritized Remediation Roadmap[\s\S]*?)(?=\n##|\Z)",
         report_content,
@@ -46,7 +124,7 @@ def extract_actionable_recommendations(report_content: str) -> str:
     if match_sec6 and match_sec6.group(1).strip():
         return match_sec6.group(1).strip()
 
-    # Priority 2: Section 4 "Key Recommendations"
+    # Fallback Priority 2: Section 4 "Key Recommendations"
     match_sec4 = re.search(
         r"(##\s*(?:4\.\s*)?Key Recommendations[\s\S]*?)(?=\n##|\Z)",
         report_content,
@@ -55,33 +133,22 @@ def extract_actionable_recommendations(report_content: str) -> str:
     if match_sec4 and match_sec4.group(1).strip():
         return match_sec4.group(1).strip()
 
-    # Priority 3: Any "## Recommendations" or "## Actionable Tasks"
+    # Fallback Priority 3: Strictly match ## level recommendations, avoiding invariants
     match_rec = re.search(
-        r"(##\s*.*(?:Recommendation|Actionable|Remediation).*[\s\S]*?)(?=\n##|\Z)",
+        r"(^##\s+.*(?:Recommendation|Actionable Tasks).*[\s\S]*?)(?=\n##|\Z)",
         report_content,
-        re.IGNORECASE,
+        re.IGNORECASE | re.MULTILINE,
     )
     if match_rec and match_rec.group(1).strip():
         return match_rec.group(1).strip()
 
-    # Fallback: Strip lines that look like file metrics table (e.g. `path` (123 LOC))
-    lines = []
-    for line in report_content.splitlines():
-        if (
-            re.search(r"\(\d+\s*LOC\)", line)
-            or "Largest Modules" in line
-            or "Total Files" in line
-        ):
-            continue
-        lines.append(line)
-    return "\n".join(lines[:60])
+    return ""
 
 
 def extract_affected_files(issues: List[str], workspace_path: Path) -> List[str]:
-    """Extract distinct relative file paths mentioned in issues and error traces, capped to top priorities."""
+    """Extract distinct relative file paths mentioned in issues, resolving partial basenames."""
     affected = set()
     for text in issues:
-        # Exclude documentation files (.md) from code fix scope
         matches = re.findall(
             r"([\w\-./\\]+\.(?:py|ts|tsx|js|jsx|json|toml|yaml|yml))", text
         )
@@ -89,7 +156,22 @@ def extract_affected_files(issues: List[str], workspace_path: Path) -> List[str]
             clean = m.replace("\\", "/").strip("./:")
             candidate = workspace_path / clean
             if candidate.exists() and candidate.is_file():
-                affected.add(clean)
+                try:
+                    affected.add(candidate.relative_to(workspace_path).as_posix())
+                except ValueError:
+                    affected.add(clean)
+            else:
+                # If only filename was mentioned (e.g. workspace_tools.py), search workspace
+                file_name = Path(clean).name
+                found = [
+                    p.relative_to(workspace_path).as_posix()
+                    for p in workspace_path.rglob(file_name)
+                    if ".git" not in p.parts
+                    and ".venv" not in p.parts
+                    and "site-packages" not in p.parts
+                ]
+                for f in found:
+                    affected.add(f)
     sorted_affected = sorted(list(affected))
     # Cap to top 3 priority files per iteration to prevent context window explosion
     return sorted_affected[:3]
@@ -231,6 +313,14 @@ class AuditFixPipeline(BasePipeline):
             except Exception:
                 pass
 
+        audit_findings_queue: List[Dict[str, Any]] = []
+        if existing_report_content:
+            audit_findings_queue = extract_audit_findings_list(existing_report_content)
+            if audit_findings_queue:
+                ConsoleOutput.info(
+                    f"Identified {len(audit_findings_queue)} prioritized actionable audit finding(s) in backlog."
+                )
+
         developer_agent = create_developer_agent(
             self.config,
             self.skill_manager,
@@ -240,6 +330,8 @@ class AuditFixPipeline(BasePipeline):
 
         reset_append_counts()
         completed_fixes: List[str] = []
+        resolved_findings: List[str] = []
+        current_finding: Optional[Dict[str, Any]] = None
         fixes_applied_log: List[Dict[str, Any]] = []
         final_status = "IN_PROGRESS"
         last_issues: List[str] = []
@@ -283,9 +375,13 @@ class AuditFixPipeline(BasePipeline):
             if not tests_clean:
                 all_issues.append(test_feedback)
 
-            # 3. On iteration 1: If static and tests are clean, check for existing audit report or explicit user directive
-            if iteration == 1 and not all_issues:
-                if not existing_report_content and self.auto_chain_audit:
+            # 3. If static and tests are clean, pull from audit findings backlog
+            if not all_issues:
+                if (
+                    iteration == 1
+                    and not existing_report_content
+                    and self.auto_chain_audit
+                ):
                     from orchestrator.pipeline.audit_pipeline import AuditPipeline
 
                     ConsoleOutput.agent_step(
@@ -308,22 +404,29 @@ class AuditFixPipeline(BasePipeline):
                             existing_report_content = audit_file.read_text(
                                 encoding="utf-8", errors="replace"
                             ).strip()
-                            ConsoleOutput.info(
-                                f"Architectural audit complete. Loaded {len(existing_report_content)} chars of recommendations."
+                            audit_findings_queue = extract_audit_findings_list(
+                                existing_report_content
                             )
                         except Exception:
                             pass
 
-                if existing_report_content:
-                    actionable_recs = extract_actionable_recommendations(
-                        existing_report_content
+                # If a finding was in-flight and needs a retry, re-present it
+                if current_finding:
+                    all_issues.append(
+                        f"[Audit Finding Remediation: {current_finding['severity']} - {current_finding['title']}]\n"
+                        f"{current_finding['content'][:2500]}"
                     )
-                    if actionable_recs:
-                        auditor_findings = f"[Actionable Audit Recommendations]\n{actionable_recs[:2000]}"
-                        all_issues.append(auditor_findings)
+                # Otherwise, pop the next highest priority finding from the queue
+                elif audit_findings_queue:
+                    current_finding = audit_findings_queue.pop(0)
+                    all_issues.append(
+                        f"[Audit Finding Remediation: {current_finding['severity']} - {current_finding['title']}]\n"
+                        f"{current_finding['content'][:2500]}"
+                    )
                 elif (
                     task_description
                     and task_description.strip().lower() not in DEFAULT_AUDIT_FIX_TASKS
+                    and iteration == 1
                 ):
                     all_issues.append(
                         f"[User Optimization Directive]\n{task_description.strip()}"
@@ -425,7 +528,9 @@ class AuditFixPipeline(BasePipeline):
                 dev_conv,
                 "Developer",
                 max_steps=min(getattr(self.config, "max_agent_steps", 8), 8),
-                max_tokens=min(getattr(self.config, "max_tokens_budget", 80_000), 80_000),
+                max_tokens=min(
+                    getattr(self.config, "max_tokens_budget", 80_000), 80_000
+                ),
                 task_complexity="medium",
             )
             if hasattr(visualizer, "close"):
@@ -505,24 +610,38 @@ class AuditFixPipeline(BasePipeline):
             if not post_tests_ok:
                 remaining_issues.append(post_test_feedback)
 
-            made_progress = (not all_issues) or bool(files_modified)
+            if post_static_ok and post_tests_ok and not remaining_issues:
+                if files_modified:
+                    if current_finding:
+                        finding_label = f"[{current_finding['severity']}] {current_finding['title']}"
+                        ConsoleOutput.success(
+                            f"Iteration {iteration}: Verified & resolved {finding_label}."
+                        )
+                        resolved_findings.append(finding_label)
+                        current_finding = None
 
-            if post_static_ok and post_tests_ok and not remaining_issues and made_progress:
-                ConsoleOutput.success(
-                    f"Strict Verification Converged in iteration {iteration}! "
-                    f"Tests pass, static checks clean, and fixes verified."
-                )
-                final_status = "CONVERGED_CLEAN"
-                break
-            elif post_static_ok and post_tests_ok and not files_modified and all_issues:
-                ConsoleOutput.warning(
-                    f"Iteration {iteration}: Developer made 0 code modifications to address active findings. "
-                    "Refining directive for next iteration..."
-                )
-                all_issues = [
-                    "CRITICAL: 0 code modifications were applied in the previous attempt. "
-                    "You must open the locked file using `workspace_file` and implement the change."
-                ]
+                    if not audit_findings_queue and not current_finding:
+                        ConsoleOutput.success(
+                            f"Strict Verification Converged in iteration {iteration}! "
+                            f"All audit backlog items resolved, tests pass, static checks clean."
+                        )
+                        final_status = "CONVERGED_CLEAN"
+                        break
+                    else:
+                        ConsoleOutput.info(
+                            f"Iteration {iteration} complete. "
+                            f"{len(audit_findings_queue)} finding(s) remaining in backlog. Continuing loop."
+                        )
+                        continue
+                else:
+                    ConsoleOutput.warning(
+                        f"Iteration {iteration}: Developer made 0 code modifications for active finding. "
+                        "Refining directive for next iteration..."
+                    )
+                    all_issues = [
+                        "CRITICAL: 0 code modifications were applied in the previous attempt. "
+                        "You must open the locked file using `workspace_file` and implement the change."
+                    ]
             else:
                 ConsoleOutput.warning(
                     f"Iteration {iteration} verification: Issues remain "
@@ -543,6 +662,9 @@ class AuditFixPipeline(BasePipeline):
             metrics=metrics,
             fixes_log=fixes_applied_log,
             last_issues=last_issues,
+            completed_fixes=completed_fixes,
+            resolved_findings=resolved_findings,
+            remaining_backlog=audit_findings_queue,
         )
         report_file.write_text(report_content, encoding="utf-8")
 
@@ -570,6 +692,9 @@ class AuditFixPipeline(BasePipeline):
         metrics: dict,
         fixes_log: List[dict],
         last_issues: List[str],
+        completed_fixes: Optional[List[str]] = None,
+        resolved_findings: Optional[List[str]] = None,
+        remaining_backlog: Optional[List[dict]] = None,
     ) -> str:
         """Construct the markdown summary of the audit-fix session."""
         ts = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -600,6 +725,29 @@ class AuditFixPipeline(BasePipeline):
                 lines.append(
                     f"| {entry['iteration']} | {entry['issues_count']} | "
                     f"{entry['duration_seconds']}s | {entry['tokens']:,} | ${entry['cost_usd']:.4f} |"
+                )
+
+        if resolved_findings:
+            lines.append("")
+            lines.append("## Remediated Audit Findings")
+            lines.append("")
+            for rf in resolved_findings:
+                lines.append(f"- [x] {rf}")
+
+        if completed_fixes:
+            lines.append("")
+            lines.append("## Code Modifications Applied")
+            lines.append("")
+            for cf in set(completed_fixes):
+                lines.append(f"- [x] {cf}")
+
+        if remaining_backlog:
+            lines.append("")
+            lines.append("## Remaining Audit Backlog")
+            lines.append("")
+            for rb in remaining_backlog:
+                lines.append(
+                    f"- [ ] [{rb.get('severity', 'FINDING')}] {rb.get('title', 'Unknown')}"
                 )
 
         lines.append("")

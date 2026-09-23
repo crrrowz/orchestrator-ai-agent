@@ -262,7 +262,10 @@ def test_workspace_file_dual_constraint_read_windowing(tmp_path: Path):
     act_lines = WorkspaceFileAction(operation="read", path="large_lines.py")
     obs_lines = execute_file_action(act_lines, base_dir=tmp_path)
     assert obs_lines.is_error is False
-    assert "[Governance Notice: Showing lines 1-250 of 400 total lines" in obs_lines.file_content
+    assert (
+        "[Governance Notice: Showing lines 1-250 of 400 total lines"
+        in obs_lines.file_content
+    )
     assert "start_line=251" in obs_lines.file_content
 
     # 2. File with long dense lines exceeding 12,000 chars within 50 lines
@@ -273,5 +276,6 @@ def test_workspace_file_dual_constraint_read_windowing(tmp_path: Path):
     act_dense = WorkspaceFileAction(operation="read", path="dense.json")
     obs_dense = execute_file_action(act_dense, base_dir=tmp_path)
     assert obs_dense.is_error is False
-    assert "[Governance Notice: Read clamped by character budget" in obs_dense.file_content
-
+    assert (
+        "[Governance Notice: Read clamped by character budget" in obs_dense.file_content
+    )

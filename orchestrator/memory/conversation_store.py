@@ -71,7 +71,10 @@ class ConversationStore:
     """Manages persistent cross-run task memory stored in diagnostics/memory/."""
 
     def __init__(self, memory_dir: Optional[Path] = None):
-        self.memory_dir = (memory_dir or DEFAULT_DIAGNOSTICS_DIR / "memory").resolve()
+        target = memory_dir or (DEFAULT_DIAGNOSTICS_DIR / "memory")
+        if target.name != "memory":
+            target = target / "memory"
+        self.memory_dir = target.resolve()
         self.memory_dir.mkdir(parents=True, exist_ok=True)
 
     def save_run_memory(

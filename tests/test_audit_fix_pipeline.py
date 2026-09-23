@@ -148,7 +148,14 @@ def test_audit_fix_pipeline_auto_chains_audit(tmp_path: Path):
         ) as mock_audit,
         patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls,
     ):
+
+        def mock_dev_run(*args, **kwargs):
+            (tmp_path / "clean_module.py").write_text(
+                "def compute():\n    return 43\n", encoding="utf-8"
+            )
+
         mock_conv = MagicMock()
+        mock_conv.run.side_effect = mock_dev_run
         mock_conv_cls.return_value = mock_conv
 
         res = pipeline.run("Autonomous codebase defect and optimization fix loop.")
@@ -270,4 +277,3 @@ def test_structured_iteration_state_prompt_block():
     assert "- [ ] Unify _run_conv duplicate" in rendered
     assert "`base_pipeline.py`" in rendered
     assert len(rendered.splitlines()) < 10
-

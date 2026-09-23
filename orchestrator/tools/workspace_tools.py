@@ -274,12 +274,12 @@ def execute_file_action(
             if clamped_by_chars:
                 notice = (
                     f"\n\n[Governance Notice: Read clamped by character budget ({MAX_READ_CHARS} chars max). "
-                    f"Showing partial lines {start+1}-{end} of {total_lines}. Specify start_line with next unread section to paginate.]"
+                    f"Showing partial lines {start + 1}-{end} of {total_lines}. Specify start_line with next unread section to paginate.]"
                 )
             elif clamped_by_lines:
                 notice = (
-                    f"\n\n[Governance Notice: Showing lines {start+1}-{end} of {total_lines} total lines in '{action.path}'. "
-                    f"To read further, specify start_line={end+1}, end_line={min(total_lines, end + MAX_READ_LINES)} in workspace_file]"
+                    f"\n\n[Governance Notice: Showing lines {start + 1}-{end} of {total_lines} total lines in '{action.path}'. "
+                    f"To read further, specify start_line={end + 1}, end_line={min(total_lines, end + MAX_READ_LINES)} in workspace_file]"
                 )
             else:
                 notice = ""
@@ -289,7 +289,7 @@ def execute_file_action(
                 content=[TextContent(text=selected_content)],
                 is_error=False,
                 success=True,
-                message=f"Read lines {start+1}-{end} of {total_lines} from '{action.path}'.",
+                message=f"Read lines {start + 1}-{end} of {total_lines} from '{action.path}'.",
                 file_content=selected_content,
             )
 
