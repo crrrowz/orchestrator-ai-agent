@@ -249,6 +249,7 @@ class AuditFixPipeline:
                 if existing_report_content:
                     auditor_findings = f"[Existing Audit Report Recommendations]\n{existing_report_content[:3000]}"
                     all_issues.append(auditor_findings)
+                else:
                     auditor_agent = create_auditor_agent(self.config, self.skill_manager, self.workspace_path)
                     ConsoleOutput.agent_step("Auditor", "Running deep semantic inspection...", model=auditor_agent.llm.model)
                     t_audit = time.perf_counter()

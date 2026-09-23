@@ -34,6 +34,22 @@ class WorkspaceFileObservation(Observation):
     files: Optional[list[str]] = None
 
 
+def sanitize_output_secrets(text: str) -> str:
+    """Redact sensitive API keys, tokens, and credentials from terminal and file observations."""
+    if not text:
+        return text
+    # 1. Redact values of environment variables with sensitive names
+    sensitive_keys = {"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CREDENTIAL"}
+    for k, v in os.environ.items():
+        if any(sk in k.upper() for sk in sensitive_keys) and v and len(v) >= 8:
+            text = text.replace(v, f"[REDACTED_{k.upper()}]")
+    # 2. Redact typical API key formats (OpenRouter, OpenAI, Anthropic, Gemini, etc.)
+    text = re.sub(r"sk-or-v1-[a-f0-9]{32,}", "[REDACTED_API_KEY]", text)
+    text = re.sub(r"sk-[a-zA-Z0-9_-]{20,}", "[REDACTED_API_KEY]", text)
+    text = re.sub(r"AIza[0-9A-Za-z-_]{35}", "[REDACTED_API_KEY]", text)
+    return text
+
+
 def _matches_path_scope(rel_posix: str, scope: str) -> bool:
     """Match exact file name or directory boundary prefix, preventing PLAN.md matching PLAN.md.bak."""
     clean = scope.lstrip("/")
@@ -44,6 +60,7 @@ def _matches_path_scope(rel_posix: str, scope: str) -> bool:
     if rel_posix.startswith(clean + "/"):
         return True
     return False
+
 
 
 def execute_file_action(
@@ -115,6 +132,14 @@ def execute_file_action(
 
     try:
         if action.operation == "read":
+            if target_path.name.startswith(".env"):
+                err_msg = f"Security restriction: reading '{action.path}' is blocked."
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg
+                )
             if not target_path.exists():
                 err_msg = f"File '{action.path}' does not exist."
                 return WorkspaceFileObservation(
@@ -126,7 +151,7 @@ def execute_file_action(
             lines = target_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
             start = (action.start_line - 1) if action.start_line and action.start_line > 0 else 0
             end = action.end_line if action.end_line and action.end_line <= len(lines) else len(lines)
-            selected_content = "".join(lines[start:end])
+            selected_content = sanitize_output_secrets("".join(lines[start:end]))
             return WorkspaceFileObservation(
                 content=[TextContent(text=selected_content)],
                 is_error=False,
@@ -425,8 +450,8 @@ def execute_terminal_action(
             timeout=action.timeout_seconds,
             env=env
         )
-        stdout_text = proc.stdout or ""
-        stderr_text = proc.stderr or ""
+        stdout_text = sanitize_output_secrets(proc.stdout or "")
+        stderr_text = sanitize_output_secrets(proc.stderr or "")
         output_text = f"Exit code: {proc.returncode}\nStdout:\n{stdout_text}\nStderr:\n{stderr_text}"
         return WorkspaceTerminalObservation(
             content=[TextContent(text=output_text)],
@@ -438,8 +463,8 @@ def execute_terminal_action(
         )
     except subprocess.TimeoutExpired as te:
         timeout_msg = "Command timed out after specified seconds."
-        stdout_str = te.stdout if isinstance(te.stdout, str) else (te.stdout.decode("utf-8", errors="replace") if te.stdout else "")
-        stderr_str = te.stderr if isinstance(te.stderr, str) else (te.stderr.decode("utf-8", errors="replace") if te.stderr else timeout_msg)
+        stdout_str = sanitize_output_secrets(te.stdout if isinstance(te.stdout, str) else (te.stdout.decode("utf-8", errors="replace") if te.stdout else ""))
+        stderr_str = sanitize_output_secrets(te.stderr if isinstance(te.stderr, str) else (te.stderr.decode("utf-8", errors="replace") if te.stderr else timeout_msg))
         return WorkspaceTerminalObservation(
             content=[TextContent(text=timeout_msg)],
             is_error=True,
