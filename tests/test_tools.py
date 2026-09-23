@@ -56,3 +56,22 @@ def test_terminal_tool_execution(tmp_path: Path):
     res = execute_terminal_action(act, base_dir=tmp_path)
     assert res.exit_code == 0
     assert "executed" in res.stdout
+
+
+def test_workspace_tools_agent_resolution(tmp_path: Path):
+    from openhands.sdk import Agent, LLM, Conversation
+    from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+
+    f_tool = create_workspace_file_tool(tmp_path)
+    t_tool = create_workspace_terminal_tool(tmp_path)
+
+    agent = Agent(
+        llm=LLM(model="openrouter/qwen/qwen3.8-27b:free"),
+        tools=[f_tool, t_tool]
+    )
+    conv = Conversation(agent=agent, workspace=tmp_path)
+    conv._ensure_agent_ready()
+    assert "workspace_file" in agent._tools
+    assert "workspace_terminal" in agent._tools
+
+

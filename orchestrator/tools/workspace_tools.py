@@ -3,11 +3,8 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import Literal, Optional
-
-from openhands.sdk.tool.registry import register_tool
-from openhands.sdk.tool.schema import Action, Observation
-from openhands.sdk.tool.tool import ToolDefinition
+from typing import Literal, Optional, Sequence, Any
+from openhands.sdk.tool import Tool, ToolDefinition, register_tool, Action, Observation, ToolExecutor
 
 
 # ==========================================
@@ -73,44 +70,44 @@ def execute_file_action(
             target_path.write_text(action.content or "", encoding="utf-8")
             return WorkspaceFileObservation(
                 success=True,
-                message=f"Successfully wrote {len(action.content or '')} chars to '{action.path}'."
+                message=f"File '{action.path}' written successfully ({len(action.content or '')} chars)."
             )
 
         elif action.operation == "edit":
             if not target_path.exists():
                 return WorkspaceFileObservation(
                     success=False,
-                    message=f"Cannot edit non-existent file '{action.path}'."
+                    message=f"File '{action.path}' not found for editing."
                 )
-            current_text = target_path.read_text(encoding="utf-8")
+            existing = target_path.read_text(encoding="utf-8", errors="replace")
             if not action.target_text:
                 return WorkspaceFileObservation(
                     success=False,
-                    message="Target text must be provided for edit operation."
+                    message="Missing 'target_text' required for editing."
                 )
-            if action.target_text not in current_text:
+            if action.target_text not in existing:
                 return WorkspaceFileObservation(
                     success=False,
-                    message="Target text not found in file."
+                    message=f"Target text was not found in '{action.path}'."
                 )
-            new_text = current_text.replace(action.target_text, action.replacement_text or "", 1)
-            target_path.write_text(new_text, encoding="utf-8")
+            new_content = existing.replace(action.target_text, action.replacement_text or "", 1)
+            target_path.write_text(new_content, encoding="utf-8")
             return WorkspaceFileObservation(
                 success=True,
-                message=f"Successfully updated '{action.path}'."
+                message=f"Successfully edited '{action.path}'."
             )
 
         elif action.operation == "list":
-            search_dir = target_path if target_path.is_dir() else target_path.parent
+            search_dir = target_path if target_path.is_dir() else workspace_root
             if not search_dir.exists():
                 return WorkspaceFileObservation(
                     success=False,
-                    message=f"Directory '{action.path}' does not exist."
+                    message=f"Directory '{search_dir}' does not exist."
                 )
             file_list = [
                 str(p.relative_to(workspace_root))
                 for p in search_dir.rglob("*")
-                if not any(part.startswith(".") or part == "__pycache__" for part in p.parts)
+                if p.is_file() and not any(part.startswith(".") for part in p.parts)
             ]
             return WorkspaceFileObservation(
                 success=True,
@@ -122,6 +119,9 @@ def execute_file_action(
             if target_path.exists():
                 if target_path.is_file():
                     target_path.unlink()
+                else:
+                    import shutil
+                    shutil.rmtree(target_path)
                 return WorkspaceFileObservation(
                     success=True,
                     message=f"Deleted '{action.path}'."
@@ -141,6 +141,48 @@ def execute_file_action(
             success=False,
             message=f"Error performing '{action.operation}' on '{action.path}': {str(e)}"
         )
+
+
+class WorkspaceFileExecutor(ToolExecutor[WorkspaceFileAction, WorkspaceFileObservation]):
+    def __init__(self, workspace_path: Optional[Path] = None):
+        self.workspace_path = workspace_path
+
+    def __call__(
+        self,
+        action: WorkspaceFileAction,
+        conversation: Any = None,
+    ) -> WorkspaceFileObservation:
+        return execute_file_action(action, conversation, self.workspace_path)
+
+
+class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObservation]):
+    """Tool for reading, writing, editing, listing, and deleting files inside the project workspace."""
+
+    @classmethod
+    def create(
+        cls,
+        conv_state: Optional[Any] = None,
+        workspace_path: Optional[str] = None,
+        **params,
+    ) -> Sequence["WorkspaceFileTool"]:
+        target_path: Optional[Path] = None
+        if workspace_path:
+            target_path = Path(workspace_path)
+        elif conv_state and hasattr(conv_state, "workspace"):
+            ws = conv_state.workspace
+            if hasattr(ws, "working_dir"):
+                target_path = Path(ws.working_dir)
+            elif isinstance(ws, (str, Path)):
+                target_path = Path(ws)
+
+        return [
+            cls(
+                description="Read, write, edit, list, and delete files inside the project workspace.",
+                action_type=WorkspaceFileAction,
+                observation_type=WorkspaceFileObservation,
+                executor=WorkspaceFileExecutor(target_path),
+            )
+        ]
 
 
 # ==========================================
@@ -206,20 +248,63 @@ def execute_terminal_action(
         )
 
 
-# Factory functions to build tool instances
-def create_workspace_file_tool(workspace_path: Optional[Path] = None) -> ToolDefinition[WorkspaceFileAction, WorkspaceFileObservation]:
-    return ToolDefinition[WorkspaceFileAction, WorkspaceFileObservation](
-        description="Read, write, edit, list, and delete files inside the project workspace.",
-        action_type=WorkspaceFileAction,
-        observation_type=WorkspaceFileObservation,
-        executor=lambda action, conv=None: execute_file_action(action, conv, workspace_path)
-    )
+class WorkspaceTerminalExecutor(ToolExecutor[WorkspaceTerminalAction, WorkspaceTerminalObservation]):
+    def __init__(self, workspace_path: Optional[Path] = None):
+        self.workspace_path = workspace_path
+
+    def __call__(
+        self,
+        action: WorkspaceTerminalAction,
+        conversation: Any = None,
+    ) -> WorkspaceTerminalObservation:
+        return execute_terminal_action(action, conversation, self.workspace_path)
 
 
-def create_workspace_terminal_tool(workspace_path: Optional[Path] = None) -> ToolDefinition[WorkspaceTerminalAction, WorkspaceTerminalObservation]:
-    return ToolDefinition[WorkspaceTerminalAction, WorkspaceTerminalObservation](
-        description="Run terminal commands (tests, python, git, build) inside the workspace.",
-        action_type=WorkspaceTerminalAction,
-        observation_type=WorkspaceTerminalObservation,
-        executor=lambda action, conv=None: execute_terminal_action(action, conv, workspace_path)
-    )
+class WorkspaceTerminalTool(ToolDefinition[WorkspaceTerminalAction, WorkspaceTerminalObservation]):
+    """Tool for running terminal commands (tests, python, git, build) inside the workspace."""
+
+    @classmethod
+    def create(
+        cls,
+        conv_state: Optional[Any] = None,
+        workspace_path: Optional[str] = None,
+        **params,
+    ) -> Sequence["WorkspaceTerminalTool"]:
+        target_path: Optional[Path] = None
+        if workspace_path:
+            target_path = Path(workspace_path)
+        elif conv_state and hasattr(conv_state, "workspace"):
+            ws = conv_state.workspace
+            if hasattr(ws, "working_dir"):
+                target_path = Path(ws.working_dir)
+            elif isinstance(ws, (str, Path)):
+                target_path = Path(ws)
+
+        return [
+            cls(
+                description="Run terminal commands (tests, python, git, build) inside the workspace.",
+                action_type=WorkspaceTerminalAction,
+                observation_type=WorkspaceTerminalObservation,
+                executor=WorkspaceTerminalExecutor(target_path),
+            )
+        ]
+
+
+# Register both tools in OpenHands global tool registry
+register_tool("WorkspaceFileTool", WorkspaceFileTool)
+register_tool("WorkspaceTerminalTool", WorkspaceTerminalTool)
+
+
+# Factory functions to build tool specifications for Agents
+def create_workspace_file_tool(workspace_path: Optional[Path] = None) -> Tool:
+    params = {}
+    if workspace_path:
+        params["workspace_path"] = str(Path(workspace_path).resolve())
+    return Tool(name="WorkspaceFileTool", params=params)
+
+
+def create_workspace_terminal_tool(workspace_path: Optional[Path] = None) -> Tool:
+    params = {}
+    if workspace_path:
+        params["workspace_path"] = str(Path(workspace_path).resolve())
+    return Tool(name="WorkspaceTerminalTool", params=params)
