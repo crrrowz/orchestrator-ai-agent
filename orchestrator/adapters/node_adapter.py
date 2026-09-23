@@ -266,7 +266,9 @@ class NodeAdapter(ProjectAdapter):
         source_exts = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
         src_files: List[Path] = []
         for root, dirs, files in os.walk(workspace):
-            dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+            dirs[:] = [
+                d for d in dirs if d not in ignored_dirs and not d.startswith(".")
+            ]
             for f in files:
                 p = Path(root) / f
                 if p.suffix in source_exts:

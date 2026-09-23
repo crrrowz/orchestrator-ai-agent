@@ -72,7 +72,9 @@ def test_auditor_agent_rbac_write_restriction(tmp_path: Path):
     )
     assert obs_report.success is True
     assert (tmp_path / "docs" / "AUDIT_REPORT.md").exists()
-    assert "All clear" in (tmp_path / "docs" / "AUDIT_REPORT.md").read_text(encoding="utf-8")
+    assert "All clear" in (tmp_path / "docs" / "AUDIT_REPORT.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_audit_pipeline_run_generates_report(tmp_path: Path):

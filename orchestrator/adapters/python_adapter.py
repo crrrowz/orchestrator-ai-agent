@@ -154,7 +154,9 @@ class PythonAdapter(ProjectAdapter):
         }
         py_files: List[Path] = []
         for root, dirs, files in os.walk(workspace):
-            dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+            dirs[:] = [
+                d for d in dirs if d not in ignored_dirs and not d.startswith(".")
+            ]
             for f in files:
                 if f.endswith(".py"):
                     py_files.append(Path(root) / f)

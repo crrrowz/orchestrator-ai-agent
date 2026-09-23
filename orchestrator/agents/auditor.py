@@ -46,4 +46,3 @@ def create_auditor_agent(
         tools=[file_tool, terminal_tool],
         agent_context=context,
     )
-

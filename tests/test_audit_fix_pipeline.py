@@ -96,6 +96,33 @@ def test_audit_fix_pipeline_clean_convergence(tmp_path: Path):
         assert "Zero Git Footprint" in content or "Final Verification State" in content
 
 
+def test_audit_fix_pipeline_default_task_zero_tokens_clean(tmp_path: Path):
+    """When workspace is clean and default task is used, Developer is never invoked (0 tokens)."""
+    (tmp_path / "clean_module.py").write_text(
+        "def compute():\n    return 42\n", encoding="utf-8"
+    )
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+
+    with patch(
+        "orchestrator.pipeline.audit_fix_pipeline.Conversation"
+    ) as mock_conv_cls:
+        res = pipeline.run("Autonomous codebase defect and optimization fix loop.")
+
+        assert res["status"] == "CONVERGED_CLEAN"
+        assert res["tokens"] == 0
+        mock_conv_cls.return_value.run.assert_not_called()
+        report_file = tmp_path / "docs" / "AUDIT_FIX_REPORT.md"
+        assert report_file.exists()
+        content = report_file.read_text(encoding="utf-8")
+        assert (
+            "No remediation iterations were needed; workspace was clean on initial scan."
+            in content
+        )
+
+
 def test_audit_fix_pipeline_remediation_loop(tmp_path: Path):
     """When syntax error is present, developer remediation is invoked to fix issues."""
     broken_py = tmp_path / "module.py"

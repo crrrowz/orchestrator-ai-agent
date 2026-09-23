@@ -309,10 +309,14 @@ def execute_file_action(
                 "build",
                 ".idea",
                 ".vscode",
+                "diagnostics",
+                ".agents",
             }
             file_list = []
             for root, dirs, files in os.walk(search_dir):
-                dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+                dirs[:] = [
+                    d for d in dirs if d not in ignored_dirs and not d.startswith(".")
+                ]
                 for f in files:
                     full_p = Path(root) / f
                     try:
@@ -520,14 +524,22 @@ def split_and_validate_command(command: str) -> tuple[bool, list[str], str]:
     # Block shell chaining injection tokens outside quoted arguments
     for tok in tokens:
         if tok in DANGEROUS_CHAINING_TOKENS:
-            return False, tokens, f"Security violation: Chained commands or pipeline operator '{tok}' are not permitted."
+            return (
+                False,
+                tokens,
+                f"Security violation: Chained commands or pipeline operator '{tok}' are not permitted.",
+            )
 
     base_cmd = Path(tokens[0].strip("'\"")).name.lower()
     if base_cmd.endswith(".exe"):
         base_cmd = base_cmd[:-4]
 
     if base_cmd not in get_allowed_command_binaries():
-        return False, tokens, f"Command binary '{base_cmd}' is not in permitted whitelist."
+        return (
+            False,
+            tokens,
+            f"Command binary '{base_cmd}' is not in permitted whitelist.",
+        )
 
     return True, tokens, ""
 
@@ -563,7 +575,8 @@ def execute_terminal_action(
                 role="agent",
                 action_type="terminal_command",
                 target=action.command,
-                reason=reason or f"Command binary is outside permitted whitelist {allowed_list}",
+                reason=reason
+                or f"Command binary is outside permitted whitelist {allowed_list}",
             )
         if not granted:
             err_msg = (

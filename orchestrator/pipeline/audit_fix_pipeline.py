@@ -46,6 +46,18 @@ def extract_affected_files(issues: List[str], workspace_path: Path) -> List[str]
     return sorted(list(affected))
 
 
+DEFAULT_AUDIT_FIX_TASKS = {
+    "autonomous codebase defect and optimization fix loop.",
+    "autonomous codebase defect and optimization fix loop",
+    "autonomous codebase audit & fix loop",
+    "autonomous codebase audit and fix loop",
+    "autonomous auto-fix validation",
+    "comprehensive codebase architecture, security, and bug audit.",
+    "comprehensive codebase architecture, security, and bug audit",
+    "",
+}
+
+
 class AuditFixPipeline:
     """Autonomous self-healing loop: audits defects/optimizations, applies fixes via Developer,
     and validates with Tester and static checks in a continuous loop without any Git operations.
@@ -74,15 +86,17 @@ class AuditFixPipeline:
         conv: Conversation,
         role: str,
         max_retries: int = 2,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 180,
         max_steps: Optional[int] = None,
         max_tokens: Optional[int] = None,
     ) -> None:
         """Execute conversation with iteration limits, token cap monitor, timeout guard, and backoff retry."""
         import threading
 
-        step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
-        token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 300_000)
+        step_limit = max_steps or min(getattr(self.config, "max_agent_steps", 8), 8)
+        token_limit = max_tokens or min(
+            getattr(self.config, "max_tokens_budget", 80_000), 80_000
+        )
 
         # Configure native OpenHands step limit
         if hasattr(conv, "max_iteration_per_run"):
@@ -101,7 +115,10 @@ class AuditFixPipeline:
                 start_time = time.time()
                 while not stop_monitor.is_set():
                     # Timeout check
-                    if timeout_seconds > 0 and (time.time() - start_time) >= timeout_seconds:
+                    if (
+                        timeout_seconds > 0
+                        and (time.time() - start_time) >= timeout_seconds
+                    ):
                         ConsoleOutput.warning(
                             f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
                         )
@@ -323,9 +340,9 @@ class AuditFixPipeline:
                 if existing_report_content:
                     auditor_findings = f"[Existing Audit Report Recommendations]\n{existing_report_content[:3000]}"
                     all_issues.append(auditor_findings)
-                elif task_description and task_description.strip() not in (
-                    "Autonomous Codebase Audit & Fix Loop",
-                    "",
+                elif (
+                    task_description
+                    and task_description.strip().lower() not in DEFAULT_AUDIT_FIX_TASKS
                 ):
                     all_issues.append(
                         f"[User Optimization Directive]\n{task_description.strip()}"
@@ -379,7 +396,7 @@ class AuditFixPipeline:
                     "MANDATORY PLAN-FIRST WORKFLOW:\n"
                     "1. First, state a concise 2-line plan (Target File and Planned Change).\n"
                     "2. Inspect ONLY the specific affected file where errors were reported.\n"
-                    "3. Do NOT read unmentioned files or list unrelated directories to conserve token context.\n"
+                    "3. You are STRICTLY FORBIDDEN from listing root directories (`ls`, `dir`, `list .`) or reading diagnostic files.\n"
                     "4. Apply the targeted fix directly and stop."
                 )
 

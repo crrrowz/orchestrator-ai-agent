@@ -71,7 +71,10 @@ class AuditPipeline:
                 start_time = time.time()
                 while not stop_monitor.is_set():
                     # Timeout check
-                    if timeout_seconds > 0 and (time.time() - start_time) >= timeout_seconds:
+                    if (
+                        timeout_seconds > 0
+                        and (time.time() - start_time) >= timeout_seconds
+                    ):
                         ConsoleOutput.warning(
                             f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
                         )

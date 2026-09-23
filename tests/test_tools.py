@@ -139,7 +139,9 @@ def test_sensitive_file_protection(tmp_path: Path):
     assert "Security restriction" in obs_read.message
 
     # Write .env.local -> blocked
-    act_write = WorkspaceFileAction(operation="write", path=".env.local", content="TOKEN=abc")
+    act_write = WorkspaceFileAction(
+        operation="write", path=".env.local", content="TOKEN=abc"
+    )
     obs_write = execute_file_action(act_write, base_dir=tmp_path)
     assert obs_write.is_error is True
     assert "Security restriction" in obs_write.message
@@ -209,4 +211,3 @@ def test_directory_list_pruning_performance(tmp_path: Path):
     assert any("index.py" in f for f in obs.files)
     assert not any("huge_dep" in f for f in obs.files)
     assert not any("node_modules" in f for f in obs.files)
-
