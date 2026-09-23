@@ -427,7 +427,9 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 is_error=True,
                 observation=str(err_msg),
             )
-            self._last_status = f"[bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]"
+            self._last_status = (
+                f"[bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]"
+            )
             self._update_live()
             if not self._is_tty:
                 self._safe_print(f"       {self._last_status}")

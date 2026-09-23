@@ -29,7 +29,10 @@ class BudgetGuard:
             self.is_exhausted = True
             return True
 
-        if self.max_budget_tokens > 0 and self._current_tokens >= self.max_budget_tokens:
+        if (
+            self.max_budget_tokens > 0
+            and self._current_tokens >= self.max_budget_tokens
+        ):
             self.is_exhausted = True
             return True
 

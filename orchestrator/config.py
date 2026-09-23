@@ -48,9 +48,7 @@ class OrchestratorConfig(BaseModel):
     max_tokens_budget: int = Field(
         default=int(os.environ.get("MAX_TOKENS_BUDGET", "350000"))
     )
-    max_agent_steps: int = Field(
-        default=int(os.environ.get("MAX_AGENT_STEPS", "12"))
-    )
+    max_agent_steps: int = Field(default=int(os.environ.get("MAX_AGENT_STEPS", "12")))
     max_tokens_per_call: int = Field(
         default=int(os.environ.get("MAX_TOKENS_PER_CALL", "4096"))
     )

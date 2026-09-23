@@ -78,11 +78,15 @@ class AuditFixPipeline:
         max_steps: Optional[int] = None,
         max_tokens: Optional[int] = None,
     ) -> None:
-        """Execute conversation with step-by-step token and step ceilings, timeout guard, and backoff retry."""
+        """Execute conversation with iteration limits, token cap monitor, timeout guard, and backoff retry."""
         import threading
 
         step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
         token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 300_000)
+
+        # Configure native OpenHands step limit
+        if hasattr(conv, "max_iteration_per_run"):
+            conv.max_iteration_per_run = step_limit
 
         for attempt in range(max_retries + 1):
             if not self.controller.check_should_continue():
@@ -91,60 +95,60 @@ class AuditFixPipeline:
                 )
                 return
 
-            def on_timeout():
-                ConsoleOutput.warning(
-                    f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
-                )
-                conv._is_closed = True
+            stop_monitor = threading.Event()
 
-            timer = threading.Timer(timeout_seconds, on_timeout)
-            timer.daemon = True
-            timer.start()
-
-            # If mock object passed in unit tests
-            if not hasattr(conv, "_is_closed") or getattr(getattr(conv, "run", None), "side_effect", None) is not None:
-                if hasattr(conv, "run"):
-                    conv.run()
-                return
-
-            step_count = 0
-            try:
-                while not conv.is_closed:
-                    if not self.controller.check_should_continue():
+            def monitor():
+                start_time = time.time()
+                while not stop_monitor.is_set():
+                    # Timeout check
+                    if timeout_seconds > 0 and (time.time() - start_time) >= timeout_seconds:
                         ConsoleOutput.warning(
-                            f"Conversation halted by controller for {role}."
+                            f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
                         )
-                        conv._is_closed = True
+                        if hasattr(conv, "interrupt"):
+                            conv.interrupt()
+                        elif hasattr(conv, "pause"):
+                            conv.pause()
                         break
 
-                    conv.step()
-                    step_count += 1
-
-                    # Check hard token budget from active LLM metrics
+                    # Token limit check
                     llm = getattr(conv, "agent", None) and getattr(
                         conv.agent, "llm", None
                     )
                     if llm and hasattr(llm, "metrics"):
                         tu = getattr(llm.metrics, "accumulated_token_usage", None)
                         if tu:
-                            total_tok = getattr(tu, "prompt_tokens", 0) + getattr(
-                                tu, "completion_tokens", 0
-                            )
-                            if token_limit > 0 and total_tok >= token_limit:
-                                ConsoleOutput.warning(
-                                    f"Agent {role} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
-                                )
-                                conv._is_closed = True
-                                break
+                            pt = getattr(tu, "prompt_tokens", 0)
+                            ct = getattr(tu, "completion_tokens", 0)
+                            if isinstance(pt, (int, float)) and isinstance(
+                                ct, (int, float)
+                            ):
+                                total_tok = int(pt + ct)
+                                if token_limit > 0 and total_tok >= token_limit:
+                                    ConsoleOutput.warning(
+                                        f"Agent {role} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
+                                    )
+                                    if hasattr(conv, "interrupt"):
+                                        conv.interrupt()
+                                    elif hasattr(conv, "pause"):
+                                        conv.pause()
+                                    break
 
-                    # Check hard step limit
-                    if step_limit > 0 and step_count >= step_limit:
-                        ConsoleOutput.warning(
-                            f"Agent {role} reached maximum step limit ({step_count}/{step_limit}). Finalizing conversation."
-                        )
-                        conv._is_closed = True
+                    # Controller abort check
+                    if not self.controller.check_should_continue():
+                        if hasattr(conv, "interrupt"):
+                            conv.interrupt()
+                        elif hasattr(conv, "pause"):
+                            conv.pause()
                         break
 
+                    stop_monitor.wait(1.0)
+
+            monitor_thread = threading.Thread(target=monitor, daemon=True)
+            monitor_thread.start()
+
+            try:
+                conv.run()
                 return
             except Exception as e:
                 if attempt < max_retries:
@@ -157,7 +161,7 @@ class AuditFixPipeline:
                 else:
                     raise
             finally:
-                timer.cancel()
+                stop_monitor.set()
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""

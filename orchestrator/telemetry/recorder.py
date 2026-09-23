@@ -94,6 +94,21 @@ class TelemetryRecorder:
         self.circuit_breaker_triggered: bool = False
         self.budget_exhausted: bool = False
 
+    def reset(self) -> None:
+        """Reset circuit breaker state for a fresh pipeline run.
+
+        This clears all accumulated failure tracking so that a reused
+        recorder starts with a clean slate and cannot be falsely tripped
+        by stale state from a prior invocation.
+        """
+        self._last_diff_hash = None
+        self._last_error_hash = None
+        self._last_error_text = None
+        self._last_failing_tests = None
+        self._identical_failure_count = 0
+        self.circuit_breaker_triggered = False
+        self.budget_exhausted = False
+
     def record_step(
         self,
         agent_role: str,
