@@ -50,6 +50,10 @@ from orchestrator.cli.handlers import (  # noqa: E402
 from orchestrator.cli.wizard import interactive_wizard  # noqa: E402
 from orchestrator.config import ConfigLoader  # noqa: E402
 from orchestrator.core.constants import ORCHESTRATOR_ROOT  # noqa: E402
+from orchestrator.core.exceptions import (  # noqa: E402
+    OrchestratorException,
+    ProviderQuotaExceededError,
+)
 from orchestrator.orchestrator import Orchestrator  # noqa: E402
 from orchestrator.rendering.diff_renderer import DiffRenderer  # noqa: E402
 from orchestrator.rendering.output import ConsoleOutput  # noqa: E402
@@ -290,12 +294,44 @@ def main() -> None:
         workspace = resolve_workspace_dir(args.workspace, config.workspace_path)
 
     orchestrator = Orchestrator(config)
-    orchestrator.run_task(
-        task=task,
-        mode=mode,
-        workspace_override=workspace,
-        checkpoint=cp,
-    )
+    try:
+        orchestrator.run_task(
+            task=task,
+            mode=mode,
+            workspace_override=workspace,
+            checkpoint=cp,
+        )
+    except ProviderQuotaExceededError as e:
+        ConsoleOutput.quota_error(e)
+        sys.exit(1)
+    except OrchestratorException as e:
+        ConsoleOutput.error(f"Execution halted: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        ConsoleOutput.warning("Execution interrupted by user.")
+        sys.exit(130)
+    except Exception as e:
+        err_text = str(e)
+        if (
+            "429" in err_text
+            or "RateLimitError" in err_text
+            or "free-models-per-day" in err_text
+        ):
+            ConsoleOutput.quota_error(
+                ProviderQuotaExceededError(
+                    provider="OpenRouter"
+                    if "openrouter" in err_text.lower()
+                    else "LLM Provider",
+                    message="Daily free-tier request limit has been exhausted (1,000 requests/day).",
+                    reset_info="Quota resets daily at 00:00 UTC (or upgrade to paid credits).",
+                    remedy="Provide GEMINI_API_KEY or GROQ_API_KEY in .env, or add funds to OpenRouter.",
+                )
+            )
+            sys.exit(1)
+        if os.environ.get("DEBUG") == "true" or os.environ.get("VERBOSITY") == "debug":
+            raise
+        ConsoleOutput.error(f"Execution failed: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

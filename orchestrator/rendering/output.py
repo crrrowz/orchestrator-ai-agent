@@ -1,6 +1,6 @@
 """Terminal output styling and formatted status tables."""
 
-from typing import Optional
+from typing import Any, Optional
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -91,3 +91,33 @@ class ConsoleOutput:
             table.add_row("Git Commit", commit_hash)
 
         console.print(table)
+
+    @staticmethod
+    def quota_error(error: Any) -> None:
+        """Render a formatted, high-visibility card when an upstream LLM quota ceiling is exceeded."""
+        provider = getattr(error, "provider", "LLM Provider")
+        message = getattr(error, "message", str(error))
+        reset_info = getattr(error, "reset_info", "")
+        remedy = getattr(error, "remedy", "")
+
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold yellow", width=14)
+        grid.add_column(style="white")
+        grid.add_row("Provider:", f"[bold cyan]{provider}[/bold cyan]")
+        grid.add_row(
+            "Status:",
+            "[bold red]HTTP 429 Too Many Requests (Quota Exhausted)[/bold red]",
+        )
+        grid.add_row("Details:", f"[yellow]{message}[/yellow]")
+        if reset_info:
+            grid.add_row("Reset Info:", f"[dim]{reset_info}[/dim]")
+        if remedy:
+            grid.add_row("Remedy:", f"[bold green]{remedy}[/bold green]")
+
+        panel = Panel(
+            grid,
+            title="[bold red]◈ Upstream Provider Quota Ceiling Exceeded[/bold red]",
+            border_style="red",
+            padding=(1, 2),
+        )
+        console.print(panel)

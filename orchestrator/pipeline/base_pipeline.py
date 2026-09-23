@@ -315,15 +315,58 @@ class BasePipeline(ABC):
                 conv.run()
                 return
             except Exception as e:
+                err_text = str(e)
+                # Safely close attached visualizer immediately to release console TTY buffer
+                vis = getattr(conv, "visualizer", None)
+                if vis and hasattr(vis, "close"):
+                    try:
+                        vis.close()
+                    except Exception:
+                        pass
+
+                # Detect unrecoverable quota exhaustion vs transient rate limits
+                is_rate_limit = (
+                    "429" in err_text
+                    or "RateLimitError" in err_text
+                    or "rate limit" in err_text.lower()
+                )
+                is_quota_exhausted = is_rate_limit and (
+                    "free-models-per-day" in err_text
+                    or 'X-RateLimit-Remaining": "0"' in err_text
+                    or "X-RateLimit-Remaining': '0'" in err_text
+                    or "remedy_hint" in err_text
+                    or "insufficient_quota" in err_text
+                )
+
+                if is_quota_exhausted:
+                    from orchestrator.core.exceptions import ProviderQuotaExceededError
+
+                    provider = (
+                        "OpenRouter"
+                        if "openrouter" in err_text.lower()
+                        else "LLM Provider"
+                    )
+                    raise ProviderQuotaExceededError(
+                        provider=provider,
+                        message="Daily free-tier request limit has been exhausted (1,000 requests/day).",
+                        reset_info="Quota resets daily at 00:00 UTC (or upgrade to paid credits).",
+                        remedy="Provide GEMINI_API_KEY or GROQ_API_KEY in .env, or add funds to OpenRouter.",
+                    ) from e
+
+                # Truncate giant nested json/traceback strings for clean console warnings
+                concise_msg = err_text.splitlines()[0] if err_text else str(e)
+                if len(concise_msg) > 140:
+                    concise_msg = concise_msg[:137] + "..."
+
                 if attempt < max_retries:
                     backoff = 2**attempt
                     ConsoleOutput.warning(
-                        f"{role_name} conversation failed (attempt {attempt + 1}): {e}. Retrying in {backoff}s..."
+                        f"{role_name} conversation failed (attempt {attempt + 1}): {concise_msg}. Retrying in {backoff}s..."
                     )
                     time.sleep(backoff)
                 else:
                     ConsoleOutput.error(
-                        f"{role_name} conversation failed after {max_retries + 1} attempts: {e}"
+                        f"{role_name} conversation failed after {max_retries + 1} attempts: {concise_msg}"
                     )
                     raise
             finally:

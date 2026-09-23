@@ -674,17 +674,19 @@ class AuditFixPipeline(BasePipeline):
 
             t_dev = time.perf_counter()
             dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
-            self._run_conv(
-                dev_conv,
-                "Developer",
-                max_steps=step_limit,
-                governor=governor,
-                task_complexity="high"
-                if governor.allocation.total_budget > 100_000
-                else "medium",
-            )
-            if hasattr(visualizer, "close"):
-                visualizer.close()
+            try:
+                self._run_conv(
+                    dev_conv,
+                    "Developer",
+                    max_steps=step_limit,
+                    governor=governor,
+                    task_complexity="high"
+                    if governor.allocation.total_budget > 100_000
+                    else "medium",
+                )
+            finally:
+                if hasattr(visualizer, "close"):
+                    visualizer.close()
             dur_dev = time.perf_counter() - t_dev
             u_dev = get_llm_usage(developer_agent.llm)
 

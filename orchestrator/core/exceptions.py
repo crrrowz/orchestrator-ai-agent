@@ -23,3 +23,20 @@ class PreflightCheckError(OrchestratorException):
 
 class HumanRejectedError(OrchestratorException):
     """Raised when a human operator rejects changes at an approval gate."""
+
+
+class ProviderQuotaExceededError(OrchestratorException):
+    """Raised when an upstream LLM provider rate limit or quota ceiling is hit."""
+
+    def __init__(
+        self,
+        provider: str = "LLM Provider",
+        message: str = "Provider quota or rate limit exceeded.",
+        reset_info: str = "",
+        remedy: str = "",
+    ):
+        super().__init__(message)
+        self.provider = provider
+        self.message = message
+        self.reset_info = reset_info
+        self.remedy = remedy
