@@ -68,9 +68,11 @@ class FullPipeline:
         # -------------------------------------------------------------------
         # Phase 1: Architectural Decomposition
         # -------------------------------------------------------------------
+        # Phase 1: Architectural Decomposition
+        # -------------------------------------------------------------------
         t0 = time.perf_counter()
-        log_store.set_agent_context("Architect", "Decomposition")
-        ConsoleOutput.agent_step("Architect", "Designing modular blueprint and PLAN.md...")
+        log_store.set_agent_context("Architect", "Decomposition", model=architect_agent.llm.model, llm=architect_agent.llm)
+        ConsoleOutput.agent_step("Architect", "Designing modular blueprint and PLAN.md...", model=architect_agent.llm.model)
         arch_conv = Conversation(agent=architect_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         arch_conv.send_message(
             f"User Task:\n{task_description}\n\n"
@@ -86,8 +88,8 @@ class FullPipeline:
         # Phase 2: Implementation & Rigorous Testing Loop
         # -------------------------------------------------------------------
         t_dev = time.perf_counter()
-        log_store.set_agent_context("Developer", "Implementation")
-        ConsoleOutput.agent_step("Developer", "Implementing specification from PLAN.md...")
+        log_store.set_agent_context("Developer", "Implementation", model=developer_agent.llm.model, llm=developer_agent.llm)
+        ConsoleOutput.agent_step("Developer", "Implementing specification from PLAN.md...", model=developer_agent.llm.model)
         dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         dev_conv.send_message(
             f"Task: {task_description}\n\n"
@@ -103,9 +105,9 @@ class FullPipeline:
         tests_passed = False
 
         while iteration <= self.config.max_iterations:
-            ConsoleOutput.agent_step("Tester", f"Verifying test suite (Iteration {iteration}/{self.config.max_iterations})...")
+            log_store.set_agent_context("Tester", f"Test Iteration {iteration}", model=tester_agent.llm.model, llm=tester_agent.llm)
+            ConsoleOutput.agent_step("Tester", f"Verifying test suite (Iteration {iteration}/{self.config.max_iterations})...", model=tester_agent.llm.model)
             t_test = time.perf_counter()
-            log_store.set_agent_context("Tester", f"Test Iteration {iteration}")
             tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
             tester_conv.send_message(
                 f"Task: {task_description}\n\n"
@@ -142,7 +144,8 @@ class FullPipeline:
 
                 ConsoleOutput.warning(f"Tests failed in iteration {iteration}. Requesting fix.")
                 t_fix = time.perf_counter()
-                log_store.set_agent_context("Developer", f"Fix Iteration {iteration}")
+                log_store.set_agent_context("Developer", f"Fix Iteration {iteration}", model=developer_agent.llm.model, llm=developer_agent.llm)
+                ConsoleOutput.agent_step("Developer", f"Fixing failures (Iteration {iteration})...", model=developer_agent.llm.model)
                 dev_fix = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
                 dev_fix.send_message(
                     f"Pytest output:\n{test_run.stdout}\n{test_run.stderr}\n"
@@ -166,8 +169,8 @@ class FullPipeline:
         # Phase 3: Independent Review
         # -------------------------------------------------------------------
         t_rev = time.perf_counter()
-        log_store.set_agent_context("Reviewer", "Code Audit")
-        ConsoleOutput.agent_step("Reviewer", f"Auditing code with independent model '{self.config.reviewer.model}'...")
+        log_store.set_agent_context("Reviewer", "Code Audit", model=reviewer_agent.llm.model, llm=reviewer_agent.llm)
+        ConsoleOutput.agent_step("Reviewer", "Auditing code with independent model...", model=reviewer_agent.llm.model)
         git_diff = self.git.get_diff() or self.git.get_status()
         reviewer_conv = Conversation(agent=reviewer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
         reviewer_conv.send_message(

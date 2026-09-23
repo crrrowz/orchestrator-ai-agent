@@ -61,8 +61,8 @@ class DevTestLoop:
         try:
             # Step 1: Initial Implementation by Developer
             t0 = time.perf_counter()
-            log_store.set_agent_context("Developer", "Initial Implementation")
-            ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", task_description)
+            log_store.set_agent_context("Developer", "Initial Implementation", model=developer_agent.llm.model, llm=developer_agent.llm)
+            ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", details=f"Task: {task_description}", model=developer_agent.llm.model)
             dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
             dev_conv.send_message(
                 f"Implement the following software task:\n\n{task_description}\n\n"
@@ -79,10 +79,10 @@ class DevTestLoop:
             tests_passed = False
 
             while iteration <= self.config.max_iterations:
-                ConsoleOutput.agent_step("Tester", f"Running test verification (Iteration {iteration}/{self.config.max_iterations})...")
+                log_store.set_agent_context("Tester", f"Test Iteration {iteration}", model=tester_agent.llm.model, llm=tester_agent.llm)
+                ConsoleOutput.agent_step("Tester", f"Running test verification (Iteration {iteration}/{self.config.max_iterations})...", model=tester_agent.llm.model)
                 
                 t_test = time.perf_counter()
-                log_store.set_agent_context("Tester", f"Test Iteration {iteration}")
                 tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
                 tester_conv.send_message(
                     f"Task: {task_description}\n\n"
@@ -124,7 +124,8 @@ class DevTestLoop:
 
                     # Step 3: Developer receives test output and fixes
                     t_fix = time.perf_counter()
-                    log_store.set_agent_context("Developer", f"Fix Iteration {iteration}")
+                    log_store.set_agent_context("Developer", f"Fix Iteration {iteration}", model=developer_agent.llm.model, llm=developer_agent.llm)
+                    ConsoleOutput.agent_step("Developer", f"Fixing failures (Iteration {iteration})...", model=developer_agent.llm.model)
                     dev_fix_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
                     failure_summary = (
                         f"Pytest execution failed with exit code {test_run.exit_code}.\n"

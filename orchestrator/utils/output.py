@@ -27,8 +27,11 @@ class ConsoleOutput:
         console.print(Panel(text, border_style="cyan", expand=False))
 
     @staticmethod
-    def agent_step(agent_role: str, action: str, details: str = "") -> None:
-        msg = f"[agent][{agent_role.upper()}][/agent] {action}"
+    def agent_step(agent_role: str, action: str, details: str = "", model: str = "") -> None:
+        header = f"[agent][{agent_role.upper()}][/agent]"
+        if model:
+            header += f" [cyan]({model})[/cyan]"
+        msg = f"{header} {action}"
         if details:
             msg += f"\n[dim]{details}[/dim]"
         console.print(Panel(msg, border_style="magenta", expand=False))

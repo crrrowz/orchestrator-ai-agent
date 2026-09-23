@@ -42,12 +42,24 @@ class SessionLogStore:
         self.workspace_path = workspace_path
         self.current_role: str = "System"
         self.current_phase: str = "Initializing"
+        self.current_model: str = "Unknown"
+        self.current_llm: Optional[Any] = None
         self.milestones: List[str] = []
         self.start_time: float = time.time()
+        self.phase_start_time: float = time.time()
 
-    def set_agent_context(self, role: str, phase: str) -> None:
+    def set_agent_context(
+        self,
+        role: str,
+        phase: str,
+        model: str = "",
+        llm: Optional[Any] = None,
+    ) -> None:
         self.current_role = role
         self.current_phase = phase
+        self.current_model = model or getattr(llm, "model", self.current_model)
+        self.current_llm = llm
+        self.phase_start_time = time.time()
 
     def add_step(
         self,
@@ -97,7 +109,7 @@ class SessionLogStore:
 
 
 class OrchestratorLiveVisualizer(ConversationVisualizerBase):
-    """Headless, quiet visualizer that suppresses prompt floods and powers the live fixed UI."""
+    """Quiet, informative live visualizer showing agent, model, execution time, and tokens in real time."""
 
     def __init__(self, log_store: SessionLogStore, console: Optional[Console] = None):
         super().__init__()
@@ -106,7 +118,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         self._last_thought: Optional[str] = None
 
     def on_event(self, event: Event) -> None:
-        """Process conversation events silently into the store and update fixed status."""
+        """Process conversation events, log to store, and display real-time progress."""
         event_name = type(event).__name__
 
         # 1. Capture Agent Actions & Thoughts
@@ -130,7 +142,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             if path:
                 summary = f"{action_kind} ({op} {path})"
             elif "command" in args:
-                cmd_preview = str(args.get("command", ""))[:40]
+                cmd_preview = str(args.get("command", ""))[:50]
                 summary = f"terminal ({cmd_preview})"
             else:
                 summary = f"{action_kind} ({op})"
@@ -141,6 +153,38 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 arguments=args,
                 thought=self._last_thought,
             )
+
+            # Live terminal stream with Role, Model, Time, and Tokens
+            t_now = time.strftime("%H:%M:%S")
+            elapsed = round(time.time() - self.store.phase_start_time, 1)
+            role = self.store.current_role
+            model = self.store.current_model
+
+            # Extract live token metrics from active LLM
+            tokens_str = ""
+            if self.store.current_llm and hasattr(self.store.current_llm, "metrics"):
+                tu = getattr(self.store.current_llm.metrics, "accumulated_token_usage", None)
+                if tu:
+                    in_tok = getattr(tu, "prompt_tokens", 0)
+                    out_tok = getattr(tu, "completion_tokens", 0)
+                    total_tok = in_tok + out_tok
+                    cost = getattr(self.store.current_llm.metrics, "accumulated_cost", 0.0)
+                    tokens_str = f" [cyan]🪙 {total_tok:,} tok (In:{in_tok:,} Out:{out_tok:,})[/cyan]"
+                    if cost > 0:
+                        tokens_str += f" [dim](${cost:.4f})[/dim]"
+
+            self.console.print(
+                f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
+                f"[blue]({model})[/blue] "
+                f"[bold white]{summary}[/bold white] "
+                f"[yellow]⏱ {elapsed}s[/yellow]"
+                f"{tokens_str}"
+            )
+            if self._last_thought:
+                thought_preview = self._last_thought.replace("\n", " ").strip()
+                if len(thought_preview) > 110:
+                    thought_preview = thought_preview[:107] + "..."
+                self.console.print(f"       [dim italic]💭 {thought_preview}[/dim italic]")
 
         # 2. Capture Tool Observations
         elif event_name == "ObservationEvent":
@@ -162,14 +206,21 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     last_step.observation = str(text_res).strip()
                     last_step.is_error = is_err
 
+            obs_preview = str(text_res).replace("\n", " ").strip()
+            if len(obs_preview) > 95:
+                obs_preview = obs_preview[:92] + "..."
+            icon = "[bold red]✗ ERR[/bold red]" if is_err else "[bold green]✓ OK[/bold green]"
+            self.console.print(f"       {icon} [dim]{obs_preview}[/dim]")
+
         # 3. Capture General Messages & Errors
-        elif event_name == "ConversationErrorEvent":
-            err_msg = getattr(event, "error", "Unknown error")
+        elif event_name in ("ConversationErrorEvent", "AgentErrorEvent"):
+            err_msg = getattr(event, "error", None) or getattr(event, "message", "Unknown error")
             self.store.add_step(
-                summary=f"Error encountered: {err_msg}",
+                summary=f"Error: {err_msg}",
                 is_error=True,
                 observation=str(err_msg),
             )
+            self.console.print(f"       [bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]")
 
 
 class InteractiveLogExplorer:
