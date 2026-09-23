@@ -6,7 +6,9 @@ from contextvars import ContextVar
 from queue import Queue, Empty
 from typing import Optional, Callable, Literal, Set
 
-_active_channel_var: ContextVar[Optional["HumanInterventionChannel"]] = ContextVar("active_channel", default=None)
+_active_channel_var: ContextVar[Optional["HumanInterventionChannel"]] = ContextVar(
+    "active_channel", default=None
+)
 
 
 def get_active_channel() -> Optional["HumanInterventionChannel"]:
@@ -61,11 +63,7 @@ class HumanInterventionChannel:
             return base_prompt
 
         guidance_block = "\n".join(f"- {m}" for m in messages)
-        return (
-            f"[HUMAN OPERATOR GUIDANCE]:\n"
-            f"{guidance_block}\n\n"
-            f"{base_prompt}"
-        )
+        return f"[HUMAN OPERATOR GUIDANCE]:\n{guidance_block}\n\n{base_prompt}"
 
     def request_stop(self) -> None:
         """Signal the pipeline to stop after the current step."""
@@ -105,12 +103,26 @@ class HumanInterventionChannel:
 
         # Check if already approved during this session
         if action_type == "file_write" and target in self._session_allowed_paths:
-            return True, f"Permission already granted for path '{target}' in this session."
-        if action_type == "terminal_command" and target in self._session_allowed_commands:
-            return True, f"Permission already granted for command '{target}' in this session."
+            return (
+                True,
+                f"Permission already granted for path '{target}' in this session.",
+            )
+        if (
+            action_type == "terminal_command"
+            and target in self._session_allowed_commands
+        ):
+            return (
+                True,
+                f"Permission already granted for command '{target}' in this session.",
+            )
 
-        if input_fn is None and not (hasattr(sys.stdin, "isatty") and sys.stdin.isatty()):
-            return False, f"Permission denied: Non-interactive environment cannot prompt developer for '{target}'."
+        if input_fn is None and not (
+            hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
+        ):
+            return (
+                False,
+                f"Permission denied: Non-interactive environment cannot prompt developer for '{target}'.",
+            )
 
         ask = input_fn or input
         prompt = (
@@ -150,11 +162,17 @@ class HumanInterventionChannel:
             return "approved"
 
         # Check if stdin is interactive terminal or if an input_fn was provided
-        if input_fn is None and not (hasattr(sys.stdin, "isatty") and sys.stdin.isatty()):
+        if input_fn is None and not (
+            hasattr(sys.stdin, "isatty") and sys.stdin.isatty()
+        ):
             return "approved"
 
         ask = input_fn or input
-        preview_text = f"\n--- Context Preview ---\n{context_preview}\n-----------------------" if context_preview else ""
+        preview_text = (
+            f"\n--- Context Preview ---\n{context_preview}\n-----------------------"
+            if context_preview
+            else ""
+        )
         prompt = (
             f"\n🛑 [APPROVAL GATE: {gate_name}]"
             f"{preview_text}\n"
@@ -174,4 +192,3 @@ class HumanInterventionChannel:
             return "approved"
         except (EOFError, KeyboardInterrupt):
             return "rejected"
-

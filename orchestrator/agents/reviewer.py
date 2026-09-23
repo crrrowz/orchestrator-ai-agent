@@ -46,14 +46,15 @@ CRITICAL INSTRUCTIONS:
 def create_reviewer_agent(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    workspace_path: Optional[Path] = None
+    workspace_path: Optional[Path] = None,
 ) -> Agent:
     """Build a Reviewer agent with an independent LLM model and review skill."""
     workspace = workspace_path or config.workspace_path
-    
+
     # Enforce independent model check
     if config.reviewer.model == config.developer.model:
         import warnings
+
         warnings.warn(
             f"Reviewer model ({config.reviewer.model}) is identical to Developer model. "
             "For true independent review, configure different models across providers."

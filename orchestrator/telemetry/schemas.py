@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class StepIncident(BaseModel):
     """Specific error or failure incident encountered during a step."""
+
     step_name: str
     incident_type: str  # "test_failure", "tool_error", "timeout", "circuit_breaker", "budget_exceeded"
     details: str
@@ -15,6 +16,7 @@ class StepIncident(BaseModel):
 
 class StepMetric(BaseModel):
     """Metrics recorded for a single agent action or pipeline step."""
+
     agent_role: str
     action_type: str
     iteration: int
@@ -31,6 +33,7 @@ class StepMetric(BaseModel):
 
 class DiagnosticReport(BaseModel):
     """Comprehensive diagnostic report generated after every task execution."""
+
     report_id: str
     task_description: str
     pipeline_mode: str

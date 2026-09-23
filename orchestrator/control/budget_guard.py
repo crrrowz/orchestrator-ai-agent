@@ -1,7 +1,5 @@
 """Token and USD budget guard for runtime cost control."""
 
-from typing import Optional
-
 
 class BudgetGuard:
     """Monitors live accumulated spend and enforces hard cost caps."""

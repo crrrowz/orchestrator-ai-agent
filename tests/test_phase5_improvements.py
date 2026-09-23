@@ -3,7 +3,7 @@
 from pathlib import Path
 import pytest
 
-from orchestrator.memory import ConversationStore, MemoryEntry
+from orchestrator.memory import ConversationStore
 from orchestrator.pipeline.state_machine import PipelineStateMachine, PipelinePhase
 from orchestrator.control import PipelineController, BudgetGuard
 
@@ -32,7 +32,9 @@ def test_conversation_store_persistence_and_retrieval(tmp_path: Path):
     assert len(all_memories) == 2
 
     # 2. Search relevant memory for related task
-    relevant = store.find_relevant_memories("Implement OAuth2 and JWT token refresh", files=["src/auth/jwt.py"])
+    relevant = store.find_relevant_memories(
+        "Implement OAuth2 and JWT token refresh", files=["src/auth/jwt.py"]
+    )
     assert len(relevant) >= 1
     assert "JWT" in relevant[0].task
 

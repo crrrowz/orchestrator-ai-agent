@@ -1,11 +1,14 @@
 """Unit tests validating Phase 11: Architectural Consolidation, BasePipeline, and ReviewerVerdict."""
 
 from pathlib import Path
-from unittest.mock import MagicMock
-import pytest
 
 from orchestrator.config import ORCHESTRATOR_ROOT, OrchestratorConfig, SkillManager
-from orchestrator.pipeline import BasePipeline, DevTestLoop, FullPipeline, ReviewerVerdict
+from orchestrator.pipeline import (
+    BasePipeline,
+    DevTestLoop,
+    FullPipeline,
+    ReviewerVerdict,
+)
 from orchestrator.tools.workspace_tools import (
     WorkspaceTerminalAction,
     _matches_path_scope,

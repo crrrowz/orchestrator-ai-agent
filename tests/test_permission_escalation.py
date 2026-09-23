@@ -2,14 +2,15 @@
 
 import pytest
 from pathlib import Path
-from orchestrator.control.human_channel import HumanInterventionChannel, set_active_channel
+from orchestrator.control.human_channel import (
+    HumanInterventionChannel,
+    set_active_channel,
+)
 from orchestrator.tools.workspace_tools import (
     WorkspaceFileAction,
-    WorkspaceTerminalAction,
     RequestPermissionAction,
     RequestPermissionExecutor,
     execute_file_action,
-    execute_terminal_action,
 )
 
 
@@ -24,9 +25,7 @@ def test_path_normalization_strips_virtual_workspace_prefix(tmp_path: Path):
     """Paths starting with /workspace or workspace/ should resolve to workspace_root directly."""
     # Write a file using /workspace prefix
     action_write = WorkspaceFileAction(
-        operation="write",
-        path="/workspace/nested/example.py",
-        content="x = 42\n"
+        operation="write", path="/workspace/nested/example.py", content="x = 42\n"
     )
     obs = execute_file_action(action_write, base_dir=tmp_path)
     assert obs.success is True
@@ -35,8 +34,7 @@ def test_path_normalization_strips_virtual_workspace_prefix(tmp_path: Path):
 
     # Read using relative workspace/ prefix
     action_read = WorkspaceFileAction(
-        operation="read",
-        path="workspace/nested/example.py"
+        operation="read", path="workspace/nested/example.py"
     )
     obs_read = execute_file_action(action_read, base_dir=tmp_path)
     assert obs_read.success is True
@@ -54,13 +52,11 @@ def test_file_write_rbac_escalation_approved(tmp_path: Path):
         return "y"
 
     action = WorkspaceFileAction(
-        operation="write",
-        path="src/protected.py",
-        content="# privileged content\n"
+        operation="write", path="src/protected.py", content="# privileged content\n"
     )
 
     # Tester agent has write scope restricted to 'tests/'
-    obs = execute_file_action(
+    execute_file_action(
         action,
         base_dir=tmp_path,
         allowed_write_prefixes=["tests/"],
@@ -73,7 +69,7 @@ def test_file_write_rbac_escalation_approved(tmp_path: Path):
         action_type="file_write",
         target="src/protected.py",
         reason="Role outside allowed scope",
-        input_fn=mock_input
+        input_fn=mock_input,
     )
     assert granted is True
     assert channel.is_path_approved("src/protected.py")
@@ -101,7 +97,7 @@ def test_file_write_rbac_escalation_denied(tmp_path: Path):
         action_type="file_write",
         target="tests/hacked.py",
         reason="Blocked write prefix",
-        input_fn=mock_input
+        input_fn=mock_input,
     )
     assert granted is False
     assert not channel.is_path_approved("tests/hacked.py")
@@ -120,7 +116,7 @@ def test_terminal_restricted_command_escalation():
         action_type="terminal_command",
         target="echo dynamic_allowed",
         reason="Testing dynamic escalation",
-        input_fn=mock_input
+        input_fn=mock_input,
     )
     assert granted is True
     assert channel.is_command_approved("echo dynamic_allowed")
@@ -147,14 +143,16 @@ def test_request_permission_tool(tmp_path: Path):
     action = RequestPermissionAction(
         action_type="dependency_install",
         target="pip install requests",
-        justification="Need to install requests for API testing"
+        justification="Need to install requests for API testing",
     )
 
     # Patch input inside channel
     original_req = channel.request_permission
+
     def patched_req(*args, **kwargs):
         kwargs["input_fn"] = mock_input
         return original_req(*args, **kwargs)
+
     channel.request_permission = patched_req
 
     obs = executor(action, conversation=conv)

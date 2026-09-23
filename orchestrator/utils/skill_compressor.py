@@ -16,7 +16,11 @@ class CompactSkillInjector:
         limit = max_chars or cls.MAX_SKILL_CHARS
 
         # Remove large markdown code blocks (```...```) to save prompt tokens
-        stripped = re.sub(r"```[a-zA-Z0-9_-]*\n[\s\S]*?\n```", "[Code example omitted for brevity]", content)
+        stripped = re.sub(
+            r"```[a-zA-Z0-9_-]*\n[\s\S]*?\n```",
+            "[Code example omitted for brevity]",
+            content,
+        )
 
         # Remove horizontal rules and excessive blank lines
         stripped = re.sub(r"\n{3,}", "\n\n", stripped)
@@ -46,7 +50,9 @@ class CompactSkillInjector:
         return "\n".join(selected_lines).strip()
 
     @classmethod
-    def create_compact_skill(cls, skill: Skill, max_chars: Optional[int] = None) -> Skill:
+    def create_compact_skill(
+        cls, skill: Skill, max_chars: Optional[int] = None
+    ) -> Skill:
         """Return a new Skill instance with compressed content."""
         compact_text = cls.compress_content(skill.content, max_chars=max_chars)
         return Skill(

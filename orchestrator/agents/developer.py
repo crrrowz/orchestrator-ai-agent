@@ -5,7 +5,10 @@ from typing import Optional
 
 from openhands.sdk import Agent
 from orchestrator.config import OrchestratorConfig, SkillManager, create_llm_for_role
-from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+from orchestrator.tools import (
+    create_workspace_file_tool,
+    create_workspace_terminal_tool,
+)
 
 DEVELOPER_SYSTEM_PROMPT = """You are the Senior Staff Developer Agent.
 Your objective is to produce production-grade, bug-free, fully implemented software.
@@ -46,4 +49,3 @@ def create_developer_agent(
         agent_context=context,
         system_prompt=DEVELOPER_SYSTEM_PROMPT,
     )
-

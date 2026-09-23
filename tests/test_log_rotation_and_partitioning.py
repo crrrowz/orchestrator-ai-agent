@@ -2,9 +2,7 @@
 
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-from orchestrator.config import OrchestratorConfig
 from orchestrator.telemetry import TelemetryRecorder
 from orchestrator.utils import SessionLogStore
 
@@ -69,11 +67,16 @@ def test_session_log_store_project_partitioning(tmp_path: Path):
 
     # Global latest points to the latest run (Project B)
     import json
-    global_data = json.loads((logs_dir / "latest_session.json").read_text(encoding="utf-8"))
+
+    global_data = json.loads(
+        (logs_dir / "latest_session.json").read_text(encoding="utf-8")
+    )
     assert global_data["project"] == "projectbeta"
 
     # Project A latest still points to Project A
-    alpha_data = json.loads((logs_dir / "projectalpha" / "latest_session.json").read_text(encoding="utf-8"))
+    alpha_data = json.loads(
+        (logs_dir / "projectalpha" / "latest_session.json").read_text(encoding="utf-8")
+    )
     assert alpha_data["project"] == "projectalpha"
 
 

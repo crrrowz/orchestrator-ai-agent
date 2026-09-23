@@ -7,7 +7,7 @@ from orchestrator.config import SkillManager
 def test_discover_skills():
     manager = SkillManager(Path.cwd())
     available = manager.available_skills
-    
+
     # Assert core skills are loaded from .agents/skills
     assert "clean-python-architecture" in available
     assert "pytest-rigorous-testing" in available
@@ -19,7 +19,9 @@ def test_discover_skills():
 
 def test_get_skills_for_role():
     manager = SkillManager(Path.cwd())
-    dev_skills = manager.get_skills_for_role(["clean-python-architecture", "graft-architecture-intelligence"])
+    dev_skills = manager.get_skills_for_role(
+        ["clean-python-architecture", "graft-architecture-intelligence"]
+    )
     assert len(dev_skills) == 2
     names = [s.name for s in dev_skills]
     assert "clean-python-architecture" in names
@@ -35,16 +37,26 @@ def test_build_agent_context():
 
 
 def test_openrouter_model_normalization_and_fallback():
-    from orchestrator.config import normalize_model_slug, OrchestratorConfig, create_llm_for_role, AgentRoleConfig
-    
+    from orchestrator.config import (
+        normalize_model_slug,
+        OrchestratorConfig,
+        create_llm_for_role,
+        AgentRoleConfig,
+    )
+
     assert normalize_model_slug("openrouter/free") == "openrouter/openrouter/free"
     assert normalize_model_slug("free") == "openrouter/openrouter/free"
-    assert normalize_model_slug("openrouter/qwen/qwen3.8-27b") == "openrouter/qwen/qwen3.8-27b:free"
+    assert (
+        normalize_model_slug("openrouter/qwen/qwen3.8-27b")
+        == "openrouter/qwen/qwen3.8-27b:free"
+    )
 
     cfg = OrchestratorConfig(openrouter_api_key="sk-test-fake")
-    role_cfg = AgentRoleConfig(role="developer", model="openrouter/qwen/qwen3.8-27b:free")
+    role_cfg = AgentRoleConfig(
+        role="developer", model="openrouter/qwen/qwen3.8-27b:free"
+    )
     llm = create_llm_for_role(cfg, role_cfg)
-    
+
     assert llm.model == "openrouter/qwen/qwen3.8-27b:free"
     assert llm.fallback_strategy is not None
     assert len(llm.fallback_strategy._resolved) == 1
@@ -55,6 +67,7 @@ def test_openrouter_model_normalization_and_fallback():
     llm_free = create_llm_for_role(cfg, role_cfg_free)
     assert llm_free.model == "openrouter/openrouter/free"
     assert llm_free.fallback_strategy is not None
-    assert llm_free.fallback_strategy._resolved[0].model == "openrouter/qwen/qwen3.8-27b:free"
-
-
+    assert (
+        llm_free.fallback_strategy._resolved[0].model
+        == "openrouter/qwen/qwen3.8-27b:free"
+    )

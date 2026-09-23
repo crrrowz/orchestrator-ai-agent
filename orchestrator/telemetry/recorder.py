@@ -2,7 +2,6 @@
 
 import difflib
 import hashlib
-import json
 import re
 import time
 import uuid
@@ -19,7 +18,12 @@ def get_llm_usage(llm) -> dict:
     """Safely extract prompt/completion tokens and cost from an OpenHands LLM instance."""
     metrics = getattr(llm, "metrics", None)
     if not metrics:
-        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}
+        return {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+        }
     tu = getattr(metrics, "accumulated_token_usage", None)
     prompt = getattr(tu, "prompt_tokens", 0) if tu else 0
     completion = getattr(tu, "completion_tokens", 0) if tu else 0
@@ -62,21 +66,25 @@ class TelemetryRecorder:
         self.task_description = task_description
         self.pipeline_mode = pipeline_mode
         now_utc = datetime.now(timezone.utc)
-        self.report_id = f"run_{now_utc.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-        self.reports_dir = (reports_dir or DEFAULT_DIAGNOSTICS_DIR / "reports").resolve()
+        self.report_id = (
+            f"run_{now_utc.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        )
+        self.reports_dir = (
+            reports_dir or DEFAULT_DIAGNOSTICS_DIR / "reports"
+        ).resolve()
         self.reports_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.circuit_breaker_threshold = circuit_breaker_threshold
         self.max_budget_usd = max_budget_usd
         self.max_retained_reports = max_retained_reports
         self.budget_guard = BudgetGuard(max_budget_usd=max_budget_usd)
         self.start_time = now_utc
         self._start_perf = time.perf_counter()
-        
+
         self.metrics: list[StepMetric] = []
         self.incidents: list[StepIncident] = []
         self.recommendations: list[str] = []
-        
+
         # State tracking for circuit breaker
         self._last_diff_hash: Optional[str] = None
         self._last_error_hash: Optional[str] = None
@@ -101,7 +109,11 @@ class TelemetryRecorder:
         estimated_cost_usd: float = 0.0,
     ) -> None:
         """Log a completed agent turn or pipeline step with token metrics."""
-        diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:12] if diff_text else None
+        diff_hash = (
+            hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:12]
+            if diff_text
+            else None
+        )
         metric = StepMetric(
             agent_role=agent_role,
             action_type=action_type,
@@ -160,16 +172,27 @@ class TelemetryRecorder:
         curr_error_clean = error_text.strip()
 
         # Extract failed test identifiers if present (e.g. FAILED tests/test_app.py::test_feature)
-        failing_tests = set(re.findall(r"(?:FAILED|ERROR)\s+([^\s:]+(?:::[\w_]+)?)", curr_error_clean))
+        failing_tests = set(
+            re.findall(r"(?:FAILED|ERROR)\s+([^\s:]+(?:::[\w_]+)?)", curr_error_clean)
+        )
 
         is_repeated = False
 
-        if curr_diff_hash == self._last_diff_hash and curr_error_hash == self._last_error_hash:
+        if (
+            curr_diff_hash == self._last_diff_hash
+            and curr_error_hash == self._last_error_hash
+        ):
             is_repeated = True
-        elif failing_tests and self._last_failing_tests and failing_tests == self._last_failing_tests:
+        elif (
+            failing_tests
+            and self._last_failing_tests
+            and failing_tests == self._last_failing_tests
+        ):
             is_repeated = True
         elif self._last_error_text and len(curr_error_clean) > 50:
-            sim = difflib.SequenceMatcher(None, curr_error_clean[:1000], self._last_error_text[:1000]).ratio()
+            sim = difflib.SequenceMatcher(
+                None, curr_error_clean[:1000], self._last_error_text[:1000]
+            ).ratio()
             if sim >= 0.88:
                 is_repeated = True
 
@@ -209,8 +232,14 @@ class TelemetryRecorder:
         total_cost = sum(m.estimated_cost_usd for m in self.metrics)
 
         # Generate automatic recommendations
-        if not completed_successfully and not self.circuit_breaker_triggered and not self.budget_exhausted:
-            self.recommendations.append("Task did not pass all tests within iteration budget. Consider increasing max_iterations or decomposing task.")
+        if (
+            not completed_successfully
+            and not self.circuit_breaker_triggered
+            and not self.budget_exhausted
+        ):
+            self.recommendations.append(
+                "Task did not pass all tests within iteration budget. Consider increasing max_iterations or decomposing task."
+            )
 
         report = DiagnosticReport(
             report_id=self.report_id,
@@ -251,7 +280,7 @@ class TelemetryRecorder:
             )
             pruned = 0
             if len(report_files) > self.max_retained_reports:
-                for old_file in report_files[self.max_retained_reports:]:
+                for old_file in report_files[self.max_retained_reports :]:
                     try:
                         old_file.unlink()
                         pruned += 1

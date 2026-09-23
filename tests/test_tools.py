@@ -11,7 +11,9 @@ from orchestrator.tools import (
 
 def test_file_tool_write_and_read(tmp_path: Path):
     # Write
-    write_act = WorkspaceFileAction(operation="write", path="test.py", content="print('hello')")
+    write_act = WorkspaceFileAction(
+        operation="write", path="test.py", content="print('hello')"
+    )
     res_w = execute_file_action(write_act, base_dir=tmp_path)
     assert res_w.success is True
     assert (tmp_path / "test.py").exists()
@@ -25,7 +27,9 @@ def test_file_tool_write_and_read(tmp_path: Path):
 
 def test_file_tool_edit(tmp_path: Path):
     # Write initial
-    write_act = WorkspaceFileAction(operation="write", path="mod.py", content="def foo(): return 1\n")
+    write_act = WorkspaceFileAction(
+        operation="write", path="mod.py", content="def foo(): return 1\n"
+    )
     execute_file_action(write_act, base_dir=tmp_path)
 
     # Edit
@@ -33,7 +37,7 @@ def test_file_tool_edit(tmp_path: Path):
         operation="edit",
         path="mod.py",
         target_text="return 1",
-        replacement_text="return 42"
+        replacement_text="return 42",
     )
     res_e = execute_file_action(edit_act, base_dir=tmp_path)
     assert res_e.success is True
@@ -45,7 +49,9 @@ def test_file_tool_edit(tmp_path: Path):
 
 
 def test_file_tool_path_traversal_blocked(tmp_path: Path):
-    act = WorkspaceFileAction(operation="write", path="../../secret.txt", content="hack")
+    act = WorkspaceFileAction(
+        operation="write", path="../../secret.txt", content="hack"
+    )
     res = execute_file_action(act, base_dir=tmp_path)
     assert res.success is False
     assert "Access denied" in res.message
@@ -60,14 +66,16 @@ def test_terminal_tool_execution(tmp_path: Path):
 
 def test_workspace_tools_agent_resolution(tmp_path: Path):
     from openhands.sdk import Agent, LLM, Conversation
-    from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+    from orchestrator.tools import (
+        create_workspace_file_tool,
+        create_workspace_terminal_tool,
+    )
 
     f_tool = create_workspace_file_tool(tmp_path)
     t_tool = create_workspace_terminal_tool(tmp_path)
 
     agent = Agent(
-        llm=LLM(model="openrouter/qwen/qwen3.8-27b:free"),
-        tools=[f_tool, t_tool]
+        llm=LLM(model="openrouter/qwen/qwen3.8-27b:free"), tools=[f_tool, t_tool]
     )
     conv = Conversation(agent=agent, workspace=tmp_path)
     conv._ensure_agent_ready()
@@ -77,7 +85,9 @@ def test_workspace_tools_agent_resolution(tmp_path: Path):
 
 def test_terminal_tool_utf8_output(tmp_path: Path):
     # Output non-ASCII UTF-8 characters (em-dash, quotes, Arabic)
-    act = WorkspaceTerminalAction(command="python -c \"import sys; sys.stdout.buffer.write('— “Hello” مرحبا'.encode('utf-8'))\"")
+    act = WorkspaceTerminalAction(
+        command="python -c \"import sys; sys.stdout.buffer.write('— “Hello” مرحبا'.encode('utf-8'))\""
+    )
     res = execute_terminal_action(act, base_dir=tmp_path)
     assert res.exit_code == 0
     assert "—" in res.stdout or "مرحبا" in res.stdout
@@ -85,10 +95,8 @@ def test_terminal_tool_utf8_output(tmp_path: Path):
 
 def test_observation_defaults():
     from orchestrator.tools.workspace_tools import WorkspaceTerminalObservation
+
     obs = WorkspaceTerminalObservation(exit_code=0)
     assert obs.stdout == ""
     assert obs.stderr == ""
     assert obs.timed_out is False
-
-
-

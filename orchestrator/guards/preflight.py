@@ -13,10 +13,20 @@ class PreFlightGuard:
     def check_syntax(workspace: Path) -> Tuple[bool, str]:
         """Compile all Python files in the workspace. Returns (is_valid, error_message)."""
         py_files: List[Path] = [
-            p for p in workspace.rglob("*.py")
+            p
+            for p in workspace.rglob("*.py")
             if not any(
                 part.startswith(".")
-                or part in ("__pycache__", ".venv", "venv", "build", "dist", "site-packages", "node_modules")
+                or part
+                in (
+                    "__pycache__",
+                    ".venv",
+                    "venv",
+                    "build",
+                    "dist",
+                    "site-packages",
+                    "node_modules",
+                )
                 for part in p.parts
             )
         ]
@@ -54,7 +64,13 @@ class PreFlightGuard:
         for root in search_roots:
             try:
                 for item in root.iterdir():
-                    if item.name.startswith((".", "_")) or item.name in ("tests", "venv", ".venv", "build", "dist"):
+                    if item.name.startswith((".", "_")) or item.name in (
+                        "tests",
+                        "venv",
+                        ".venv",
+                        "build",
+                        "dist",
+                    ):
                         continue
                     if item.is_dir() and (item / "__init__.py").exists():
                         targets.append(item.name)
@@ -70,7 +86,11 @@ class PreFlightGuard:
         for mod in sorted(set(targets)):
             try:
                 res = subprocess.run(
-                    [sys.executable, "-c", f"import sys; sys.path.insert(0, '.'); sys.path.insert(0, 'src'); import {mod}"],
+                    [
+                        sys.executable,
+                        "-c",
+                        f"import sys; sys.path.insert(0, '.'); sys.path.insert(0, 'src'); import {mod}",
+                    ],
                     cwd=str(workspace),
                     capture_output=True,
                     text=True,
@@ -79,7 +99,11 @@ class PreFlightGuard:
                 if res.returncode != 0 and res.stderr:
                     err_text = res.stderr.strip()
                     # Only report local broken imports or syntax failures
-                    if f"No module named '{mod}'" in err_text or "ImportError" in err_text or "SyntaxError" in err_text:
+                    if (
+                        f"No module named '{mod}'" in err_text
+                        or "ImportError" in err_text
+                        or "SyntaxError" in err_text
+                    ):
                         errors.append(f"Import failure in module '{mod}':\n{err_text}")
             except Exception:
                 continue

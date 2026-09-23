@@ -1,10 +1,8 @@
 """Unit tests for Phase P8: Token Efficiency Deep Cuts."""
 
-import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 from orchestrator.config import OrchestratorConfig
 from orchestrator.memory import ConversationStore
@@ -27,16 +25,22 @@ def test_memory_stopword_filtering_and_min_score(tmp_path: Path):
 
     # 1. Query with generic task words that are stopwords ("create implement task with code")
     # Should not match because all words are filtered out by COMMON_TASK_STOPWORDS
-    results_generic = store.find_relevant_memories("Create and implement task with code", min_score=3.0)
+    results_generic = store.find_relevant_memories(
+        "Create and implement task with code", min_score=3.0
+    )
     assert len(results_generic) == 0
 
     # 2. Query with unrelated technical words ("PostgreSQL database migration")
     # No word overlap with Redis cache
-    results_unrelated = store.find_relevant_memories("PostgreSQL database migration", min_score=3.0)
+    results_unrelated = store.find_relevant_memories(
+        "PostgreSQL database migration", min_score=3.0
+    )
     assert len(results_unrelated) == 0
 
     # 3. Query with relevant technical terms ("Redis cache invalidation")
-    results_relevant = store.find_relevant_memories("Redis cache invalidation", min_score=3.0)
+    results_relevant = store.find_relevant_memories(
+        "Redis cache invalidation", min_score=3.0
+    )
     assert len(results_relevant) == 1
     assert "Redis" in results_relevant[0].task
 
@@ -55,11 +59,14 @@ def test_graft_freshness_caching(tmp_path: Path):
     graft_dir = tmp_path / "graft"
     graft_dir.mkdir(parents=True)
 
-    with patch.object(GraftContextProvider, "is_graft_available", return_value=True), \
-         patch("subprocess.run") as mock_subproc:
-
+    with (
+        patch.object(GraftContextProvider, "is_graft_available", return_value=True),
+        patch("subprocess.run") as mock_subproc,
+    ):
         # Fresh index (< 300s old): should NOT call subprocess.run
-        fresh = GraftContextProvider.build_index(tmp_path, force=False, max_age_seconds=300.0)
+        fresh = GraftContextProvider.build_index(
+            tmp_path, force=False, max_age_seconds=300.0
+        )
         assert fresh is True
         mock_subproc.assert_not_called()
 
@@ -76,14 +83,19 @@ def test_git_ops_get_compact_diff_truncation(tmp_path: Path):
 
     # Create mock diff outputs
     stat_output = " src/app.py | 120 +++++++++++++++++++++++++++++++++++++++++++++++\n 1 file changed, 120 insertions(+)"
-    
+
     # 200 lines of diff
-    diff_lines = ["diff --git a/src/app.py b/src/app.py", "--- a/src/app.py", "+++ b/src/app.py"]
+    diff_lines = [
+        "diff --git a/src/app.py b/src/app.py",
+        "--- a/src/app.py",
+        "+++ b/src/app.py",
+    ]
     for i in range(120):
         diff_lines.append(f"+    line_content_{i} = 'some payload data here'")
     diff_output = "\n".join(diff_lines)
 
     with patch.object(git, "_run_git") as mock_run:
+
         def side_effect(*args):
             mock_proc = MagicMock()
             if "--stat" in args:
@@ -96,19 +108,26 @@ def test_git_ops_get_compact_diff_truncation(tmp_path: Path):
 
         # Compact diff with max_lines_per_file=20
         compact = git.get_compact_diff(max_lines_per_file=20, max_chars=1000)
-        
+
         assert "Diff Summary:" in compact
         assert "1 file changed" in compact
-        assert "[... diff truncated for this file ...]" in compact or "[... Diff truncated:" in compact
+        assert (
+            "[... diff truncated for this file ...]" in compact
+            or "[... Diff truncated:" in compact
+        )
         assert len(compact) <= 1200
 
 
 def test_cost_estimator_calculation():
     """CostEstimator should calculate tokens and pricing for dev-test and full modes."""
     cfg = OrchestratorConfig()
-    
+
     # dev-test mode
-    res_dev = CostEstimator.estimate("Implement JWT authentication with refresh token revocation", mode="dev-test", config=cfg)
+    res_dev = CostEstimator.estimate(
+        "Implement JWT authentication with refresh token revocation",
+        mode="dev-test",
+        config=cfg,
+    )
     assert res_dev.mode == "dev-test"
     assert len(res_dev.roles) == 2  # developer, tester
     assert res_dev.total_tokens > 0
@@ -116,7 +135,11 @@ def test_cost_estimator_calculation():
     assert res_dev.total_cost_usd == 0.0
 
     # full mode
-    res_full = CostEstimator.estimate("Implement JWT authentication with refresh token revocation", mode="full", config=cfg)
+    res_full = CostEstimator.estimate(
+        "Implement JWT authentication with refresh token revocation",
+        mode="full",
+        config=cfg,
+    )
     assert res_full.mode == "full"
     assert len(res_full.roles) == 4  # architect, developer, tester, reviewer
     assert res_full.total_tokens > res_dev.total_tokens
@@ -127,6 +150,6 @@ def test_cost_estimator_paid_model_pricing():
     cfg = OrchestratorConfig()
     cfg.developer.model = "anthropic/claude-sonnet-4-5-20250929"
     cfg.reviewer.model = "openai/gpt-4o"
-    
+
     res = CostEstimator.estimate("Build microservice", mode="full", config=cfg)
     assert res.total_cost_usd > 0.0

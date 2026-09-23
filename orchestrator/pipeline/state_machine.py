@@ -1,11 +1,12 @@
 """Pipeline Finite State Machine (FSM) for dynamic stage orchestration."""
 
 from enum import Enum
-from typing import Optional, Set, Dict, List
+from typing import Set, Dict, List
 
 
 class PipelinePhase(str, Enum):
     """Enumeration of all discrete pipeline lifecycle phases."""
+
     INIT = "init"
     ARCHITECT = "architect"
     DEVELOP = "develop"
@@ -25,15 +26,65 @@ class PipelineStateMachine:
 
     # Explicit allowed transitions graph
     ALLOWED_TRANSITIONS: Dict[PipelinePhase, Set[PipelinePhase]] = {
-        PipelinePhase.INIT: {PipelinePhase.ARCHITECT, PipelinePhase.DEVELOP, PipelinePhase.ABORTED, PipelinePhase.FAILED},
-        PipelinePhase.ARCHITECT: {PipelinePhase.HUMAN_GATE, PipelinePhase.DEVELOP, PipelinePhase.FAILED, PipelinePhase.ABORTED},
-        PipelinePhase.DEVELOP: {PipelinePhase.PREFLIGHT, PipelinePhase.HUMAN_GATE, PipelinePhase.TEST, PipelinePhase.FAILED, PipelinePhase.ABORTED},
-        PipelinePhase.PREFLIGHT: {PipelinePhase.DEVELOP, PipelinePhase.TEST, PipelinePhase.FAILED, PipelinePhase.ABORTED},
-        PipelinePhase.TEST: {PipelinePhase.FIX, PipelinePhase.REVIEW, PipelinePhase.COMMIT, PipelinePhase.COMPLETED, PipelinePhase.FAILED, PipelinePhase.ABORTED},
-        PipelinePhase.FIX: {PipelinePhase.PREFLIGHT, PipelinePhase.TEST, PipelinePhase.FAILED, PipelinePhase.ABORTED},
-        PipelinePhase.REVIEW: {PipelinePhase.DEVELOP, PipelinePhase.COMMIT, PipelinePhase.COMPLETED, PipelinePhase.FAILED, PipelinePhase.ABORTED},
-        PipelinePhase.HUMAN_GATE: {PipelinePhase.DEVELOP, PipelinePhase.TEST, PipelinePhase.COMMIT, PipelinePhase.COMPLETED, PipelinePhase.ABORTED, PipelinePhase.FAILED},
-        PipelinePhase.COMMIT: {PipelinePhase.COMPLETED, PipelinePhase.FAILED, PipelinePhase.ABORTED},
+        PipelinePhase.INIT: {
+            PipelinePhase.ARCHITECT,
+            PipelinePhase.DEVELOP,
+            PipelinePhase.ABORTED,
+            PipelinePhase.FAILED,
+        },
+        PipelinePhase.ARCHITECT: {
+            PipelinePhase.HUMAN_GATE,
+            PipelinePhase.DEVELOP,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
+        PipelinePhase.DEVELOP: {
+            PipelinePhase.PREFLIGHT,
+            PipelinePhase.HUMAN_GATE,
+            PipelinePhase.TEST,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
+        PipelinePhase.PREFLIGHT: {
+            PipelinePhase.DEVELOP,
+            PipelinePhase.TEST,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
+        PipelinePhase.TEST: {
+            PipelinePhase.FIX,
+            PipelinePhase.REVIEW,
+            PipelinePhase.COMMIT,
+            PipelinePhase.COMPLETED,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
+        PipelinePhase.FIX: {
+            PipelinePhase.PREFLIGHT,
+            PipelinePhase.TEST,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
+        PipelinePhase.REVIEW: {
+            PipelinePhase.DEVELOP,
+            PipelinePhase.COMMIT,
+            PipelinePhase.COMPLETED,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
+        PipelinePhase.HUMAN_GATE: {
+            PipelinePhase.DEVELOP,
+            PipelinePhase.TEST,
+            PipelinePhase.COMMIT,
+            PipelinePhase.COMPLETED,
+            PipelinePhase.ABORTED,
+            PipelinePhase.FAILED,
+        },
+        PipelinePhase.COMMIT: {
+            PipelinePhase.COMPLETED,
+            PipelinePhase.FAILED,
+            PipelinePhase.ABORTED,
+        },
         PipelinePhase.COMPLETED: set(),
         PipelinePhase.FAILED: set(),
         PipelinePhase.ABORTED: set(),

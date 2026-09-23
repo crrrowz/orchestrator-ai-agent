@@ -10,7 +10,10 @@ from orchestrator.agents import create_developer_agent, create_tester_agent
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import PipelineController
 from orchestrator.pipeline.base_pipeline import BasePipeline, PipelinePhase
-from orchestrator.pipeline.checkpoint import PipelineCheckpoint, PipelineCheckpointManager
+from orchestrator.pipeline.checkpoint import (
+    PipelineCheckpoint,
+    PipelineCheckpointManager,
+)
 from orchestrator.telemetry import get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
 from orchestrator.utils import ConsoleOutput, PytestOutputParser
@@ -47,7 +50,9 @@ class DevTestLoop(BasePipeline):
             pytest_cmd = "pytest -v"
 
         return execute_terminal_action(
-            WorkspaceTerminalAction(command=pytest_cmd, timeout_seconds=timeout_seconds),
+            WorkspaceTerminalAction(
+                command=pytest_cmd, timeout_seconds=timeout_seconds
+            ),
             base_dir=self.workspace_path,
         )
 
@@ -59,32 +64,63 @@ class DevTestLoop(BasePipeline):
             banner_title="Starting Developer-Tester Pipeline",
         )
 
-        developer_agent = create_developer_agent(self.config, self.skill_manager, self.workspace_path)
-        tester_agent = create_tester_agent(self.config, self.skill_manager, self.workspace_path)
+        developer_agent = create_developer_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
+        tester_agent = create_tester_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
 
         def _get_total_cost() -> float:
-            return get_llm_usage(developer_agent.llm)["estimated_cost_usd"] + get_llm_usage(tester_agent.llm)["estimated_cost_usd"]
+            return (
+                get_llm_usage(developer_agent.llm)["estimated_cost_usd"]
+                + get_llm_usage(tester_agent.llm)["estimated_cost_usd"]
+            )
 
         try:
             if not self.controller.check_should_continue():
-                ConsoleOutput.warning("Execution stopped by controller before developer phase.")
+                ConsoleOutput.warning(
+                    "Execution stopped by controller before developer phase."
+                )
                 diag_report = recorder.finalize(completed_successfully=False)
                 return {"status": "STOPPED", "report_id": diag_report.report_id}
 
             self.state_machine.transition_to(PipelinePhase.DEVELOP)
 
             # Step 1: Initial Implementation by Developer
-            dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+            dev_conv = Conversation(
+                agent=developer_agent,
+                workspace=str(self.workspace_path),
+                visualizer=visualizer,
+            )
 
             if self.checkpoint and "developer" in self.checkpoint.completed_phases:
-                ConsoleOutput.success("Developer phase already completed in checkpoint. Skipping initial implementation.")
-                log_store.add_step("Skipped developer initial implementation (loaded from checkpoint).")
+                ConsoleOutput.success(
+                    "Developer phase already completed in checkpoint. Skipping initial implementation."
+                )
+                log_store.add_step(
+                    "Skipped developer initial implementation (loaded from checkpoint)."
+                )
             else:
                 t0 = time.perf_counter()
-                log_store.set_agent_context("Developer", "Initial Implementation", model=developer_agent.llm.model, llm=developer_agent.llm)
-                ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", details=f"Task: {task_description}", model=developer_agent.llm.model)
+                log_store.set_agent_context(
+                    "Developer",
+                    "Initial Implementation",
+                    model=developer_agent.llm.model,
+                    llm=developer_agent.llm,
+                )
+                ConsoleOutput.agent_step(
+                    "Developer",
+                    "Implementing solution based on skills...",
+                    details=f"Task: {task_description}",
+                    model=developer_agent.llm.model,
+                )
 
-                graft_part = f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
+                graft_part = (
+                    f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}"
+                    if graft_map
+                    else ""
+                )
                 memory_part = ""
                 if self.config.enable_memory:
                     memory_ctx = memory_store.format_memory_context(task_description)
@@ -103,19 +139,32 @@ class DevTestLoop(BasePipeline):
                 curr_diff = self.git.get_diff() or self.git.get_status()
                 u_dev = get_llm_usage(developer_agent.llm)
                 recorder.record_step(
-                    "developer", "initial_implementation", 1, duration_dev, True, curr_diff,
+                    "developer",
+                    "initial_implementation",
+                    1,
+                    duration_dev,
+                    True,
+                    curr_diff,
                     prompt_tokens=u_dev["prompt_tokens"],
                     completion_tokens=u_dev["completion_tokens"],
                     total_tokens=u_dev["total_tokens"],
                     estimated_cost_usd=u_dev["estimated_cost_usd"],
                 )
-                ConsoleOutput.success(f"Developer completed implementation phase (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f}).")
+                ConsoleOutput.success(
+                    f"Developer completed implementation phase (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f})."
+                )
 
             if recorder.check_budget(_get_total_cost()):
-                ConsoleOutput.error("Budget ceiling reached after initial implementation. Halting.")
+                ConsoleOutput.error(
+                    "Budget ceiling reached after initial implementation. Halting."
+                )
                 diag_report = recorder.finalize(completed_successfully=False)
                 log_store.save_to_file()
-                return {"status": "BUDGET_EXHAUSTED", "iterations": 1, "report_id": diag_report.report_id}
+                return {
+                    "status": "BUDGET_EXHAUSTED",
+                    "iterations": 1,
+                    "report_id": diag_report.report_id,
+                }
 
             # Persist checkpoint after developer implementation
             PipelineCheckpointManager.save(
@@ -130,28 +179,52 @@ class DevTestLoop(BasePipeline):
             # Approval Gate: after_developer
             if "after_developer" in self.config.approval_gates:
                 diff_preview = self.git.get_diff() or self.git.get_status()
-                gate_decision = self.human_channel.prompt_gate("after_developer", context_preview=diff_preview[:1500])
+                gate_decision = self.human_channel.prompt_gate(
+                    "after_developer", context_preview=diff_preview[:1500]
+                )
                 if gate_decision == "rejected":
-                    ConsoleOutput.error("Execution halted: human operator rejected changes at 'after_developer' gate.")
-                    log_store.add_step("Changes rejected at after_developer approval gate.", is_error=True)
+                    ConsoleOutput.error(
+                        "Execution halted: human operator rejected changes at 'after_developer' gate."
+                    )
+                    log_store.add_step(
+                        "Changes rejected at after_developer approval gate.",
+                        is_error=True,
+                    )
                     diag_report = recorder.finalize(completed_successfully=False)
                     log_store.save_to_file()
-                    return {"status": "HUMAN_REJECTED", "phase": "developer", "report_id": diag_report.report_id}
+                    return {
+                        "status": "HUMAN_REJECTED",
+                        "phase": "developer",
+                        "report_id": diag_report.report_id,
+                    }
 
             # Step 2: Iterative Test & Fix Loop
             iteration = 1
             tests_passed = False
-            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+            tester_conv = Conversation(
+                agent=tester_agent,
+                workspace=str(self.workspace_path),
+                visualizer=visualizer,
+            )
 
             while iteration <= self.config.max_iterations:
                 if not self.controller.check_should_continue():
-                    ConsoleOutput.warning(f"Execution stopped by controller before test iteration {iteration}.")
+                    ConsoleOutput.warning(
+                        f"Execution stopped by controller before test iteration {iteration}."
+                    )
                     break
 
-                log_store.set_agent_context("Tester", f"Test Iteration {iteration}", model=tester_agent.llm.model, llm=tester_agent.llm)
+                log_store.set_agent_context(
+                    "Tester",
+                    f"Test Iteration {iteration}",
+                    model=tester_agent.llm.model,
+                    llm=tester_agent.llm,
+                )
 
                 # Preflight check
-                self._run_preflight(iteration, dev_conv, developer_agent, recorder, log_store)
+                self._run_preflight(
+                    iteration, dev_conv, developer_agent, recorder, log_store
+                )
 
                 if self.state_machine.can_transition(PipelinePhase.TEST):
                     self.state_machine.transition_to(PipelinePhase.TEST)
@@ -159,25 +232,37 @@ class DevTestLoop(BasePipeline):
                 # Test Execution (Zero-Token Skip on fix iterations > 1)
                 t_test = time.perf_counter()
                 if iteration == 1:
-                    ConsoleOutput.agent_step("Tester", f"Generating & executing tests (Iteration {iteration})...", model=tester_agent.llm.model)
+                    ConsoleOutput.agent_step(
+                        "Tester",
+                        f"Generating & executing tests (Iteration {iteration})...",
+                        model=tester_agent.llm.model,
+                    )
                     test_prompt = (
                         f"Target Task: {task_description}\n\n"
                         "Inspect the implemented code using workspace tools. Write comprehensive pytest unit tests "
                         "covering edge cases and execute them using your terminal tool (`pytest tests/ -v`)."
                     )
-                    tester_conv.send_message(self.human_channel.inject_into_prompt(test_prompt))
+                    tester_conv.send_message(
+                        self.human_channel.inject_into_prompt(test_prompt)
+                    )
                     self._run_conv(tester_conv, "Tester")
                     dur_test = time.perf_counter() - t_test
                     u_test = get_llm_usage(tester_agent.llm)
                     recorder.record_step(
-                        "tester", "write_and_run_tests", iteration, dur_test, True,
+                        "tester",
+                        "write_and_run_tests",
+                        iteration,
+                        dur_test,
+                        True,
                         prompt_tokens=u_test["prompt_tokens"],
                         completion_tokens=u_test["completion_tokens"],
                         total_tokens=u_test["total_tokens"],
                         estimated_cost_usd=u_test["estimated_cost_usd"],
                     )
                 else:
-                    ConsoleOutput.info(f"Iteration {iteration}: Re-verifying fix directly via pytest (Zero-Token Tester Skip).")
+                    ConsoleOutput.info(
+                        f"Iteration {iteration}: Re-verifying fix directly via pytest (Zero-Token Tester Skip)."
+                    )
 
                 # Verify test results
                 test_run = self._execute_pytest()
@@ -191,31 +276,55 @@ class DevTestLoop(BasePipeline):
                 if self.state_machine.can_transition(PipelinePhase.FIX):
                     self.state_machine.transition_to(PipelinePhase.FIX)
 
-                log_store.add_step(f"Tests failed in iteration {iteration}", is_error=True, observation=test_run.stdout)
-                compact_failure = PytestOutputParser.extract_compact_failures(test_run.stdout, test_run.stderr)
+                log_store.add_step(
+                    f"Tests failed in iteration {iteration}",
+                    is_error=True,
+                    observation=test_run.stdout,
+                )
+                compact_failure = PytestOutputParser.extract_compact_failures(
+                    test_run.stdout, test_run.stderr
+                )
                 circuit_broken = recorder.check_circuit_breaker(compact_failure)
-                recorder.record_incident(f"Iteration_{iteration}_Pytest", "test_failure", compact_failure)
+                recorder.record_incident(
+                    f"Iteration_{iteration}_Pytest", "test_failure", compact_failure
+                )
 
                 if circuit_broken:
-                    ConsoleOutput.error("Circuit Breaker Tripped! Detected repeated failures without progress. Aborting loop.")
+                    ConsoleOutput.error(
+                        "Circuit Breaker Tripped! Detected repeated failures without progress. Aborting loop."
+                    )
                     break
 
                 if iteration < self.config.max_iterations:
-                    ConsoleOutput.warning(f"Tests failed (Iteration {iteration}). Developer fixing...")
-                    log_store.set_agent_context("Developer", f"Fix Iteration {iteration}", model=developer_agent.llm.model, llm=developer_agent.llm)
+                    ConsoleOutput.warning(
+                        f"Tests failed (Iteration {iteration}). Developer fixing..."
+                    )
+                    log_store.set_agent_context(
+                        "Developer",
+                        f"Fix Iteration {iteration}",
+                        model=developer_agent.llm.model,
+                        llm=developer_agent.llm,
+                    )
                     t_fix = time.perf_counter()
                     failure_summary = (
                         f"Pytest execution failed with exit code {test_run.exit_code}.\n\n"
                         f"{compact_failure}\n\n"
                         "Please diagnose the failure using the systematic-debugging skill and update the code."
                     )
-                    dev_conv.send_message(self.human_channel.inject_into_prompt(failure_summary))
+                    dev_conv.send_message(
+                        self.human_channel.inject_into_prompt(failure_summary)
+                    )
                     self._run_conv(dev_conv, "Developer")
                     dur_fix = time.perf_counter() - t_fix
                     new_diff = self.git.get_diff() or self.git.get_status()
                     u_dev_fix = get_llm_usage(developer_agent.llm)
                     recorder.record_step(
-                        "developer", "fix_code", iteration, dur_fix, True, new_diff,
+                        "developer",
+                        "fix_code",
+                        iteration,
+                        dur_fix,
+                        True,
+                        new_diff,
                         prompt_tokens=u_dev_fix["prompt_tokens"],
                         completion_tokens=u_dev_fix["completion_tokens"],
                         total_tokens=u_dev_fix["total_tokens"],
@@ -223,7 +332,9 @@ class DevTestLoop(BasePipeline):
                     )
 
                     if recorder.check_budget(_get_total_cost()):
-                        ConsoleOutput.error("Budget ceiling reached after developer fix. Halting.")
+                        ConsoleOutput.error(
+                            "Budget ceiling reached after developer fix. Halting."
+                        )
                         break
 
                 iteration += 1

@@ -1,7 +1,6 @@
 """Unit tests verifying Phase 4: Reliability, Git Branch Isolation & Smart Circuit Breaker."""
 
 from pathlib import Path
-import pytest
 
 from orchestrator.telemetry.recorder import TelemetryRecorder
 from orchestrator.utils.git_ops import GitOps
@@ -31,7 +30,9 @@ def test_smart_circuit_breaker_semantic_test_failure_loop():
     )
 
     diff1 = "+ def add(a, b): return a + b\n"
-    diff2 = "+ def add(a, b):\n+     # slightly different whitespace\n+     return a + b\n"
+    diff2 = (
+        "+ def add(a, b):\n+     # slightly different whitespace\n+     return a + b\n"
+    )
 
     error_out1 = """
 =================================== FAILURES ===================================

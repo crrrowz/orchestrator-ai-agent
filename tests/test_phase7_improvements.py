@@ -2,13 +2,17 @@
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import pytest
 
-from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR, ORCHESTRATOR_ROOT, OrchestratorConfig, SkillManager
+from orchestrator.config import (
+    DEFAULT_DIAGNOSTICS_DIR,
+    ORCHESTRATOR_ROOT,
+    OrchestratorConfig,
+    SkillManager,
+)
 from orchestrator.control import PipelineController
-from orchestrator.pipeline import DevTestLoop, FullPipeline
+from orchestrator.pipeline import DevTestLoop
 from orchestrator.pipeline.checkpoint import PipelineCheckpoint
-from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
+from orchestrator.pipeline.state_machine import PipelinePhase
 from orchestrator.telemetry import TelemetryRecorder
 
 
@@ -86,10 +90,20 @@ def test_checkpoint_phase_skipping_developer(tmp_path: Path):
     mock_agent = MagicMock()
     mock_agent.llm.metrics = None
 
-    with patch("orchestrator.pipeline.dev_test_loop.execute_terminal_action") as mock_exec, \
-         patch("orchestrator.pipeline.dev_test_loop.create_developer_agent", return_value=mock_agent), \
-         patch("orchestrator.pipeline.dev_test_loop.create_tester_agent", return_value=mock_agent), \
-         patch("orchestrator.pipeline.dev_test_loop.Conversation"):
+    with (
+        patch(
+            "orchestrator.pipeline.dev_test_loop.execute_terminal_action"
+        ) as mock_exec,
+        patch(
+            "orchestrator.pipeline.dev_test_loop.create_developer_agent",
+            return_value=mock_agent,
+        ),
+        patch(
+            "orchestrator.pipeline.dev_test_loop.create_tester_agent",
+            return_value=mock_agent,
+        ),
+        patch("orchestrator.pipeline.dev_test_loop.Conversation"),
+    ):
         mock_exec.return_value = MagicMock(exit_code=0, stdout="81 passed", stderr="")
         res = pipeline.run("Test checkpoint skip")
 

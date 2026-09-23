@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class PipelineCheckpoint(BaseModel):
     """Schema for persisted pipeline checkpoint."""
+
     run_id: str
     task: str
     mode: str

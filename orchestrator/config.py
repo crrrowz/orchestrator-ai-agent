@@ -22,6 +22,7 @@ DEFAULT_WORKSPACE_DIR: Path = ORCHESTRATOR_ROOT / "workspace"
 
 class AgentRoleConfig(BaseModel):
     """Configuration for a specific agent role."""
+
     role: str
     model: str
     temperature: float = 0.2
@@ -31,61 +32,133 @@ class AgentRoleConfig(BaseModel):
 
 class OrchestratorConfig(BaseModel):
     """Global configuration for orchestrator execution."""
+
     workspace_path: Path = Field(
-        default_factory=lambda: Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+        default_factory=lambda: Path(
+            os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))
+        ).resolve()
     )
     max_iterations: int = Field(default=int(os.environ.get("MAX_ITERATIONS", "4")))
-    auto_commit: bool = Field(default=os.environ.get("AUTO_COMMIT", "true").lower() == "true")
-    max_budget_usd: float = Field(default=float(os.environ.get("MAX_BUDGET_USD", "0.50")))
-    max_tokens_per_call: int = Field(default=int(os.environ.get("MAX_TOKENS_PER_CALL", "4096")))
-    circuit_breaker_threshold: int = Field(default=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "2")))
-    approval_gates: List[str] = Field(default_factory=lambda: [g.strip() for g in os.environ.get("APPROVAL_GATES", "").split(",") if g.strip()])
-    interactive: bool = Field(default_factory=lambda: os.environ.get("INTERACTIVE", "false").lower() == "true")
-    verbosity: str = Field(default_factory=lambda: os.environ.get("VERBOSITY", "normal"))
-    enable_memory: bool = Field(default=os.environ.get("ENABLE_MEMORY", "true").lower() == "true")
-    max_retained_reports: int = Field(default=int(os.environ.get("MAX_RETAINED_REPORTS", "20")))
+    auto_commit: bool = Field(
+        default=os.environ.get("AUTO_COMMIT", "true").lower() == "true"
+    )
+    max_budget_usd: float = Field(
+        default=float(os.environ.get("MAX_BUDGET_USD", "0.50"))
+    )
+    max_tokens_per_call: int = Field(
+        default=int(os.environ.get("MAX_TOKENS_PER_CALL", "4096"))
+    )
+    circuit_breaker_threshold: int = Field(
+        default=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "2"))
+    )
+    approval_gates: List[str] = Field(
+        default_factory=lambda: [
+            g.strip()
+            for g in os.environ.get("APPROVAL_GATES", "").split(",")
+            if g.strip()
+        ]
+    )
+    interactive: bool = Field(
+        default_factory=lambda: os.environ.get("INTERACTIVE", "false").lower() == "true"
+    )
+    verbosity: str = Field(
+        default_factory=lambda: os.environ.get("VERBOSITY", "normal")
+    )
+    enable_memory: bool = Field(
+        default=os.environ.get("ENABLE_MEMORY", "true").lower() == "true"
+    )
+    max_retained_reports: int = Field(
+        default=int(os.environ.get("MAX_RETAINED_REPORTS", "20"))
+    )
     allowed_commands: Set[str] = Field(
         default_factory=lambda: set(
             c.strip().lower()
             for c in os.environ.get(
                 "ALLOWED_COMMANDS",
-                "pytest,python,py,pip,uv,git,ruff,mypy,graft,ls,dir,cat,type,echo,pwd,tree,find,cd,where"
+                "pytest,python,py,pip,uv,git,ruff,mypy,graft,ls,dir,cat,type,echo,pwd,tree,find,cd,where",
             ).split(",")
             if c.strip()
         )
     )
-    
+
     # Provider keys
-    anthropic_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY"))
-    openai_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("OPENAI_API_KEY"))
-    gemini_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
-    openrouter_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("OPENROUTER_API_KEY"))
+    anthropic_api_key: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY")
+    )
+    openai_api_key: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("OPENAI_API_KEY")
+    )
+    gemini_api_key: Optional[str] = Field(
+        default_factory=lambda: (
+            os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        )
+    )
+    openrouter_api_key: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("OPENROUTER_API_KEY")
+    )
 
     # Role configs
-    developer: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
-        role="developer",
-        model=os.environ.get("DEVELOPER_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "anthropic/claude-sonnet-4-5-20250929"),
-        temperature=0.2,
-        skills=["clean-python-architecture", "systematic-debugging", "docker-devops-containerization", "graft-architecture-intelligence"],
-    ))
-    tester: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
-        role="tester",
-        model=os.environ.get("TESTER_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "openai/gpt-4o-mini"),
-        temperature=0.0,
-        skills=["pytest-rigorous-testing"],
-    ))
-    reviewer: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
-        role="reviewer",
-        model=os.environ.get("REVIEWER_MODEL", "openrouter/google/gemini-2.0-flash-exp:free" if os.environ.get("OPENROUTER_API_KEY") else "openai/gpt-4o"),
-        temperature=0.1,
-        skills=["code-review-standards", "security-audit-hardening"],
-    ))
-    architect: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
-        role="architect",
-        model=os.environ.get("ARCHITECT_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "anthropic/claude-sonnet-4-5-20250929"),
-        temperature=0.3,
-        skills=["architectural-decomposition", "api-design-contract", "graft-architecture-intelligence"],
-    ))
+    developer: AgentRoleConfig = Field(
+        default_factory=lambda: AgentRoleConfig(
+            role="developer",
+            model=os.environ.get(
+                "DEVELOPER_MODEL",
+                "openrouter/qwen/qwen3.8-27b:free"
+                if os.environ.get("OPENROUTER_API_KEY")
+                else "anthropic/claude-sonnet-4-5-20250929",
+            ),
+            temperature=0.2,
+            skills=[
+                "clean-python-architecture",
+                "systematic-debugging",
+                "docker-devops-containerization",
+                "graft-architecture-intelligence",
+            ],
+        )
+    )
+    tester: AgentRoleConfig = Field(
+        default_factory=lambda: AgentRoleConfig(
+            role="tester",
+            model=os.environ.get(
+                "TESTER_MODEL",
+                "openrouter/qwen/qwen3.8-27b:free"
+                if os.environ.get("OPENROUTER_API_KEY")
+                else "openai/gpt-4o-mini",
+            ),
+            temperature=0.0,
+            skills=["pytest-rigorous-testing"],
+        )
+    )
+    reviewer: AgentRoleConfig = Field(
+        default_factory=lambda: AgentRoleConfig(
+            role="reviewer",
+            model=os.environ.get(
+                "REVIEWER_MODEL",
+                "openrouter/google/gemini-2.0-flash-exp:free"
+                if os.environ.get("OPENROUTER_API_KEY")
+                else "openai/gpt-4o",
+            ),
+            temperature=0.1,
+            skills=["code-review-standards", "security-audit-hardening"],
+        )
+    )
+    architect: AgentRoleConfig = Field(
+        default_factory=lambda: AgentRoleConfig(
+            role="architect",
+            model=os.environ.get(
+                "ARCHITECT_MODEL",
+                "openrouter/qwen/qwen3.8-27b:free"
+                if os.environ.get("OPENROUTER_API_KEY")
+                else "anthropic/claude-sonnet-4-5-20250929",
+            ),
+            temperature=0.3,
+            skills=[
+                "architectural-decomposition",
+                "api-design-contract",
+                "graft-architecture-intelligence",
+            ],
+        )
+    )
 
 
 class SkillManager:
@@ -118,17 +191,22 @@ class SkillManager:
                 resolved.append(skill)
         return resolved
 
-    def build_agent_context(self, skill_names: list[str], compact: bool = True) -> AgentContext:
+    def build_agent_context(
+        self, skill_names: list[str], compact: bool = True
+    ) -> AgentContext:
         """Construct an AgentContext loaded with the specified skills (optionally compressed to save tokens)."""
         role_skills = self.get_skills_for_role(skill_names)
         if compact:
             from orchestrator.utils.skill_compressor import CompactSkillInjector
-            role_skills = [CompactSkillInjector.create_compact_skill(s) for s in role_skills]
+
+            role_skills = [
+                CompactSkillInjector.create_compact_skill(s) for s in role_skills
+            ]
         return AgentContext(
             skills=role_skills,
             load_project_skills=False,
             load_user_skills=False,
-            load_memory=True
+            load_memory=True,
         )
 
 
@@ -144,7 +222,9 @@ def normalize_model_slug(model: str) -> str:
     return resolved
 
 
-def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig) -> LLM:
+def create_llm_for_role(
+    config: OrchestratorConfig, role_config: AgentRoleConfig
+) -> LLM:
     """Factory to create an OpenHands LLM instance with appropriate credentials and failover."""
     model = normalize_model_slug(role_config.model)
     api_key_val = role_config.api_key
@@ -178,7 +258,7 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
         llm_kwargs["openrouter_app_name"] = "Antigravity Multi-Agent Orchestrator"
 
         # OpenRouter Model-Layer Failover Array
-        model_slug = model[len("openrouter/"):]
+        model_slug = model[len("openrouter/") :]
         if model_slug in ("free", "openrouter/free"):
             fallback_models = ["qwen/qwen3.8-27b:free", "openrouter/free"]
             primary_fb_target = "openrouter/qwen/qwen3.8-27b:free"
@@ -193,10 +273,13 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
 
         # Native OpenHands SDK FallbackStrategy for resilient recovery
         from openhands.sdk.llm.fallback_strategy import FallbackStrategy
+
         fb_kwargs = dict(llm_kwargs)
         fb_kwargs["model"] = primary_fb_target
         fb_kwargs["usage_id"] = f"{role_config.role}-fallback-resilient"
-        fb_kwargs["litellm_extra_body"] = {"models": ["qwen/qwen3.8-27b:free", "openrouter/free"]}
+        fb_kwargs["litellm_extra_body"] = {
+            "models": ["qwen/qwen3.8-27b:free", "openrouter/free"]
+        }
         fb_kwargs.pop("fallback_strategy", None)
         fallback_llm = LLM(**fb_kwargs)
         strat = FallbackStrategy(fallback_llms=["openrouter-resilient-fallback"])

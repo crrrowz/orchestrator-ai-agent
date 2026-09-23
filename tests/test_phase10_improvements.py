@@ -1,17 +1,15 @@
 """Unit tests validating Phase 10: Code Quality, Polish & Configuration Standards."""
 
-from pathlib import Path
 from io import StringIO
 from rich.console import Console
 
 from orchestrator.config import ORCHESTRATOR_ROOT
-from orchestrator.utils.output import ConsoleOutput, console
+from orchestrator.utils.output import ConsoleOutput
 
 
 def test_summary_table_renders_tokens_and_cost():
     """Verify ConsoleOutput.summary_table correctly accepts both iteration/iterations and displays metrics."""
-    test_console = Console(file=StringIO())
-    original_console = console
+    Console(file=StringIO())
 
     # Test with keyword iterations
     ConsoleOutput.summary_table(
@@ -34,6 +32,7 @@ def test_summary_table_renders_tokens_and_cost():
 def test_clean_orchestrator_import():
     """Verify importing orchestrator package does not fail."""
     import orchestrator
+
     assert hasattr(orchestrator, "__version__")
     assert orchestrator.__version__ == "0.1.0"
 

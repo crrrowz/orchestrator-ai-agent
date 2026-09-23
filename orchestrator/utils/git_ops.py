@@ -66,7 +66,9 @@ class GitOps:
         stat_proc = self._run_git(*stat_args)
         stat_summary = stat_proc.stdout.strip()
 
-        diff_args = ["diff", "--cached", "--unified=3"] if staged else ["diff", "--unified=3"]
+        diff_args = (
+            ["diff", "--cached", "--unified=3"] if staged else ["diff", "--unified=3"]
+        )
         diff_proc = self._run_git(*diff_args)
         diff_text = diff_proc.stdout.strip()
 
@@ -95,25 +97,41 @@ class GitOps:
         result = "\n".join(truncated_lines).strip()
         if len(result) > max_chars:
             omitted = len(result) - max_chars
-            result = result[:max_chars] + f"\n\n[... Diff truncated: {omitted} characters omitted to save tokens ...]"
+            result = (
+                result[:max_chars]
+                + f"\n\n[... Diff truncated: {omitted} characters omitted to save tokens ...]"
+            )
 
-        return f"Diff Summary:\n{stat_summary}\n\nDetailed Changes:\n{result}".strip() if stat_summary else result
+        return (
+            f"Diff Summary:\n{stat_summary}\n\nDetailed Changes:\n{result}".strip()
+            if stat_summary
+            else result
+        )
 
     def stage_all(self) -> bool:
         """Stage all changes in the workspace."""
         proc = self._run_git("add", "-A")
         return proc.returncode == 0
 
-    def commit(self, message: str, author_name: str = "Agent Orchestrator", author_email: str = "agent@orchestrator.local") -> Optional[str]:
+    def commit(
+        self,
+        message: str,
+        author_name: str = "Agent Orchestrator",
+        author_email: str = "agent@orchestrator.local",
+    ) -> Optional[str]:
         """Stage all changes and create a commit. Returns commit hash or None."""
         if not self.has_uncommitted_changes():
             return None
 
         self.stage_all()
         proc = self._run_git(
-            "-c", f"user.name={author_name}",
-            "-c", f"user.email={author_email}",
-            "commit", "-m", message
+            "-c",
+            f"user.name={author_name}",
+            "-c",
+            f"user.email={author_email}",
+            "commit",
+            "-m",
+            message,
         )
         if proc.returncode == 0:
             head = self._run_git("rev-parse", "HEAD")
@@ -133,7 +151,9 @@ class GitOps:
         import re
         import time
 
-        clean_slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", task_name.strip().lower()).strip("-")[:25]
+        clean_slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", task_name.strip().lower()).strip(
+            "-"
+        )[:25]
         if not clean_slug:
             clean_slug = "task"
         timestamp = int(time.time())

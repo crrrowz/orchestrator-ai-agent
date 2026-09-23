@@ -7,7 +7,9 @@ class PytestOutputParser:
     """Extracts only actionable test failure details, stripping passing tests and environment noise."""
 
     @staticmethod
-    def extract_compact_failures(stdout: str, stderr: str, max_chars: int = 2500) -> str:
+    def extract_compact_failures(
+        stdout: str, stderr: str, max_chars: int = 2500
+    ) -> str:
         """Parse pytest stdout/stderr and return a concise, targeted failure report."""
         combined = f"{stdout}\n{stderr}".strip()
         if not combined:
@@ -20,9 +22,13 @@ class PytestOutputParser:
 
         for line in lines:
             # Capture failure headers like: _____ test_name _____
-            if re.match(r"^_{3,}\s+.*\s+_{3,}$", line.strip()) or re.match(r"^__+\s+.*\s+__+$", line.strip()):
+            if re.match(r"^_{3,}\s+.*\s+_{3,}$", line.strip()) or re.match(
+                r"^__+\s+.*\s+__+$", line.strip()
+            ):
                 if current_failure:
-                    failures.append("\n".join(current_failure[-15:]))  # Keep only the last 15 lines of trace
+                    failures.append(
+                        "\n".join(current_failure[-15:])
+                    )  # Keep only the last 15 lines of trace
                     current_failure = []
                 capturing = True
                 current_failure.append(line.strip())
@@ -46,7 +52,9 @@ class PytestOutputParser:
                 in_summary = True
                 summary_section.append(line)
             elif in_summary:
-                if line.startswith("===") and ("failed" in line or "passed" in line or "error" in line):
+                if line.startswith("===") and (
+                    "failed" in line or "passed" in line or "error" in line
+                ):
                     summary_section.append(line)
                     break
                 summary_section.append(line)

@@ -4,13 +4,15 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.theme import Theme
 
-custom_theme = Theme({
-    "info": "cyan",
-    "warning": "yellow",
-    "danger": "bold red",
-    "success": "bold green",
-    "agent": "bold magenta",
-})
+custom_theme = Theme(
+    {
+        "info": "cyan",
+        "warning": "yellow",
+        "danger": "bold red",
+        "success": "bold green",
+        "agent": "bold magenta",
+    }
+)
 
 console = Console(theme=custom_theme)
 
@@ -26,7 +28,9 @@ class ConsoleOutput:
         console.print(Panel(text, border_style="cyan", expand=False))
 
     @staticmethod
-    def agent_step(agent_role: str, action: str, details: str = "", model: str = "") -> None:
+    def agent_step(
+        agent_role: str, action: str, details: str = "", model: str = ""
+    ) -> None:
         header = f"[agent][{agent_role.upper()}][/agent]"
         if model:
             header += f" [cyan]({model})[/cyan]"
@@ -38,6 +42,10 @@ class ConsoleOutput:
     @staticmethod
     def success(message: str) -> None:
         console.print(f"[success][OK][/success] {message}")
+
+    @staticmethod
+    def info(message: str) -> None:
+        console.print(f"[info][INFO][/info] {message}")
 
     @staticmethod
     def error(message: str) -> None:
@@ -61,15 +69,23 @@ class ConsoleOutput:
         table.add_column("Property", style="bold cyan")
         table.add_column("Value", style="white")
 
-        table.add_row("Status", f"[green]{status}[/green]" if status == "SUCCESS" else f"[red]{status}[/red]")
+        table.add_row(
+            "Status",
+            f"[green]{status}[/green]"
+            if status == "SUCCESS"
+            else f"[red]{status}[/red]",
+        )
         table.add_row("Total Iterations", str(actual_iterations))
         if total_tokens > 0:
             table.add_row("Total Tokens", f"{total_tokens:,}")
         if total_cost_usd > 0.0 or total_tokens > 0:
-            cost_str = f"${total_cost_usd:.4f}" if total_cost_usd > 0.0 else "$0.0000 (Free Tier)"
+            cost_str = (
+                f"${total_cost_usd:.4f}"
+                if total_cost_usd > 0.0
+                else "$0.0000 (Free Tier)"
+            )
             table.add_row("Total Cost", cost_str)
         if commit_hash:
             table.add_row("Git Commit", commit_hash)
 
         console.print(table)
-

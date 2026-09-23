@@ -5,7 +5,10 @@ from typing import Optional
 
 from openhands.sdk import Agent
 from orchestrator.config import OrchestratorConfig, SkillManager, create_llm_for_role
-from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+from orchestrator.tools import (
+    create_workspace_file_tool,
+    create_workspace_terminal_tool,
+)
 
 
 AUDITOR_SYSTEM_PROMPT = """You are the Senior Code Auditor & Software Architect Agent.
@@ -48,7 +51,11 @@ def create_auditor_agent(
     workspace = (workspace_path or config.workspace_path).resolve()
 
     llm = create_llm_for_role(config, config.reviewer)
-    auditor_skills = ["code-review-standards", "security-audit-hardening", "graft-architecture-intelligence"]
+    auditor_skills = [
+        "code-review-standards",
+        "security-audit-hardening",
+        "graft-architecture-intelligence",
+    ]
     context = skill_manager.build_agent_context(auditor_skills)
 
     file_tool = create_workspace_file_tool(

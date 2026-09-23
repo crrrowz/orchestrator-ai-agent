@@ -2,11 +2,9 @@
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import pytest
 
 from orchestrator.config import OrchestratorConfig, SkillManager, ORCHESTRATOR_ROOT
 from orchestrator.pipeline import AuditFixPipeline
-from orchestrator.orchestrator import Orchestrator
 from orchestrator.main import parse_args, resolve_workspace_dir, resolve_task_input
 from orchestrator.agents.developer import create_developer_agent
 
@@ -67,15 +65,18 @@ def test_developer_agent_allow_test_writes(tmp_path: Path):
 
 def test_audit_fix_pipeline_clean_convergence(tmp_path: Path):
     """When workspace has valid code, pipeline converges cleanly and writes AUDIT_FIX_REPORT.md without git."""
-    (tmp_path / "app.py").write_text("def main():\n    return 'clean'\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text(
+        "def main():\n    return 'clean'\n", encoding="utf-8"
+    )
 
     cfg = OrchestratorConfig(workspace_path=tmp_path)
     sm = SkillManager(ORCHESTRATOR_ROOT)
     pipeline = AuditFixPipeline(cfg, sm, tmp_path)
 
-    with patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls, \
-         patch("orchestrator.pipeline.audit_fix_pipeline.get_llm_usage") as mock_usage:
-
+    with (
+        patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls,
+        patch("orchestrator.pipeline.audit_fix_pipeline.get_llm_usage") as mock_usage,
+    ):
         mock_conv = MagicMock()
         mock_conv_cls.return_value = mock_conv
         mock_usage.return_value = {
@@ -108,9 +109,10 @@ def test_audit_fix_pipeline_remediation_loop(tmp_path: Path):
     def fix_code_side_effect(*args, **kwargs):
         broken_py.write_text("def foo():\n    return 'fixed'\n", encoding="utf-8")
 
-    with patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls, \
-         patch("orchestrator.pipeline.audit_fix_pipeline.get_llm_usage") as mock_usage:
-
+    with (
+        patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls,
+        patch("orchestrator.pipeline.audit_fix_pipeline.get_llm_usage") as mock_usage,
+    ):
         mock_conv = MagicMock()
         mock_conv.run.side_effect = fix_code_side_effect
         mock_conv_cls.return_value = mock_conv

@@ -3,10 +3,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from orchestrator.config import OrchestratorConfig, SkillManager, ORCHESTRATOR_ROOT
-from orchestrator.agents import create_auditor_agent
 from orchestrator.pipeline import AuditPipeline
 from orchestrator.orchestrator import Orchestrator
 from orchestrator.tools.workspace_tools import WorkspaceFileAction, execute_file_action
@@ -80,9 +78,10 @@ def test_audit_pipeline_run_generates_report(tmp_path: Path):
     sm = SkillManager(ORCHESTRATOR_ROOT)
     pipeline = AuditPipeline(cfg, sm, tmp_path)
 
-    with patch("orchestrator.pipeline.audit_pipeline.Conversation") as mock_conv_cls, \
-         patch("orchestrator.pipeline.audit_pipeline.get_llm_usage") as mock_usage:
-
+    with (
+        patch("orchestrator.pipeline.audit_pipeline.Conversation") as mock_conv_cls,
+        patch("orchestrator.pipeline.audit_pipeline.get_llm_usage") as mock_usage,
+    ):
         mock_conv = MagicMock()
         mock_conv_cls.return_value = mock_conv
         mock_usage.return_value = {
@@ -108,7 +107,11 @@ def test_orchestrator_mode_audit_dispatch(tmp_path: Path):
     cfg = OrchestratorConfig(workspace_path=tmp_path)
     orch = Orchestrator(cfg)
 
-    with patch.object(AuditPipeline, "run", return_value={"status": "AUDIT_COMPLETED"}) as mock_run:
-        result = orch.run_task("Audit security", mode="audit", workspace_override=tmp_path)
+    with patch.object(
+        AuditPipeline, "run", return_value={"status": "AUDIT_COMPLETED"}
+    ) as mock_run:
+        result = orch.run_task(
+            "Audit security", mode="audit", workspace_override=tmp_path
+        )
         assert result["status"] == "AUDIT_COMPLETED"
         mock_run.assert_called_once_with("Audit security")

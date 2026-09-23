@@ -1,30 +1,41 @@
 """CLI entry point for Antigravity Multi-Agent Orchestrator."""
 
+import argparse
 import os
 import sys
 import logging
+from pathlib import Path
+from typing import Optional
 
 # Suppress OpenHands banner box & debug spam immediately before any SDK import
 os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
 os.environ["LITELLM_LOG"] = "CRITICAL"
 
-for _logger_name in ["openhands", "litellm", "LiteLLM", "httpx", "httpcore", "urllib3", "asyncio"]:
+for _logger_name in [
+    "openhands",
+    "litellm",
+    "LiteLLM",
+    "httpx",
+    "httpcore",
+    "urllib3",
+    "asyncio",
+]:
     logging.getLogger(_logger_name).setLevel(logging.CRITICAL)
 
 try:
     import litellm
+
     litellm.suppress_debug_info = True
     litellm.set_verbose = False
 except ImportError:
     pass
 
-import argparse
-from pathlib import Path
-from typing import Optional
-
-from orchestrator.config import OrchestratorConfig, SkillManager
-from orchestrator.orchestrator import Orchestrator
-from orchestrator.utils import ConsoleOutput
+# Intentional E402: orchestrator modules must be imported only after the
+# environment-suppression block above, otherwise the OpenHands SDK and
+# LiteLLM emit banners and debug spam at import time.
+from orchestrator.config import OrchestratorConfig, SkillManager  # noqa: E402
+from orchestrator.orchestrator import Orchestrator  # noqa: E402
+from orchestrator.utils import ConsoleOutput  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,7 +81,8 @@ def parse_args() -> argparse.Namespace:
         help="Open the interactive collapsible log explorer (arrow keys / dropdowns) for the latest session.",
     )
     parser.add_argument(
-        "--interactive", "-i",
+        "--interactive",
+        "-i",
         action="store_true",
         help="Enable Human-in-the-Loop (HITL) interactive guidance and approval checkpoints.",
     )
@@ -81,12 +93,14 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated approval checkpoints (e.g. 'after_architect,after_developer,before_commit').",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Verbose stream showing full agent thoughts and detailed action parameters.",
     )
     parser.add_argument(
-        "--quiet", "-q",
+        "--quiet",
+        "-q",
         action="store_true",
         help="Quiet mode showing only milestone transitions and errors.",
     )
@@ -122,7 +136,7 @@ def resolve_task_input(task_input: Optional[str]) -> str:
                 ConsoleOutput.agent_step(
                     "INPUT",
                     f"Loaded task specification from file: [bold]{p.name}[/bold]",
-                    f"Path: {p} ({len(content)} chars, {len(content.split())} words)"
+                    f"Path: {p} ({len(content)} chars, {len(content.split())} words)",
                 )
                 return content
     except Exception:
@@ -130,6 +144,7 @@ def resolve_task_input(task_input: Optional[str]) -> str:
 
     # 2. Check if text contains a file path (e.g. 'افحص D:\path\AUDIT_REPORT.md')
     import re
+
     path_matches = re.findall(r"([a-zA-Z]:[\\/][^\s\"'<>|]+|/[^\s\"'<>|]+)", task_input)
     for candidate in path_matches:
         try:
@@ -140,7 +155,7 @@ def resolve_task_input(task_input: Optional[str]) -> str:
                     ConsoleOutput.agent_step(
                         "INPUT",
                         f"Embedded file specification loaded: [bold]{cand_p.name}[/bold]",
-                        f"Path: {cand_p} ({len(file_text)} chars)"
+                        f"Path: {cand_p} ({len(file_text)} chars)",
                     )
                     return f"{task_input}\n\n[Referenced File Content ({cand_p.name})]:\n{file_text}"
         except Exception:
@@ -155,7 +170,9 @@ def resolve_workspace_dir(target: Optional[Path], default: Path) -> Path:
         return default.resolve()
     resolved = target.resolve()
     if resolved.is_file():
-        ConsoleOutput.warning(f"Target workspace '{resolved}' is a file. Resolving to parent directory: '{resolved.parent}'.")
+        ConsoleOutput.warning(
+            f"Target workspace '{resolved}' is a file. Resolving to parent directory: '{resolved.parent}'."
+        )
         return resolved.parent
     return resolved
 
@@ -175,6 +192,7 @@ def handle_list_skills(skill_manager: SkillManager) -> None:
 
 def handle_check_config(config: OrchestratorConfig) -> None:
     from orchestrator.utils import ConnectivityChecker
+
     ConnectivityChecker.run_zero_token_audit(config)
     print("\n" + "=" * 50)
     print("Environment & Cost Safety Controls:")
@@ -182,7 +200,9 @@ def handle_check_config(config: OrchestratorConfig) -> None:
     print(f"  Max Iterations Cap:    {config.max_iterations}")
     print(f"  Max Output Tokens:     {config.max_tokens_per_call}")
     print(f"  Max Budget (USD):      ${config.max_budget_usd:.2f}")
-    print(f"  Circuit Breaker:       Trigger on {config.circuit_breaker_threshold} identical consecutive failures")
+    print(
+        f"  Circuit Breaker:       Trigger on {config.circuit_breaker_threshold} identical consecutive failures"
+    )
     print(f"  Auto Git Commit:       {config.auto_commit}")
     print(f"  Interactive (HITL):    {config.interactive}")
     print(f"  Approval Gates:        {config.approval_gates or 'None'}")
@@ -193,19 +213,22 @@ def handle_check_config(config: OrchestratorConfig) -> None:
 def interactive_wizard(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    default_mode: Optional[str] = None
+    default_mode: Optional[str] = None,
 ) -> tuple[str, str, Path]:
     """Interactive prompt wizard for users running without command-line arguments."""
     ConsoleOutput.banner(
         "Antigravity Multi-Agent Orchestrator",
-        f"Active Skills: {len(skill_manager.available_skills)} loaded"
+        f"Active Skills: {len(skill_manager.available_skills)} loaded",
     )
-    
+
     try:
         if default_mode == "audit":
             task_prompt = "\n📝 Audit Focus Directive [Default: Full codebase architecture & security audit]: "
             task_in = input(task_prompt).strip()
-            task = task_in or "Comprehensive codebase architecture, security, and bug audit."
+            task = (
+                task_in
+                or "Comprehensive codebase architecture, security, and bug audit."
+            )
             mode = "audit"
         elif default_mode == "audit-fix":
             task_prompt = "\n📝 Fix Directive [Default: Autonomous codebase defect and optimization fix loop]: "
@@ -214,7 +237,9 @@ def interactive_wizard(
             mode = "audit-fix"
         else:
             print("\nEnter the software task you want the multi-agent team to build.")
-            print("Example: 'Create a JWT authentication service with token revocation and pytest tests'")
+            print(
+                "Example: 'Create a JWT authentication service with token revocation and pytest tests'"
+            )
             task = input("\n📝 Task Description: ").strip()
             while not task:
                 task = input("Please enter a non-empty task description: ").strip()
@@ -223,10 +248,18 @@ def interactive_wizard(
                 mode = default_mode
             else:
                 print("\nChoose Pipeline Execution Mode:")
-                print("  [1] Dev-Test Loop (Developer writes code, Tester runs pytest in loop) [Fast]")
-                print("  [2] Full 4-Agent Pipeline (Architect -> Dev -> Test -> Independent Reviewer) [Complete]")
-                print("  [3] Deep Code Analysis & Audit (Static AST + LLM Auditor -> AUDIT_REPORT.md) [Audit]")
-                print("  [4] Autonomous Audit & Auto-Fix Loop (Inspect & Auto-Remediate without Git) [Fix]")
+                print(
+                    "  [1] Dev-Test Loop (Developer writes code, Tester runs pytest in loop) [Fast]"
+                )
+                print(
+                    "  [2] Full 4-Agent Pipeline (Architect -> Dev -> Test -> Independent Reviewer) [Complete]"
+                )
+                print(
+                    "  [3] Deep Code Analysis & Audit (Static AST + LLM Auditor -> AUDIT_REPORT.md) [Audit]"
+                )
+                print(
+                    "  [4] Autonomous Audit & Auto-Fix Loop (Inspect & Auto-Remediate without Git) [Fix]"
+                )
                 mode_choice = input("Select mode [1/2/3/4, default 1]: ").strip()
                 if mode_choice == "4":
                     mode = "audit-fix"
@@ -237,8 +270,12 @@ def interactive_wizard(
                 else:
                     mode = "dev-test"
 
-        ws_input = input(f"Target workspace directory [Default: {config.workspace_path}]: ").strip()
-        workspace = resolve_workspace_dir(Path(ws_input) if ws_input else None, config.workspace_path)
+        ws_input = input(
+            f"Target workspace directory [Default: {config.workspace_path}]: "
+        ).strip()
+        workspace = resolve_workspace_dir(
+            Path(ws_input) if ws_input else None, config.workspace_path
+        )
 
         return task, mode, workspace
     except (KeyboardInterrupt, EOFError):
@@ -248,6 +285,7 @@ def interactive_wizard(
 
 def handle_self_audit() -> None:
     from orchestrator.evolution import SystemAuditor
+
     auditor = SystemAuditor()
     report_file = auditor.audit_and_generate_report()
     ConsoleOutput.banner("System Evolution & Self-Improvement Audit")
@@ -267,15 +305,22 @@ def handle_view_logs(workspace: Optional[Path] = None) -> None:
     log_file = logs_base / "latest_session.json"
 
     if workspace:
-        p_slug = re.sub(r"[^a-zA-Z0-9_\-]+", "_", workspace.name.lower()).strip("_") or "default"
+        p_slug = (
+            re.sub(r"[^a-zA-Z0-9_\-]+", "_", workspace.name.lower()).strip("_")
+            or "default"
+        )
         project_log = logs_base / p_slug / "latest_session.json"
         if project_log.exists():
             log_file = project_log
         else:
-            ConsoleOutput.info(f"No dedicated log found for workspace '{workspace.name}', checking global latest log.")
+            ConsoleOutput.info(
+                f"No dedicated log found for workspace '{workspace.name}', checking global latest log."
+            )
 
     if not log_file.exists():
-        ConsoleOutput.warning(f"No session log found at {log_file}. Run a development task first.")
+        ConsoleOutput.warning(
+            f"No session log found at {log_file}. Run a development task first."
+        )
         return
 
     try:
@@ -289,20 +334,22 @@ def handle_view_logs(workspace: Optional[Path] = None) -> None:
         ConsoleOutput.error(f"Error loading session log: {str(e)}")
 
 
-
 def main() -> None:
     args = parse_args()
     config = OrchestratorConfig()
     if args.interactive:
         config.interactive = True
     if args.approval_gates:
-        config.approval_gates = [g.strip() for g in args.approval_gates.split(",") if g.strip()]
+        config.approval_gates = [
+            g.strip() for g in args.approval_gates.split(",") if g.strip()
+        ]
     if args.verbose:
         config.verbosity = "verbose"
     elif args.quiet:
         config.verbosity = "quiet"
 
     from orchestrator.config import ORCHESTRATOR_ROOT
+
     skill_manager = SkillManager(ORCHESTRATOR_ROOT)
 
     if args.no_memory:
@@ -310,6 +357,7 @@ def main() -> None:
 
     if args.estimate:
         from orchestrator.control import CostEstimator
+
         task_desc = resolve_task_input(args.task) or "Sample development task"
         result = CostEstimator.estimate(task_desc, args.mode, config)
         CostEstimator.render(result, config)
@@ -335,36 +383,56 @@ def main() -> None:
     cp = None
     if args.resume:
         from orchestrator.pipeline.checkpoint import PipelineCheckpointManager
+
         target_ws = resolve_workspace_dir(args.workspace, config.workspace_path)
         cp = PipelineCheckpointManager.load(target_ws)
         if cp:
-            ConsoleOutput.banner("Resuming Pipeline Execution", f"Phase: {cp.current_phase} | Run: {cp.run_id}")
+            ConsoleOutput.banner(
+                "Resuming Pipeline Execution",
+                f"Phase: {cp.current_phase} | Run: {cp.run_id}",
+            )
             task = cp.task
             mode = cp.mode
             workspace = target_ws
         else:
-            ConsoleOutput.warning(f"No checkpoint file found at {target_ws}. Starting fresh.")
+            ConsoleOutput.warning(
+                f"No checkpoint file found at {target_ws}. Starting fresh."
+            )
             if args.mode in ("audit", "audit-fix"):
-                default_task = "Autonomous codebase defect and optimization fix loop." if args.mode == "audit-fix" else "Comprehensive codebase architecture, security, and bug audit."
+                default_task = (
+                    "Autonomous codebase defect and optimization fix loop."
+                    if args.mode == "audit-fix"
+                    else "Comprehensive codebase architecture, security, and bug audit."
+                )
                 task = resolve_task_input(args.task) if args.task else default_task
                 mode = args.mode
                 workspace = target_ws
             elif not args.task:
-                task, mode, workspace = interactive_wizard(config, skill_manager, default_mode=args.mode)
+                task, mode, workspace = interactive_wizard(
+                    config, skill_manager, default_mode=args.mode
+                )
             else:
                 task = resolve_task_input(args.task)
                 mode = args.mode or "dev-test"
                 workspace = target_ws
     elif args.mode in ("audit", "audit-fix"):
         # Audit & Audit-Fix modes do not require an interactive task prompt — target is the codebase itself
-        default_task = "Autonomous codebase defect and optimization fix loop." if args.mode == "audit-fix" else "Comprehensive codebase architecture, security, and bug audit."
+        default_task = (
+            "Autonomous codebase defect and optimization fix loop."
+            if args.mode == "audit-fix"
+            else "Comprehensive codebase architecture, security, and bug audit."
+        )
         task = resolve_task_input(args.task) if args.task else default_task
         mode = args.mode
         # Default audit and audit-fix to the current codebase (project root) when --workspace is not specified
-        default_ws = Path.cwd().resolve() if not args.workspace else config.workspace_path
+        default_ws = (
+            Path.cwd().resolve() if not args.workspace else config.workspace_path
+        )
         workspace = resolve_workspace_dir(args.workspace, default_ws)
     elif not args.task:
-        task, mode, workspace = interactive_wizard(config, skill_manager, default_mode=args.mode)
+        task, mode, workspace = interactive_wizard(
+            config, skill_manager, default_mode=args.mode
+        )
     else:
         task = resolve_task_input(args.task)
         mode = args.mode or "dev-test"

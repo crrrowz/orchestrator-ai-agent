@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-import pytest
 
 from orchestrator.guards import PreFlightGuard
 from orchestrator.utils import (
@@ -95,7 +94,9 @@ Additional details:
 def test_rbac_file_restrictions(tmp_path: Path):
     """File tool must enforce RBAC: read-only, allowed prefixes, and blocked prefixes."""
     # 1. Read-only restriction (Reviewer)
-    action_write = WorkspaceFileAction(operation="write", path="src/main.py", content="print('hello')")
+    action_write = WorkspaceFileAction(
+        operation="write", path="src/main.py", content="print('hello')"
+    )
     obs_ro = execute_file_action(action_write, base_dir=tmp_path, read_only=True)
     assert obs_ro.is_error is True
     assert "read-only access" in obs_ro.message
@@ -110,23 +111,39 @@ def test_rbac_file_restrictions(tmp_path: Path):
     assert "x = 1" in (obs_read.file_content or "")
 
     # 2. Blocked write prefixes (Developer blocked from tests/)
-    action_dev_test = WorkspaceFileAction(operation="write", path="tests/test_hacked.py", content="# hack")
-    obs_dev = execute_file_action(action_dev_test, base_dir=tmp_path, blocked_write_prefixes=["tests/"])
+    action_dev_test = WorkspaceFileAction(
+        operation="write", path="tests/test_hacked.py", content="# hack"
+    )
+    obs_dev = execute_file_action(
+        action_dev_test, base_dir=tmp_path, blocked_write_prefixes=["tests/"]
+    )
     assert obs_dev.is_error is True
     assert "restricted" in obs_dev.message
 
     # Developer allowed to write outside tests/
-    action_dev_ok = WorkspaceFileAction(operation="write", path="src/feature.py", content="# feature")
-    obs_dev_ok = execute_file_action(action_dev_ok, base_dir=tmp_path, blocked_write_prefixes=["tests/"])
+    action_dev_ok = WorkspaceFileAction(
+        operation="write", path="src/feature.py", content="# feature"
+    )
+    obs_dev_ok = execute_file_action(
+        action_dev_ok, base_dir=tmp_path, blocked_write_prefixes=["tests/"]
+    )
     assert obs_dev_ok.is_error is False
 
     # 3. Allowed write prefixes (Architect allowed only PLAN.md)
-    action_arch_plan = WorkspaceFileAction(operation="write", path="PLAN.md", content="# Architecture Plan")
-    obs_arch_ok = execute_file_action(action_arch_plan, base_dir=tmp_path, allowed_write_prefixes=["PLAN.md"])
+    action_arch_plan = WorkspaceFileAction(
+        operation="write", path="PLAN.md", content="# Architecture Plan"
+    )
+    obs_arch_ok = execute_file_action(
+        action_arch_plan, base_dir=tmp_path, allowed_write_prefixes=["PLAN.md"]
+    )
     assert obs_arch_ok.is_error is False
 
-    action_arch_code = WorkspaceFileAction(operation="write", path="src/impl.py", content="# Should be blocked")
-    obs_arch_blocked = execute_file_action(action_arch_code, base_dir=tmp_path, allowed_write_prefixes=["PLAN.md"])
+    action_arch_code = WorkspaceFileAction(
+        operation="write", path="src/impl.py", content="# Should be blocked"
+    )
+    obs_arch_blocked = execute_file_action(
+        action_arch_code, base_dir=tmp_path, allowed_write_prefixes=["PLAN.md"]
+    )
     assert obs_arch_blocked.is_error is True
     assert "outside permitted role scope" in obs_arch_blocked.message
 
@@ -138,8 +155,10 @@ def test_terminal_environment_credential_sanitization(tmp_path: Path):
     os.environ["MOCK_TOKEN"] = "bearer_secret_abc"
     try:
         # Run a python command that checks if MOCK_SECRET_KEY is visible
-        cmd = 'python -c "import os; print(\'VISIBLE\' if \'MOCK_SECRET_KEY\' in os.environ or \'MOCK_TOKEN\' in os.environ else \'STRIPPED\')"'
-        obs = execute_terminal_action(WorkspaceTerminalAction(command=cmd), base_dir=tmp_path)
+        cmd = "python -c \"import os; print('VISIBLE' if 'MOCK_SECRET_KEY' in os.environ or 'MOCK_TOKEN' in os.environ else 'STRIPPED')\""
+        obs = execute_terminal_action(
+            WorkspaceTerminalAction(command=cmd), base_dir=tmp_path
+        )
         assert obs.is_error is False
         assert "STRIPPED" in obs.stdout
     finally:

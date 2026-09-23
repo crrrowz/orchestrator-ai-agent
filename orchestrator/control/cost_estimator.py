@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 from rich.table import Table
 
 from orchestrator.config import OrchestratorConfig
@@ -48,7 +47,11 @@ class CostEstimator:
         m = (model or "").lower()
         if ":free" in m or "openrouter/free" in m:
             return 0.0, 0.0
-        if "claude-sonnet-4-5" in m or "claude-3-5-sonnet" in m or "claude-3.5-sonnet" in m:
+        if (
+            "claude-sonnet-4-5" in m
+            or "claude-3-5-sonnet" in m
+            or "claude-3.5-sonnet" in m
+        ):
             return 3.0, 15.0
         if "gpt-4o-mini" in m:
             return 0.15, 0.60
@@ -106,15 +109,17 @@ class CostEstimator:
             # Input tokens scale with context overhead + task + previous history
             est_in = calls * (context_overhead + task_tokens + 500)
             est_out = calls * est_out_per_call
-            estimates.append(RoleEstimate(
-                role=role_name,
-                model=model_name,
-                calls_expected=calls,
-                est_input_tokens=est_in,
-                est_output_tokens=est_out,
-                input_rate_per_m=in_rate,
-                output_rate_per_m=out_rate,
-            ))
+            estimates.append(
+                RoleEstimate(
+                    role=role_name,
+                    model=model_name,
+                    calls_expected=calls,
+                    est_input_tokens=est_in,
+                    est_output_tokens=est_out,
+                    input_rate_per_m=in_rate,
+                    output_rate_per_m=out_rate,
+                )
+            )
 
         total_toks = sum(e.total_tokens for e in estimates)
         total_cost = sum(e.est_cost_usd for e in estimates)
@@ -143,7 +148,11 @@ class CostEstimator:
         table.add_column("Est. Cost (USD)", justify="right")
 
         for r in result.roles:
-            cost_str = "$0.0000 (Free Tier)" if r.est_cost_usd == 0.0 else f"${r.est_cost_usd:.4f}"
+            cost_str = (
+                "$0.0000 (Free Tier)"
+                if r.est_cost_usd == 0.0
+                else f"${r.est_cost_usd:.4f}"
+            )
             table.add_row(
                 r.role.capitalize(),
                 r.model,
@@ -155,5 +164,7 @@ class CostEstimator:
 
         console.print(table)
         console.print(f"[bold]Total Projected Tokens:[/bold] {result.total_tokens:,}")
-        console.print(f"[bold]Total Estimated Cost:[/bold] ${result.total_cost_usd:.4f} USD")
+        console.print(
+            f"[bold]Total Estimated Cost:[/bold] ${result.total_cost_usd:.4f} USD"
+        )
         console.print(f"[dim]Budget Cap: ${config.max_budget_usd:.2f} USD[/dim]\n")

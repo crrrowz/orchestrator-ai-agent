@@ -1,6 +1,5 @@
 """Deep Codebase Audit Pipeline: Static AST + Flake8/Ruff Lint + LLM Auditor Agent."""
 
-import os
 import shutil
 import subprocess
 import time
@@ -14,7 +13,11 @@ from orchestrator.control import PipelineController, HumanInterventionChannel
 from orchestrator.control.human_channel import set_active_channel
 from orchestrator.guards import PreFlightGuard
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
-from orchestrator.utils import ConsoleOutput, SessionLogStore, OrchestratorLiveVisualizer
+from orchestrator.utils import (
+    ConsoleOutput,
+    SessionLogStore,
+    OrchestratorLiveVisualizer,
+)
 from orchestrator.utils.graft_context import GraftContextProvider
 
 
@@ -37,18 +40,29 @@ class AuditPipeline:
         )
         self.controller = controller or PipelineController()
 
-    def _run_conv(self, conv: Conversation, role: str, max_retries: int = 2, timeout_seconds: int = 300) -> None:
+    def _run_conv(
+        self,
+        conv: Conversation,
+        role: str,
+        max_retries: int = 2,
+        timeout_seconds: int = 300,
+    ) -> None:
         """Execute conversation with retry on transient API/model failures and wall-clock timeout."""
         import threading
+
         for attempt in range(max_retries + 1):
             timer = None
             if timeout_seconds > 0:
+
                 def on_timeout():
-                    ConsoleOutput.warning(f"Agent {role} exceeded {timeout_seconds}s timeout cap.")
+                    ConsoleOutput.warning(
+                        f"Agent {role} exceeded {timeout_seconds}s timeout cap."
+                    )
                     if hasattr(conv, "cancel"):
                         conv.cancel()
                     elif hasattr(conv, "stop"):
                         conv.stop()
+
                 timer = threading.Timer(timeout_seconds, on_timeout)
                 timer.daemon = True
                 timer.start()
@@ -58,7 +72,7 @@ class AuditPipeline:
                 return
             except Exception as e:
                 if attempt < max_retries:
-                    delay = 2 ** attempt
+                    delay = 2**attempt
                     ConsoleOutput.warning(
                         f"Agent {role} execution failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
                         f"Retrying in {delay}s..."
@@ -72,7 +86,16 @@ class AuditPipeline:
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
-        excluded_dirs = {".git", ".venv", "venv", "__pycache__", "node_modules", "site-packages", ".pytest_cache", ".agents"}
+        excluded_dirs = {
+            ".git",
+            ".venv",
+            "venv",
+            "__pycache__",
+            "node_modules",
+            "site-packages",
+            ".pytest_cache",
+            ".agents",
+        }
         total_py_files = 0
         total_loc = 0
         files_by_size: list[tuple[str, int]] = []
@@ -81,10 +104,14 @@ class AuditPipeline:
             if any(part in excluded_dirs for part in p.parts):
                 continue
             try:
-                lines = len(p.read_text(encoding="utf-8", errors="replace").splitlines())
+                lines = len(
+                    p.read_text(encoding="utf-8", errors="replace").splitlines()
+                )
                 total_py_files += 1
                 total_loc += lines
-                files_by_size.append((p.relative_to(self.workspace_path).as_posix(), lines))
+                files_by_size.append(
+                    (p.relative_to(self.workspace_path).as_posix(), lines)
+                )
             except Exception:
                 continue
 
@@ -103,7 +130,9 @@ class AuditPipeline:
         # 1. Syntax Check via AST py_compile
         syntax_ok, syntax_errors = PreFlightGuard.check_syntax(self.workspace_path)
         if syntax_ok:
-            lines.append("- AST Syntax Validation: [PASS] (No compilation errors detected)")
+            lines.append(
+                "- AST Syntax Validation: [PASS] (No compilation errors detected)"
+            )
         else:
             lines.append("- AST Syntax Validation: [FAIL] Syntax errors detected:")
             for err in syntax_errors[:5]:
@@ -122,10 +151,16 @@ class AuditPipeline:
                 if res.returncode == 0:
                     lines.append("- Ruff Static Analysis: [CLEAN] (0 lint errors)")
                 else:
-                    lint_sample = [l for l in res.stdout.splitlines() if l.strip()][:8]
-                    lines.append(f"- Ruff Static Analysis: [ISSUES DETECTED] ({len(res.stdout.splitlines())} warnings/errors):")
-                    for l in lint_sample:
-                        lines.append(f"  * {l.strip()}")
+                    lint_sample = [
+                        line_text
+                        for line_text in res.stdout.splitlines()
+                        if line_text.strip()
+                    ][:8]
+                    lines.append(
+                        f"- Ruff Static Analysis: [ISSUES DETECTED] ({len(res.stdout.splitlines())} warnings/errors):"
+                    )
+                    for line_text in lint_sample:
+                        lines.append(f"  * {line_text.strip()}")
             except Exception as e:
                 lines.append(f"- Ruff Static Analysis: [SKIPPED] ({e})")
         else:
@@ -137,38 +172,70 @@ class AuditPipeline:
         """Run the hybrid static + LLM deep codebase audit."""
         set_active_channel(self.human_channel)
         if not self.controller.check_should_continue():
-            return {"status": "AUDIT_ABORTED", "reason": "Pipeline controller abort signal"}
+            return {
+                "status": "AUDIT_ABORTED",
+                "reason": "Pipeline controller abort signal",
+            }
 
-        ConsoleOutput.banner("Codebase Deep Audit Pipeline", f"Workspace: {self.workspace_path}")
+        ConsoleOutput.banner(
+            "Codebase Deep Audit Pipeline", f"Workspace: {self.workspace_path}"
+        )
 
         # Step 0: Static Metrics & AST Validation
-        ConsoleOutput.agent_step("AUDIT", "Phase 0: Running zero-token static analysis & metrics...")
+        ConsoleOutput.agent_step(
+            "AUDIT", "Phase 0: Running zero-token static analysis & metrics..."
+        )
         metrics = self.collect_codebase_metrics()
         static_report = self.run_static_checks()
 
         # Step 1: Graft Codebase Context
-        ConsoleOutput.agent_step("AUDIT", "Phase 1: Querying codebase architecture graph...")
+        ConsoleOutput.agent_step(
+            "AUDIT", "Phase 1: Querying codebase architecture graph..."
+        )
         graft_map = GraftContextProvider.get_compact_map(self.workspace_path)
-        graft_part = f"\n\n[Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
+        graft_part = (
+            f"\n\n[Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
+        )
 
         # Step 2: LLM Auditor Agent
         log_store = SessionLogStore()
-        visualizer = OrchestratorLiveVisualizer(log_store, verbosity=self.config.verbosity)
+        visualizer = OrchestratorLiveVisualizer(
+            log_store, verbosity=self.config.verbosity
+        )
         telemetry = TelemetryRecorder(
             task_description=task_description or "Codebase Deep Audit",
             pipeline_mode="audit",
             max_budget_usd=self.config.max_budget_usd,
         )
 
-        auditor_agent = create_auditor_agent(self.config, self.skill_manager, self.workspace_path)
-        log_store.set_agent_context("Auditor", "Codebase Analysis", model=auditor_agent.llm.model, llm=auditor_agent.llm)
-        ConsoleOutput.agent_step("Auditor", "Performing deep inspection and writing AUDIT_REPORT.md...", model=auditor_agent.llm.model)
+        auditor_agent = create_auditor_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
+        log_store.set_agent_context(
+            "Auditor",
+            "Codebase Analysis",
+            model=auditor_agent.llm.model,
+            llm=auditor_agent.llm,
+        )
+        ConsoleOutput.agent_step(
+            "Auditor",
+            "Performing deep inspection and writing AUDIT_REPORT.md...",
+            model=auditor_agent.llm.model,
+        )
 
         t_start = time.perf_counter()
-        auditor_conv = Conversation(agent=auditor_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+        auditor_conv = Conversation(
+            agent=auditor_agent,
+            workspace=str(self.workspace_path),
+            visualizer=visualizer,
+        )
         auditor_conv.human_channel = self.human_channel
 
-        focus_directive = task_description.strip() if task_description else "Full codebase architecture, security, and bug audit."
+        focus_directive = (
+            task_description.strip()
+            if task_description
+            else "Full codebase architecture, security, and bug audit."
+        )
         prompt = (
             f"Audit Objective: {focus_directive}\n\n"
             f"Codebase Overview:\n"
@@ -192,7 +259,9 @@ class AuditPipeline:
 
         # Step 3: Fallback report generation if agent did not write the file (e.g. offline/mock)
         if not report_file.exists():
-            top_files_md = "\n".join(f"- `{f}` ({loc} LOC)" for f, loc in metrics["top_files"])
+            top_files_md = "\n".join(
+                f"- `{f}` ({loc} LOC)" for f, loc in metrics["top_files"]
+            )
             fallback_content = (
                 f"# Codebase Architecture & Security Audit Report\n\n"
                 f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n"
@@ -221,12 +290,15 @@ class AuditPipeline:
             prompt_tokens=u_audit.get("prompt_tokens", 0),
             completion_tokens=u_audit.get("completion_tokens", 0),
             total_tokens=u_audit.get("total_tokens", 0),
-            estimated_cost_usd=u_audit.get("accumulated_cost", 0.0) or u_audit.get("estimated_cost_usd", 0.0),
+            estimated_cost_usd=u_audit.get("accumulated_cost", 0.0)
+            or u_audit.get("estimated_cost_usd", 0.0),
         )
         telemetry.finalize(completed_successfully=True)
         log_store.save_to_file()
 
-        ConsoleOutput.success(f"Audit completed successfully! Report generated at: {report_file}")
+        ConsoleOutput.success(
+            f"Audit completed successfully! Report generated at: {report_file}"
+        )
         return {
             "status": "AUDIT_COMPLETED",
             "report_path": str(report_file),

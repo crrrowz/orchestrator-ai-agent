@@ -1,8 +1,6 @@
 """Unit tests verifying Phase 3: Human-in-the-Loop (HITL) & Approval Gates."""
 
 from io import StringIO
-from pathlib import Path
-import pytest
 
 from orchestrator.config import OrchestratorConfig
 from orchestrator.control import HumanInterventionChannel
@@ -39,16 +37,22 @@ def test_human_channel_approval_gates_interactive_mock():
     channel = HumanInterventionChannel(enabled=True)
 
     # 1. Approval
-    res_approve = channel.prompt_gate("after_architect", "PLAN.md preview", input_fn=lambda _: "y")
+    res_approve = channel.prompt_gate(
+        "after_architect", "PLAN.md preview", input_fn=lambda _: "y"
+    )
     assert res_approve == "approved"
 
     # 2. Rejection
-    res_reject = channel.prompt_gate("after_developer", "Diff preview", input_fn=lambda _: "n")
+    res_reject = channel.prompt_gate(
+        "after_developer", "Diff preview", input_fn=lambda _: "n"
+    )
     assert res_reject == "rejected"
 
     # 3. Modification / Guidance
     inputs = iter(["m", "Please rename class Foo to Bar."])
-    res_mod = channel.prompt_gate("after_developer", "Diff preview", input_fn=lambda _: next(inputs))
+    res_mod = channel.prompt_gate(
+        "after_developer", "Diff preview", input_fn=lambda _: next(inputs)
+    )
     assert res_mod == "modified"
     assert channel.has_message()
     assert channel.get_message() == "Please rename class Foo to Bar."
@@ -57,6 +61,7 @@ def test_human_channel_approval_gates_interactive_mock():
 def test_human_channel_disabled_bypass():
     """Disabled channel should automatically approve all gates without prompting."""
     channel = HumanInterventionChannel(enabled=False)
+
     # Should never call input_fn when disabled
     def fail_if_called(_):
         raise RuntimeError("Should not be called")
@@ -71,11 +76,15 @@ def test_visualizer_verbosity_modes():
     store = SessionLogStore()
 
     # 1. Quiet mode: suppresses thought lines
-    viz_quiet = OrchestratorLiveVisualizer(store, console=test_console, verbosity="quiet")
+    viz_quiet = OrchestratorLiveVisualizer(
+        store, console=test_console, verbosity="quiet"
+    )
     assert viz_quiet.verbosity == "quiet"
 
     # 2. Verbose mode: preserves full thoughts without truncation
-    viz_verbose = OrchestratorLiveVisualizer(store, console=test_console, verbosity="verbose")
+    viz_verbose = OrchestratorLiveVisualizer(
+        store, console=test_console, verbosity="verbose"
+    )
     assert viz_verbose.verbosity == "verbose"
 
     long_thought = "Thinking about architecture: " + ("deep analysis " * 20)
@@ -85,6 +94,7 @@ def test_visualizer_verbosity_modes():
     class DummyAction:
         operation = "read"
         path = "main.py"
+
     class ActionEvent:
         action = DummyAction()
 
@@ -96,7 +106,9 @@ def test_visualizer_verbosity_modes():
 
 def test_config_approval_gates_parsing(monkeypatch):
     """OrchestratorConfig should properly parse comma-separated approval gates from env."""
-    monkeypatch.setenv("APPROVAL_GATES", "after_architect, after_developer, before_commit")
+    monkeypatch.setenv(
+        "APPROVAL_GATES", "after_architect, after_developer, before_commit"
+    )
     monkeypatch.setenv("INTERACTIVE", "true")
     monkeypatch.setenv("VERBOSITY", "verbose")
 

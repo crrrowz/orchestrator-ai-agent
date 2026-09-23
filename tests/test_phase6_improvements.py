@@ -1,10 +1,9 @@
 """Unit tests verifying Phase 6: Agent Governance, Milestone DAG & Pipeline Checkpointing."""
 
 from pathlib import Path
-import pytest
 
-from orchestrator.pipeline.milestone_dag import MilestoneParser, SubtaskMilestone
-from orchestrator.pipeline.checkpoint import PipelineCheckpointManager, PipelineCheckpoint
+from orchestrator.pipeline.milestone_dag import MilestoneParser
+from orchestrator.pipeline.checkpoint import PipelineCheckpointManager
 from orchestrator.main import parse_args
 
 
@@ -41,7 +40,9 @@ Write unit tests in `tests/test_auth.py`.
 
 def test_milestone_parser_monolithic_fallback():
     """MilestoneParser should fallback cleanly to a single task if no milestones are found."""
-    plain_plan = "Implement a simple calculator function in calc.py with tests in test_calc.py."
+    plain_plan = (
+        "Implement a simple calculator function in calc.py with tests in test_calc.py."
+    )
     milestones = MilestoneParser.parse_plan(plain_plan)
     assert len(milestones) == 1
     assert milestones[0].index == 1
@@ -84,6 +85,7 @@ def test_checkpoint_manager_lifecycle(tmp_path: Path):
 def test_main_cli_resume_flag(monkeypatch):
     """CLI argument parser should recognize --resume flag."""
     import sys
+
     monkeypatch.setattr(sys, "argv", ["main.py", "--resume"])
     args = parse_args()
     assert args.resume is True

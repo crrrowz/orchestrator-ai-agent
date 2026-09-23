@@ -5,7 +5,10 @@ from typing import Optional
 
 from openhands.sdk import Agent
 from orchestrator.config import OrchestratorConfig, SkillManager, create_llm_for_role
-from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+from orchestrator.tools import (
+    create_workspace_file_tool,
+    create_workspace_terminal_tool,
+)
 
 ARCHITECT_SYSTEM_PROMPT = """You are the Principal System Architect Agent.
 Your objective is to decompose high-level user tasks into precise, modular technical designs.
@@ -32,13 +35,15 @@ CRITICAL INSTRUCTIONS:
 def create_architect_agent(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    workspace_path: Optional[Path] = None
+    workspace_path: Optional[Path] = None,
 ) -> Agent:
     """Build an Architect agent configured with architectural decomposition skills and graft intelligence."""
     workspace = workspace_path or config.workspace_path
     llm = create_llm_for_role(config, config.architect)
     context = skill_manager.build_agent_context(config.architect.skills)
-    file_tool = create_workspace_file_tool(workspace, allowed_write_prefixes=["PLAN.md"])
+    file_tool = create_workspace_file_tool(
+        workspace, allowed_write_prefixes=["PLAN.md"]
+    )
     terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(

@@ -15,7 +15,10 @@ from orchestrator.agents import (
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import PipelineController
 from orchestrator.pipeline.base_pipeline import BasePipeline
-from orchestrator.pipeline.checkpoint import PipelineCheckpoint, PipelineCheckpointManager
+from orchestrator.pipeline.checkpoint import (
+    PipelineCheckpoint,
+    PipelineCheckpointManager,
+)
 from orchestrator.pipeline.milestone_dag import MilestoneParser
 from orchestrator.pipeline.reviewer_parser import ReviewerVerdict
 from orchestrator.pipeline.state_machine import PipelinePhase
@@ -52,10 +55,18 @@ class FullPipeline(BasePipeline):
             banner_title="Starting Full 4-Agent Software Engineering Pipeline",
         )
 
-        architect_agent = create_architect_agent(self.config, self.skill_manager, self.workspace_path)
-        developer_agent = create_developer_agent(self.config, self.skill_manager, self.workspace_path)
-        tester_agent = create_tester_agent(self.config, self.skill_manager, self.workspace_path)
-        reviewer_agent = create_reviewer_agent(self.config, self.skill_manager, self.workspace_path)
+        architect_agent = create_architect_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
+        developer_agent = create_developer_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
+        tester_agent = create_tester_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
+        reviewer_agent = create_reviewer_agent(
+            self.config, self.skill_manager, self.workspace_path
+        )
 
         def _get_total_cost() -> float:
             return (
@@ -70,52 +81,87 @@ class FullPipeline(BasePipeline):
             # Phase 1: Architecture Blueprint (PLAN.md)
             # -------------------------------------------------------------------
             if not self.controller.check_should_continue():
-                ConsoleOutput.warning("Execution stopped by controller before architect phase.")
+                ConsoleOutput.warning(
+                    "Execution stopped by controller before architect phase."
+                )
                 diag_report = recorder.finalize(completed_successfully=False)
                 return {"status": "STOPPED", "report_id": diag_report.report_id}
 
             self.state_machine.transition_to(PipelinePhase.ARCHITECT)
 
             if self.checkpoint and "architect" in self.checkpoint.completed_phases:
-                ConsoleOutput.success("Architect phase already completed in checkpoint. Skipping...")
+                ConsoleOutput.success(
+                    "Architect phase already completed in checkpoint. Skipping..."
+                )
                 log_store.add_step("Skipped architect phase (loaded from checkpoint).")
             else:
                 t0 = time.perf_counter()
-                log_store.set_agent_context("Architect", "System Architecture Blueprint", model=architect_agent.llm.model, llm=architect_agent.llm)
-                ConsoleOutput.agent_step("Architect", "Designing system blueprint and PLAN.md...", model=architect_agent.llm.model)
+                log_store.set_agent_context(
+                    "Architect",
+                    "System Architecture Blueprint",
+                    model=architect_agent.llm.model,
+                    llm=architect_agent.llm,
+                )
+                ConsoleOutput.agent_step(
+                    "Architect",
+                    "Designing system blueprint and PLAN.md...",
+                    model=architect_agent.llm.model,
+                )
 
-                graft_part = f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
+                graft_part = (
+                    f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}"
+                    if graft_map
+                    else ""
+                )
                 memory_part = ""
                 if self.config.enable_memory:
                     memory_ctx = memory_store.format_memory_context(task_description)
                     if memory_ctx:
                         memory_part = f"\n\n{memory_ctx}"
 
-                architect_conv = Conversation(agent=architect_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+                architect_conv = Conversation(
+                    agent=architect_agent,
+                    workspace=str(self.workspace_path),
+                    visualizer=visualizer,
+                )
                 architect_prompt = (
                     f"User Task: {task_description}\n\n"
                     "Decompose this task into a clean technical design and write `PLAN.md` into the workspace."
                     f"{graft_part}"
                     f"{memory_part}"
                 )
-                architect_conv.send_message(self.human_channel.inject_into_prompt(architect_prompt))
+                architect_conv.send_message(
+                    self.human_channel.inject_into_prompt(architect_prompt)
+                )
                 self._run_conv(architect_conv, "Architect")
                 dur_arch = time.perf_counter() - t0
                 u_arch = get_llm_usage(architect_agent.llm)
                 recorder.record_step(
-                    "architect", "design_plan", 1, dur_arch, True,
+                    "architect",
+                    "design_plan",
+                    1,
+                    dur_arch,
+                    True,
                     prompt_tokens=u_arch["prompt_tokens"],
                     completion_tokens=u_arch["completion_tokens"],
                     total_tokens=u_arch["total_tokens"],
                     estimated_cost_usd=u_arch["estimated_cost_usd"],
                 )
-                ConsoleOutput.success(f"Architect generated PLAN.md (Tokens: {u_arch['total_tokens']:,}, Cost: ${u_arch['estimated_cost_usd']:.4f}).")
+                ConsoleOutput.success(
+                    f"Architect generated PLAN.md (Tokens: {u_arch['total_tokens']:,}, Cost: ${u_arch['estimated_cost_usd']:.4f})."
+                )
 
             if recorder.check_budget(_get_total_cost()):
-                ConsoleOutput.error("Budget ceiling reached after architect phase. Halting.")
+                ConsoleOutput.error(
+                    "Budget ceiling reached after architect phase. Halting."
+                )
                 diag_report = recorder.finalize(completed_successfully=False)
                 log_store.save_to_file()
-                return {"status": "BUDGET_EXHAUSTED", "iterations": 1, "report_id": diag_report.report_id}
+                return {
+                    "status": "BUDGET_EXHAUSTED",
+                    "iterations": 1,
+                    "report_id": diag_report.report_id,
+                }
 
             # Checkpoint save
             PipelineCheckpointManager.save(
@@ -130,83 +176,151 @@ class FullPipeline(BasePipeline):
             # Approval Gate: after_architect
             if "after_architect" in self.config.approval_gates:
                 plan_file = self.workspace_path / "PLAN.md"
-                plan_preview = plan_file.read_text(encoding="utf-8", errors="replace") if plan_file.exists() else "No PLAN.md found."
-                gate_decision = self.human_channel.prompt_gate("after_architect", context_preview=plan_preview[:2000])
+                plan_preview = (
+                    plan_file.read_text(encoding="utf-8", errors="replace")
+                    if plan_file.exists()
+                    else "No PLAN.md found."
+                )
+                gate_decision = self.human_channel.prompt_gate(
+                    "after_architect", context_preview=plan_preview[:2000]
+                )
                 if gate_decision == "rejected":
                     if self.state_machine.can_transition(PipelinePhase.FAILED):
                         self.state_machine.transition_to(PipelinePhase.FAILED)
-                    ConsoleOutput.error("Execution halted: human operator rejected PLAN.md at 'after_architect' gate.")
-                    log_store.add_step("PLAN.md rejected by human operator.", is_error=True)
+                    ConsoleOutput.error(
+                        "Execution halted: human operator rejected PLAN.md at 'after_architect' gate."
+                    )
+                    log_store.add_step(
+                        "PLAN.md rejected by human operator.", is_error=True
+                    )
                     diag_report = recorder.finalize(completed_successfully=False)
                     log_store.save_to_file()
-                    return {"status": "HUMAN_REJECTED", "phase": "architect", "report_id": diag_report.report_id}
+                    return {
+                        "status": "HUMAN_REJECTED",
+                        "phase": "architect",
+                        "report_id": diag_report.report_id,
+                    }
 
             # Milestone DAG Decomposition from PLAN.md
             plan_path = self.workspace_path / "PLAN.md"
-            plan_content = plan_path.read_text(encoding="utf-8", errors="replace") if plan_path.exists() else ""
+            plan_content = (
+                plan_path.read_text(encoding="utf-8", errors="replace")
+                if plan_path.exists()
+                else ""
+            )
             milestones = MilestoneParser.parse_plan(plan_content)
 
             # -------------------------------------------------------------------
             # Phase 2: Implementation & Milestone DAG Execution
             # -------------------------------------------------------------------
             if not self.controller.check_should_continue():
-                ConsoleOutput.warning("Execution stopped by controller before developer phase.")
+                ConsoleOutput.warning(
+                    "Execution stopped by controller before developer phase."
+                )
                 diag_report = recorder.finalize(completed_successfully=False)
                 return {"status": "STOPPED", "report_id": diag_report.report_id}
 
             self.state_machine.transition_to(PipelinePhase.DEVELOP)
-            dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+            dev_conv = Conversation(
+                agent=developer_agent,
+                workspace=str(self.workspace_path),
+                visualizer=visualizer,
+            )
 
             if self.checkpoint and "developer" in self.checkpoint.completed_phases:
-                ConsoleOutput.success("Developer phase already completed in checkpoint. Skipping initial implementation.")
-                log_store.add_step("Skipped developer initial implementation (loaded from checkpoint).")
+                ConsoleOutput.success(
+                    "Developer phase already completed in checkpoint. Skipping initial implementation."
+                )
+                log_store.add_step(
+                    "Skipped developer initial implementation (loaded from checkpoint)."
+                )
             else:
                 t_dev = time.perf_counter()
-                log_store.set_agent_context("Developer", "Implementation", model=developer_agent.llm.model, llm=developer_agent.llm)
+                log_store.set_agent_context(
+                    "Developer",
+                    "Implementation",
+                    model=developer_agent.llm.model,
+                    llm=developer_agent.llm,
+                )
 
                 if len(milestones) > 1:
-                    ConsoleOutput.info(f"Decomposed PLAN.md into {len(milestones)} structured milestones for developer implementation.")
+                    ConsoleOutput.info(
+                        f"Decomposed PLAN.md into {len(milestones)} structured milestones for developer implementation."
+                    )
                     for ms in milestones:
                         if not self.controller.check_should_continue():
                             break
-                        ConsoleOutput.agent_step("Developer", f"Executing Milestone {ms.index}: {ms.title}...", model=developer_agent.llm.model)
-                        target_str = f"Target files: {', '.join(ms.target_files)}" if ms.target_files else ""
+                        ConsoleOutput.agent_step(
+                            "Developer",
+                            f"Executing Milestone {ms.index}: {ms.title}...",
+                            model=developer_agent.llm.model,
+                        )
+                        target_str = (
+                            f"Target files: {', '.join(ms.target_files)}"
+                            if ms.target_files
+                            else ""
+                        )
                         ms_prompt = (
                             f"Implement Milestone {ms.index}: {ms.title}\n\n"
                             f"{ms.content}\n\n"
                             f"{target_str}\n\n"
                             "Follow clean-python-architecture principles and implement required files."
                         )
-                        dev_conv.send_message(self.human_channel.inject_into_prompt(ms_prompt))
+                        dev_conv.send_message(
+                            self.human_channel.inject_into_prompt(ms_prompt)
+                        )
                         self._run_conv(dev_conv, f"Developer (Milestone {ms.index})")
                 else:
-                    ConsoleOutput.agent_step("Developer", "Implementing specification from PLAN.md...", model=developer_agent.llm.model)
-                    graft_part = f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
+                    ConsoleOutput.agent_step(
+                        "Developer",
+                        "Implementing specification from PLAN.md...",
+                        model=developer_agent.llm.model,
+                    )
+                    graft_part = (
+                        f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}"
+                        if graft_map
+                        else ""
+                    )
                     dev_prompt = (
                         f"Task: {task_description}\n\n"
                         "Read PLAN.md and implement the complete solution adhering to clean-python-architecture."
                         f"{graft_part}"
                     )
-                    dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
+                    dev_conv.send_message(
+                        self.human_channel.inject_into_prompt(dev_prompt)
+                    )
                     self._run_conv(dev_conv, "Developer")
 
                 dur_dev = time.perf_counter() - t_dev
                 curr_diff = self.git.get_diff() or self.git.get_status()
                 u_dev = get_llm_usage(developer_agent.llm)
                 recorder.record_step(
-                    "developer", "initial_implementation", 1, dur_dev, True, curr_diff,
+                    "developer",
+                    "initial_implementation",
+                    1,
+                    dur_dev,
+                    True,
+                    curr_diff,
                     prompt_tokens=u_dev["prompt_tokens"],
                     completion_tokens=u_dev["completion_tokens"],
                     total_tokens=u_dev["total_tokens"],
                     estimated_cost_usd=u_dev["estimated_cost_usd"],
                 )
-                ConsoleOutput.success(f"Developer completed initial code (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f}).")
+                ConsoleOutput.success(
+                    f"Developer completed initial code (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f})."
+                )
 
             if recorder.check_budget(_get_total_cost()):
-                ConsoleOutput.error("Budget ceiling reached after initial developer phase. Halting.")
+                ConsoleOutput.error(
+                    "Budget ceiling reached after initial developer phase. Halting."
+                )
                 diag_report = recorder.finalize(completed_successfully=False)
                 log_store.save_to_file()
-                return {"status": "BUDGET_EXHAUSTED", "iterations": 1, "report_id": diag_report.report_id}
+                return {
+                    "status": "BUDGET_EXHAUSTED",
+                    "iterations": 1,
+                    "report_id": diag_report.report_id,
+                }
 
             # Persist checkpoint after developer phase
             PipelineCheckpointManager.save(
@@ -221,54 +335,90 @@ class FullPipeline(BasePipeline):
             # Approval Gate: after_developer
             if "after_developer" in self.config.approval_gates:
                 diff_preview = self.git.get_diff() or self.git.get_status()
-                gate_decision = self.human_channel.prompt_gate("after_developer", context_preview=diff_preview[:1500])
+                gate_decision = self.human_channel.prompt_gate(
+                    "after_developer", context_preview=diff_preview[:1500]
+                )
                 if gate_decision == "rejected":
-                    ConsoleOutput.error("Execution halted: human operator rejected changes at 'after_developer' gate.")
-                    log_store.add_step("Changes rejected at after_developer approval gate.", is_error=True)
+                    ConsoleOutput.error(
+                        "Execution halted: human operator rejected changes at 'after_developer' gate."
+                    )
+                    log_store.add_step(
+                        "Changes rejected at after_developer approval gate.",
+                        is_error=True,
+                    )
                     diag_report = recorder.finalize(completed_successfully=False)
                     log_store.save_to_file()
-                    return {"status": "HUMAN_REJECTED", "phase": "developer", "report_id": diag_report.report_id}
+                    return {
+                        "status": "HUMAN_REJECTED",
+                        "phase": "developer",
+                        "report_id": diag_report.report_id,
+                    }
 
             # -------------------------------------------------------------------
             # Phase 3: Iterative Test & Fix Loop
             # -------------------------------------------------------------------
             iteration = 1
             tests_passed = False
-            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+            tester_conv = Conversation(
+                agent=tester_agent,
+                workspace=str(self.workspace_path),
+                visualizer=visualizer,
+            )
 
             while iteration <= self.config.max_iterations:
                 if not self.controller.check_should_continue():
-                    ConsoleOutput.warning(f"Execution stopped by controller before test iteration {iteration}.")
+                    ConsoleOutput.warning(
+                        f"Execution stopped by controller before test iteration {iteration}."
+                    )
                     break
 
-                log_store.set_agent_context("Tester", f"Test Iteration {iteration}", model=tester_agent.llm.model, llm=tester_agent.llm)
+                log_store.set_agent_context(
+                    "Tester",
+                    f"Test Iteration {iteration}",
+                    model=tester_agent.llm.model,
+                    llm=tester_agent.llm,
+                )
 
                 # Preflight check
-                self._run_preflight(iteration, dev_conv, developer_agent, recorder, log_store)
+                self._run_preflight(
+                    iteration, dev_conv, developer_agent, recorder, log_store
+                )
 
                 if self.state_machine.can_transition(PipelinePhase.TEST):
                     self.state_machine.transition_to(PipelinePhase.TEST)
 
                 t_test = time.perf_counter()
                 if iteration == 1:
-                    ConsoleOutput.agent_step("Tester", f"Generating & executing tests (Iteration {iteration})...", model=tester_agent.llm.model)
+                    ConsoleOutput.agent_step(
+                        "Tester",
+                        f"Generating & executing tests (Iteration {iteration})...",
+                        model=tester_agent.llm.model,
+                    )
                     test_prompt = (
                         f"Task: {task_description}\n\n"
                         "Inspect PLAN.md and implementation. Write comprehensive pytest unit tests and execute via `pytest tests/ -v`."
                     )
-                    tester_conv.send_message(self.human_channel.inject_into_prompt(test_prompt))
+                    tester_conv.send_message(
+                        self.human_channel.inject_into_prompt(test_prompt)
+                    )
                     self._run_conv(tester_conv, "Tester")
                     dur_test = time.perf_counter() - t_test
                     u_test = get_llm_usage(tester_agent.llm)
                     recorder.record_step(
-                        "tester", "write_and_run_tests", iteration, dur_test, True,
+                        "tester",
+                        "write_and_run_tests",
+                        iteration,
+                        dur_test,
+                        True,
                         prompt_tokens=u_test["prompt_tokens"],
                         completion_tokens=u_test["completion_tokens"],
                         total_tokens=u_test["total_tokens"],
                         estimated_cost_usd=u_test["estimated_cost_usd"],
                     )
                 else:
-                    ConsoleOutput.info(f"Iteration {iteration}: Re-verifying fix directly via pytest (Zero-Token Tester Skip).")
+                    ConsoleOutput.info(
+                        f"Iteration {iteration}: Re-verifying fix directly via pytest (Zero-Token Tester Skip)."
+                    )
 
                 # Verify test results
                 test_run = self._execute_pytest()
@@ -282,31 +432,55 @@ class FullPipeline(BasePipeline):
                 if self.state_machine.can_transition(PipelinePhase.FIX):
                     self.state_machine.transition_to(PipelinePhase.FIX)
 
-                log_store.add_step(f"Tests failed in iteration {iteration}", is_error=True, observation=test_run.stdout)
-                compact_failure = PytestOutputParser.extract_compact_failures(test_run.stdout, test_run.stderr)
+                log_store.add_step(
+                    f"Tests failed in iteration {iteration}",
+                    is_error=True,
+                    observation=test_run.stdout,
+                )
+                compact_failure = PytestOutputParser.extract_compact_failures(
+                    test_run.stdout, test_run.stderr
+                )
                 circuit_broken = recorder.check_circuit_breaker(compact_failure)
-                recorder.record_incident(f"Iteration_{iteration}_Pytest", "test_failure", compact_failure)
+                recorder.record_incident(
+                    f"Iteration_{iteration}_Pytest", "test_failure", compact_failure
+                )
 
                 if circuit_broken:
-                    ConsoleOutput.error("Circuit Breaker Tripped! Detected repeated failures without progress. Aborting loop.")
+                    ConsoleOutput.error(
+                        "Circuit Breaker Tripped! Detected repeated failures without progress. Aborting loop."
+                    )
                     break
 
                 if iteration < self.config.max_iterations:
-                    ConsoleOutput.warning(f"Tests failed (Iteration {iteration}). Developer fixing...")
-                    log_store.set_agent_context("Developer", f"Fix Iteration {iteration}", model=developer_agent.llm.model, llm=developer_agent.llm)
+                    ConsoleOutput.warning(
+                        f"Tests failed (Iteration {iteration}). Developer fixing..."
+                    )
+                    log_store.set_agent_context(
+                        "Developer",
+                        f"Fix Iteration {iteration}",
+                        model=developer_agent.llm.model,
+                        llm=developer_agent.llm,
+                    )
                     t_fix = time.perf_counter()
                     failure_summary = (
                         f"Pytest execution failed with exit code {test_run.exit_code}.\n\n"
                         f"{compact_failure}\n\n"
                         "Please diagnose the failure using the systematic-debugging skill and update the code."
                     )
-                    dev_conv.send_message(self.human_channel.inject_into_prompt(failure_summary))
+                    dev_conv.send_message(
+                        self.human_channel.inject_into_prompt(failure_summary)
+                    )
                     self._run_conv(dev_conv, "Developer")
                     dur_fix = time.perf_counter() - t_fix
                     new_diff = self.git.get_diff() or self.git.get_status()
                     u_dev_fix = get_llm_usage(developer_agent.llm)
                     recorder.record_step(
-                        "developer", "fix_code", iteration, dur_fix, True, new_diff,
+                        "developer",
+                        "fix_code",
+                        iteration,
+                        dur_fix,
+                        True,
+                        new_diff,
                         prompt_tokens=u_dev_fix["prompt_tokens"],
                         completion_tokens=u_dev_fix["completion_tokens"],
                         total_tokens=u_dev_fix["total_tokens"],
@@ -314,7 +488,9 @@ class FullPipeline(BasePipeline):
                     )
 
                     if recorder.check_budget(_get_total_cost()):
-                        ConsoleOutput.error("Budget ceiling reached after developer fix. Halting.")
+                        ConsoleOutput.error(
+                            "Budget ceiling reached after developer fix. Halting."
+                        )
                         break
 
                 iteration += 1
@@ -328,17 +504,34 @@ class FullPipeline(BasePipeline):
                     self.state_machine.transition_to(PipelinePhase.REVIEW)
 
                 t_rev = time.perf_counter()
-                log_store.set_agent_context("Reviewer", "Independent Code Review", model=reviewer_agent.llm.model, llm=reviewer_agent.llm)
-                ConsoleOutput.agent_step("Reviewer", "Conducting independent audit and security review...", model=reviewer_agent.llm.model)
+                log_store.set_agent_context(
+                    "Reviewer",
+                    "Independent Code Review",
+                    model=reviewer_agent.llm.model,
+                    llm=reviewer_agent.llm,
+                )
+                ConsoleOutput.agent_step(
+                    "Reviewer",
+                    "Conducting independent audit and security review...",
+                    model=reviewer_agent.llm.model,
+                )
 
-                reviewer_conv = Conversation(agent=reviewer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
-                git_diff = self.git.get_compact_diff(max_chars=4000) or self.git.get_status()
+                reviewer_conv = Conversation(
+                    agent=reviewer_agent,
+                    workspace=str(self.workspace_path),
+                    visualizer=visualizer,
+                )
+                git_diff = (
+                    self.git.get_compact_diff(max_chars=4000) or self.git.get_status()
+                )
                 review_prompt = (
                     f"Task: {task_description}\n\n"
                     f"Git Changes:\n{git_diff}\n\n"
                     "Evaluate against code-review-standards and conclude with a valid JSON verdict block."
                 )
-                reviewer_conv.send_message(self.human_channel.inject_into_prompt(review_prompt))
+                reviewer_conv.send_message(
+                    self.human_channel.inject_into_prompt(review_prompt)
+                )
                 self._run_conv(reviewer_conv, "Reviewer")
                 dur_rev = time.perf_counter() - t_rev
                 u_rev = get_llm_usage(reviewer_agent.llm)
@@ -346,14 +539,20 @@ class FullPipeline(BasePipeline):
                 verdict = ReviewerVerdict(approved=False, verdict="REJECTED")
                 if reviewer_conv.state and reviewer_conv.state.events:
                     for ev in reversed(reviewer_conv.state.events):
-                        text = str(getattr(ev, "content", "") or getattr(ev, "text", ""))
+                        text = str(
+                            getattr(ev, "content", "") or getattr(ev, "text", "")
+                        )
                         verdict = ReviewerVerdict.parse(text)
                         if verdict.verdict in ("APPROVED", "REJECTED"):
                             break
 
                 review_approved = verdict.approved
                 recorder.record_step(
-                    "reviewer", "audit_code", iteration, dur_rev, review_approved,
+                    "reviewer",
+                    "audit_code",
+                    iteration,
+                    dur_rev,
+                    review_approved,
                     prompt_tokens=u_rev["prompt_tokens"],
                     completion_tokens=u_rev["completion_tokens"],
                     total_tokens=u_rev["total_tokens"],
@@ -363,7 +562,9 @@ class FullPipeline(BasePipeline):
                 if review_approved:
                     ConsoleOutput.success("Reviewer approved the code!")
                 else:
-                    ConsoleOutput.warning(f"Reviewer requested fixes: {verdict.required_fixes or 'See review report'}")
+                    ConsoleOutput.warning(
+                        f"Reviewer requested fixes: {verdict.required_fixes or 'See review report'}"
+                    )
 
                 # Optional review fix cycle
                 review_cycle = 1
@@ -371,9 +572,17 @@ class FullPipeline(BasePipeline):
                     if not self.controller.check_should_continue():
                         break
 
-                    ConsoleOutput.agent_step("Developer", f"Addressing Reviewer critique (Cycle {review_cycle})...", model=developer_agent.llm.model)
+                    ConsoleOutput.agent_step(
+                        "Developer",
+                        f"Addressing Reviewer critique (Cycle {review_cycle})...",
+                        model=developer_agent.llm.model,
+                    )
                     t_rev_fix = time.perf_counter()
-                    fixes_str = "\n".join(f"- {f}" for f in verdict.required_fixes) if verdict.required_fixes else verdict.raw_text[:1000]
+                    fixes_str = (
+                        "\n".join(f"- {f}" for f in verdict.required_fixes)
+                        if verdict.required_fixes
+                        else verdict.raw_text[:1000]
+                    )
                     dev_conv.send_message(
                         f"Reviewer rejected the code. Required fixes:\n{fixes_str}\n\nPlease apply fixes."
                     )
@@ -382,7 +591,12 @@ class FullPipeline(BasePipeline):
                     new_diff = self.git.get_diff() or self.git.get_status()
                     u_dev_rf = get_llm_usage(developer_agent.llm)
                     recorder.record_step(
-                        "developer", "review_fix", iteration + review_cycle, dur_rev_fix, True, new_diff,
+                        "developer",
+                        "review_fix",
+                        iteration + review_cycle,
+                        dur_rev_fix,
+                        True,
+                        new_diff,
                         prompt_tokens=u_dev_rf["prompt_tokens"],
                         completion_tokens=u_dev_rf["completion_tokens"],
                         total_tokens=u_dev_rf["total_tokens"],
@@ -391,13 +605,20 @@ class FullPipeline(BasePipeline):
 
                     test_run = self._execute_pytest()
                     if test_run.exit_code != 0:
-                        ConsoleOutput.warning("Tests failed after review fixes. Attempting quick fix...")
-                        dev_conv.send_message(f"Pytest failed after review fixes:\n{test_run.stdout}\n{test_run.stderr}\nFix code to pass tests.")
+                        ConsoleOutput.warning(
+                            "Tests failed after review fixes. Attempting quick fix..."
+                        )
+                        dev_conv.send_message(
+                            f"Pytest failed after review fixes:\n{test_run.stdout}\n{test_run.stderr}\nFix code to pass tests."
+                        )
                         self._run_conv(dev_conv, "Developer")
 
                     # Re-audit
                     t_re_audit = time.perf_counter()
-                    git_diff = self.git.get_compact_diff(max_chars=4000) or self.git.get_status()
+                    git_diff = (
+                        self.git.get_compact_diff(max_chars=4000)
+                        or self.git.get_status()
+                    )
                     reviewer_conv.send_message(
                         f"Developer applied fixes.\n\nUpdated Git Changes:\n{git_diff}\n\nRe-evaluate and conclude with JSON verdict."
                     )
@@ -407,14 +628,20 @@ class FullPipeline(BasePipeline):
 
                     if reviewer_conv.state and reviewer_conv.state.events:
                         for ev in reversed(reviewer_conv.state.events):
-                            text = str(getattr(ev, "content", "") or getattr(ev, "text", ""))
+                            text = str(
+                                getattr(ev, "content", "") or getattr(ev, "text", "")
+                            )
                             verdict = ReviewerVerdict.parse(text)
                             if verdict.verdict in ("APPROVED", "REJECTED"):
                                 break
 
                     review_approved = verdict.approved
                     recorder.record_step(
-                        "reviewer", "re_audit", iteration + review_cycle, dur_re_audit, review_approved,
+                        "reviewer",
+                        "re_audit",
+                        iteration + review_cycle,
+                        dur_re_audit,
+                        review_approved,
                         prompt_tokens=u_re_audit["prompt_tokens"],
                         completion_tokens=u_re_audit["completion_tokens"],
                         total_tokens=u_re_audit["total_tokens"],
@@ -427,11 +654,17 @@ class FullPipeline(BasePipeline):
 
                     review_cycle += 1
                     if recorder.check_budget(_get_total_cost()):
-                        ConsoleOutput.error("Budget ceiling reached during review fix cycles. Halting.")
+                        ConsoleOutput.error(
+                            "Budget ceiling reached during review fix cycles. Halting."
+                        )
                         break
 
             final_success = tests_passed and review_approved
-            status_override = "SUCCESS" if final_success else ("REVIEW_REJECTED" if tests_passed else "TESTS_FAILED")
+            status_override = (
+                "SUCCESS"
+                if final_success
+                else ("REVIEW_REJECTED" if tests_passed else "TESTS_FAILED")
+            )
 
             return self._finalize_pipeline(
                 task_description=task_description,

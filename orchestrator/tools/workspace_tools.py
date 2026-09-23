@@ -4,7 +4,14 @@ import subprocess
 from pathlib import Path
 from typing import Literal, Optional, Sequence, Any
 from pydantic import ConfigDict, Field
-from openhands.sdk.tool import Tool, ToolDefinition, register_tool, Action, Observation, ToolExecutor
+from openhands.sdk.tool import (
+    Tool,
+    ToolDefinition,
+    register_tool,
+    Action,
+    Observation,
+    ToolExecutor,
+)
 from openhands.sdk.tool.schema import TextContent
 from orchestrator.config import DEFAULT_WORKSPACE_DIR
 from orchestrator.control.human_channel import get_active_channel
@@ -14,8 +21,10 @@ from orchestrator.control.human_channel import get_active_channel
 # 1. Workspace File Tool
 # ==========================================
 
+
 class WorkspaceFileAction(Action):
     """File manipulation action within the workspace sandbox."""
+
     model_config = ConfigDict(extra="ignore")
     operation: Literal["read", "write", "edit", "list", "delete"]
     path: str
@@ -28,6 +37,7 @@ class WorkspaceFileAction(Action):
 
 class WorkspaceFileObservation(Observation):
     """Observation resulting from workspace file manipulation."""
+
     success: bool
     message: str
     file_content: Optional[str] = None
@@ -62,7 +72,6 @@ def _matches_path_scope(rel_posix: str, scope: str) -> bool:
     return False
 
 
-
 def execute_file_action(
     action: WorkspaceFileAction,
     conversation=None,
@@ -72,7 +81,10 @@ def execute_file_action(
     blocked_write_prefixes: Optional[Sequence[str]] = None,
 ) -> WorkspaceFileObservation:
     """Safely execute file operation within workspace."""
-    workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+    workspace_root = (
+        base_dir
+        or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+    )
     workspace_root.mkdir(parents=True, exist_ok=True)
 
     # Normalize path: strip leading virtual container /workspace or workspace prefixes
@@ -92,7 +104,7 @@ def execute_file_action(
             content=[TextContent(text=err_msg)],
             is_error=True,
             success=False,
-            message=err_msg
+            message=err_msg,
         )
 
     # RBAC Permission Enforcement
@@ -105,11 +117,19 @@ def execute_file_action(
 
         if not is_pre_authorized:
             if read_only:
-                violation_reason = "Agent role has strictly read-only access to workspace files."
-            elif allowed_write_prefixes and not any(_matches_path_scope(rel_posix, p) for p in allowed_write_prefixes):
+                violation_reason = (
+                    "Agent role has strictly read-only access to workspace files."
+                )
+            elif allowed_write_prefixes and not any(
+                _matches_path_scope(rel_posix, p) for p in allowed_write_prefixes
+            ):
                 violation_reason = f"Writing to '{action.path}' is outside permitted role scope {list(allowed_write_prefixes)}."
-            elif blocked_write_prefixes and any(_matches_path_scope(rel_posix, p) for p in blocked_write_prefixes):
-                violation_reason = f"Modifying '{action.path}' is restricted for this agent role."
+            elif blocked_write_prefixes and any(
+                _matches_path_scope(rel_posix, p) for p in blocked_write_prefixes
+            ):
+                violation_reason = (
+                    f"Modifying '{action.path}' is restricted for this agent role."
+                )
 
         if violation_reason:
             granted = False
@@ -127,7 +147,7 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
 
     try:
@@ -138,7 +158,7 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
             if not target_path.exists():
                 err_msg = f"File '{action.path}' does not exist."
@@ -146,18 +166,28 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
-            lines = target_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
-            start = (action.start_line - 1) if action.start_line and action.start_line > 0 else 0
-            end = action.end_line if action.end_line and action.end_line <= len(lines) else len(lines)
+            lines = target_path.read_text(
+                encoding="utf-8", errors="replace"
+            ).splitlines(keepends=True)
+            start = (
+                (action.start_line - 1)
+                if action.start_line and action.start_line > 0
+                else 0
+            )
+            end = (
+                action.end_line
+                if action.end_line and action.end_line <= len(lines)
+                else len(lines)
+            )
             selected_content = sanitize_output_secrets("".join(lines[start:end]))
             return WorkspaceFileObservation(
                 content=[TextContent(text=selected_content)],
                 is_error=False,
                 success=True,
                 message=f"Read {len(lines[start:end])} lines from '{action.path}'.",
-                file_content=selected_content
+                file_content=selected_content,
             )
 
         elif action.operation == "write":
@@ -168,7 +198,7 @@ def execute_file_action(
                 content=[TextContent(text=msg)],
                 is_error=False,
                 success=True,
-                message=msg
+                message=msg,
             )
 
         elif action.operation == "edit":
@@ -178,7 +208,7 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
             existing = target_path.read_text(encoding="utf-8", errors="replace")
             if not action.target_text:
@@ -187,7 +217,7 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
             if action.target_text not in existing:
                 err_msg = f"Target text was not found in '{action.path}'."
@@ -195,16 +225,18 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
-            new_content = existing.replace(action.target_text, action.replacement_text or "", 1)
+            new_content = existing.replace(
+                action.target_text, action.replacement_text or "", 1
+            )
             target_path.write_text(new_content, encoding="utf-8")
             msg = f"Successfully edited '{action.path}'."
             return WorkspaceFileObservation(
                 content=[TextContent(text=msg)],
                 is_error=False,
                 success=True,
-                message=msg
+                message=msg,
             )
 
         elif action.operation == "list":
@@ -214,25 +246,37 @@ def execute_file_action(
                     content=[TextContent(text=err_msg)],
                     is_error=True,
                     success=False,
-                    message=err_msg
+                    message=err_msg,
                 )
             search_dir = target_path if target_path.is_dir() else target_path.parent
-            ignored_dirs = {".git", ".venv", "__pycache__", ".pytest_cache", "node_modules", "dist", "build"}
+            ignored_dirs = {
+                ".git",
+                ".venv",
+                "__pycache__",
+                ".pytest_cache",
+                "node_modules",
+                "dist",
+                "build",
+            }
             file_list = []
             for p in search_dir.rglob("*"):
-                if p.is_file() and not any(part in ignored_dirs or part.startswith(".") for part in p.parts):
+                if p.is_file() and not any(
+                    part in ignored_dirs or part.startswith(".") for part in p.parts
+                ):
                     file_list.append(str(p.relative_to(workspace_root)))
                     if len(file_list) >= 100:
                         file_list.append("... [Additional files omitted for brevity]")
                         break
-            files_str = "\n".join(file_list) if file_list else "(No files found in directory)"
+            files_str = (
+                "\n".join(file_list) if file_list else "(No files found in directory)"
+            )
             msg = f"Found {len(file_list)} files:\n{files_str}"
             return WorkspaceFileObservation(
                 content=[TextContent(text=msg)],
                 is_error=False,
                 success=True,
                 message=msg,
-                files=[f for f in file_list if not f.startswith("...")]
+                files=[f for f in file_list if not f.startswith("...")],
             )
 
         elif action.operation == "delete":
@@ -241,20 +285,21 @@ def execute_file_action(
                     target_path.unlink()
                 else:
                     import shutil
+
                     shutil.rmtree(target_path)
                 msg = f"Deleted '{action.path}'."
                 return WorkspaceFileObservation(
                     content=[TextContent(text=msg)],
                     is_error=False,
                     success=True,
-                    message=msg
+                    message=msg,
                 )
             err_msg = f"File '{action.path}' does not exist."
             return WorkspaceFileObservation(
                 content=[TextContent(text=err_msg)],
                 is_error=True,
                 success=False,
-                message=err_msg
+                message=err_msg,
             )
 
         err_msg = f"Unknown operation: {action.operation}"
@@ -262,7 +307,7 @@ def execute_file_action(
             content=[TextContent(text=err_msg)],
             is_error=True,
             success=False,
-            message=err_msg
+            message=err_msg,
         )
 
     except Exception as e:
@@ -271,11 +316,13 @@ def execute_file_action(
             content=[TextContent(text=err_msg)],
             is_error=True,
             success=False,
-            message=err_msg
+            message=err_msg,
         )
 
 
-class WorkspaceFileExecutor(ToolExecutor[WorkspaceFileAction, WorkspaceFileObservation]):
+class WorkspaceFileExecutor(
+    ToolExecutor[WorkspaceFileAction, WorkspaceFileObservation]
+):
     def __init__(
         self,
         workspace_path: Optional[Path] = None,
@@ -345,8 +392,10 @@ class WorkspaceFileTool(ToolDefinition[WorkspaceFileAction, WorkspaceFileObserva
 # 2. Workspace Terminal Tool
 # ==========================================
 
+
 class WorkspaceTerminalAction(Action):
     """Terminal execution action within the workspace environment."""
+
     model_config = ConfigDict(extra="ignore")
     command: str
     timeout_seconds: int = 30
@@ -354,6 +403,7 @@ class WorkspaceTerminalAction(Action):
 
 class WorkspaceTerminalObservation(Observation):
     """Observation resulting from terminal command execution."""
+
     exit_code: int = 0
     stdout: str = ""
     stderr: str = ""
@@ -361,8 +411,25 @@ class WorkspaceTerminalObservation(Observation):
 
 
 DEFAULT_ALLOWED_COMMANDS = {
-    "pytest", "python", "py", "pip", "uv", "git", "ruff", "mypy", "graft",
-    "ls", "dir", "cat", "type", "echo", "pwd", "tree", "find", "cd", "where",
+    "pytest",
+    "python",
+    "py",
+    "pip",
+    "uv",
+    "git",
+    "ruff",
+    "mypy",
+    "graft",
+    "ls",
+    "dir",
+    "cat",
+    "type",
+    "echo",
+    "pwd",
+    "tree",
+    "find",
+    "cd",
+    "where",
 }
 
 
@@ -390,16 +457,19 @@ def is_command_allowed(command: str) -> bool:
 
 
 def execute_terminal_action(
-    action: WorkspaceTerminalAction,
-    conversation=None,
-    base_dir: Optional[Path] = None
+    action: WorkspaceTerminalAction, conversation=None, base_dir: Optional[Path] = None
 ) -> WorkspaceTerminalObservation:
     """Execute terminal command safely inside workspace directory."""
-    workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+    workspace_root = (
+        base_dir
+        or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+    )
     workspace_root.mkdir(parents=True, exist_ok=True)
 
     channel = getattr(conversation, "human_channel", None) or get_active_channel()
-    is_pre_authorized = channel.is_command_approved(action.command) if channel else False
+    is_pre_authorized = (
+        channel.is_command_approved(action.command) if channel else False
+    )
 
     if not is_command_allowed(action.command) and not is_pre_authorized:
         granted = False
@@ -423,7 +493,7 @@ def execute_terminal_action(
                 exit_code=126,
                 stdout="",
                 stderr=err_msg,
-                timed_out=False
+                timed_out=False,
             )
 
     # Sanitize env to prevent leaking sensitive API keys / secrets to commands or child processes
@@ -448,7 +518,7 @@ def execute_terminal_action(
             encoding="utf-8",
             errors="replace",
             timeout=action.timeout_seconds,
-            env=env
+            env=env,
         )
         stdout_text = sanitize_output_secrets(proc.stdout or "")
         stderr_text = sanitize_output_secrets(proc.stderr or "")
@@ -459,19 +529,31 @@ def execute_terminal_action(
             exit_code=proc.returncode,
             stdout=stdout_text,
             stderr=stderr_text,
-            timed_out=False
+            timed_out=False,
         )
     except subprocess.TimeoutExpired as te:
         timeout_msg = "Command timed out after specified seconds."
-        stdout_str = sanitize_output_secrets(te.stdout if isinstance(te.stdout, str) else (te.stdout.decode("utf-8", errors="replace") if te.stdout else ""))
-        stderr_str = sanitize_output_secrets(te.stderr if isinstance(te.stderr, str) else (te.stderr.decode("utf-8", errors="replace") if te.stderr else timeout_msg))
+        stdout_str = sanitize_output_secrets(
+            te.stdout
+            if isinstance(te.stdout, str)
+            else (te.stdout.decode("utf-8", errors="replace") if te.stdout else "")
+        )
+        stderr_str = sanitize_output_secrets(
+            te.stderr
+            if isinstance(te.stderr, str)
+            else (
+                te.stderr.decode("utf-8", errors="replace")
+                if te.stderr
+                else timeout_msg
+            )
+        )
         return WorkspaceTerminalObservation(
             content=[TextContent(text=timeout_msg)],
             is_error=True,
             exit_code=-1,
             stdout=stdout_str,
             stderr=stderr_str,
-            timed_out=True
+            timed_out=True,
         )
     except Exception as e:
         err_msg = f"Execution error: {str(e)}"
@@ -481,11 +563,13 @@ def execute_terminal_action(
             exit_code=-1,
             stdout="",
             stderr=err_msg,
-            timed_out=False
+            timed_out=False,
         )
 
 
-class WorkspaceTerminalExecutor(ToolExecutor[WorkspaceTerminalAction, WorkspaceTerminalObservation]):
+class WorkspaceTerminalExecutor(
+    ToolExecutor[WorkspaceTerminalAction, WorkspaceTerminalObservation]
+):
     def __init__(self, workspace_path: Optional[Path] = None):
         self.workspace_path = workspace_path
 
@@ -497,7 +581,9 @@ class WorkspaceTerminalExecutor(ToolExecutor[WorkspaceTerminalAction, WorkspaceT
         return execute_terminal_action(action, conversation, self.workspace_path)
 
 
-class WorkspaceTerminalTool(ToolDefinition[WorkspaceTerminalAction, WorkspaceTerminalObservation]):
+class WorkspaceTerminalTool(
+    ToolDefinition[WorkspaceTerminalAction, WorkspaceTerminalObservation]
+):
     """Tool for running terminal commands (tests, python, git, build) inside the workspace."""
 
     @classmethod
@@ -536,21 +622,32 @@ register_tool("WorkspaceTerminalTool", WorkspaceTerminalTool)
 # 3. Dynamic Permission Escalation Tool
 # ==========================================
 
+
 class RequestPermissionAction(Action):
     """Explicitly request approval from the human developer for a privileged or restricted task."""
+
     model_config = ConfigDict(extra="ignore")
-    action_type: Literal["terminal_command", "file_write", "dependency_install", "architectural_change"]
-    target: str = Field(description="Command, file path, or package name requiring authorization")
-    justification: str = Field(description="Clear technical rationale explaining why this operation is essential")
+    action_type: Literal[
+        "terminal_command", "file_write", "dependency_install", "architectural_change"
+    ]
+    target: str = Field(
+        description="Command, file path, or package name requiring authorization"
+    )
+    justification: str = Field(
+        description="Clear technical rationale explaining why this operation is essential"
+    )
 
 
 class RequestPermissionObservation(Observation):
     """Result of human developer permission review."""
+
     granted: bool = False
     message: str = ""
 
 
-class RequestPermissionExecutor(ToolExecutor[RequestPermissionAction, RequestPermissionObservation]):
+class RequestPermissionExecutor(
+    ToolExecutor[RequestPermissionAction, RequestPermissionObservation]
+):
     def __call__(
         self,
         action: RequestPermissionAction,
@@ -568,7 +665,9 @@ class RequestPermissionExecutor(ToolExecutor[RequestPermissionAction, RequestPer
 
         granted, feedback = channel.request_permission(
             role="agent",
-            action_type="terminal_command" if action.action_type in ("terminal_command", "dependency_install") else "file_write",
+            action_type="terminal_command"
+            if action.action_type in ("terminal_command", "dependency_install")
+            else "file_write",
             target=action.target,
             reason=f"Agent request: {action.justification}",
         )
@@ -590,10 +689,15 @@ class RequestPermissionExecutor(ToolExecutor[RequestPermissionAction, RequestPer
             )
 
 
-class RequestPermissionTool(ToolDefinition[RequestPermissionAction, RequestPermissionObservation]):
+class RequestPermissionTool(
+    ToolDefinition[RequestPermissionAction, RequestPermissionObservation]
+):
     """Tool enabling agents to proactively ask developer permission before running privileged actions."""
+
     @classmethod
-    def create(cls, conv_state: Optional[Any] = None, **params) -> Sequence["RequestPermissionTool"]:
+    def create(
+        cls, conv_state: Optional[Any] = None, **params
+    ) -> Sequence["RequestPermissionTool"]:
         return [
             cls(
                 description="Request human developer approval before executing restricted actions (e.g. installing packages, modifying protected files).",

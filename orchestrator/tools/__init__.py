@@ -27,4 +27,3 @@ __all__ = [
     "execute_file_action",
     "execute_terminal_action",
 ]
-

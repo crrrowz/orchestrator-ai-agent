@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class SubtaskMilestone(BaseModel):
     """Structured milestone extracted from architectural PLAN.md."""
+
     index: int
     title: str
     content: str
@@ -65,12 +66,14 @@ class MilestoneParser:
         """Extract referenced file paths from markdown text (both quoted and bare paths)."""
         matches = re.findall(
             r"(?:[`'\"]\s*)?([a-zA-Z0-9_\-\.\/]+\.(?:py|json|md|toml|ya?ml|html|css|js|ts))(?:\s*[`'\"])?",
-            text
+            text,
         )
         cleaned = []
         for m in matches:
             m_clean = m.strip("`'\".,;:()")
-            if not m_clean.startswith("http") and ("/" in m_clean or m_clean.endswith(".py")):
+            if not m_clean.startswith("http") and (
+                "/" in m_clean or m_clean.endswith(".py")
+            ):
                 if m_clean not in cleaned:
                     cleaned.append(m_clean)
         return cleaned

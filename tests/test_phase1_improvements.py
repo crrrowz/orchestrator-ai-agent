@@ -2,8 +2,7 @@
 
 from pathlib import Path
 from orchestrator.config import SkillManager
-from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
-from orchestrator.telemetry.schemas import StepMetric, DiagnosticReport
+from orchestrator.telemetry import TelemetryRecorder
 from orchestrator.evolution import SystemAuditor
 
 
@@ -86,11 +85,14 @@ def test_auditor_fallback_recovery(tmp_path: Path):
                 "action_type": None,
                 "duration_s": 25.0,
                 "is_error": True,
-            }
-        ]
+            },
+        ],
     }
     import json
-    (logs_dir / "latest_session.json").write_text(json.dumps(fake_session), encoding="utf-8")
+
+    (logs_dir / "latest_session.json").write_text(
+        json.dumps(fake_session), encoding="utf-8"
+    )
 
     auditor = SystemAuditor(reports_dir=reports_dir)
     reports = auditor.load_reports()

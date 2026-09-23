@@ -1,7 +1,7 @@
 """Signal-based non-blocking pipeline controller for pause, stop, and abort operations."""
 
 import threading
-from typing import Literal, Optional
+from typing import Literal
 
 
 class PipelineController:

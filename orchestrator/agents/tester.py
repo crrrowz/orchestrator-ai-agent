@@ -5,7 +5,10 @@ from typing import Optional
 
 from openhands.sdk import Agent
 from orchestrator.config import OrchestratorConfig, SkillManager, create_llm_for_role
-from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+from orchestrator.tools import (
+    create_workspace_file_tool,
+    create_workspace_terminal_tool,
+)
 
 TESTER_SYSTEM_PROMPT = """You are the Senior Staff QA & Test Engineer Agent.
 Your objective is to guarantee code correctness, edge-case resilience, and regression prevention.
@@ -26,7 +29,7 @@ CRITICAL INSTRUCTIONS:
 def create_tester_agent(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    workspace_path: Optional[Path] = None
+    workspace_path: Optional[Path] = None,
 ) -> Agent:
     """Build a Tester agent configured with testing skills and execution tools."""
     workspace = workspace_path or config.workspace_path

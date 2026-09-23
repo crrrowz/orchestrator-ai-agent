@@ -55,7 +55,11 @@ class ReviewerVerdict:
 
         # 3. Fallback: text pattern matching
         upper_text = clean_text.upper()
-        if "VERDICT: APPROVED" in upper_text or "VERDICT - APPROVED" in upper_text or '"VERDICT": "APPROVED"' in upper_text:
+        if (
+            "VERDICT: APPROVED" in upper_text
+            or "VERDICT - APPROVED" in upper_text
+            or '"VERDICT": "APPROVED"' in upper_text
+        ):
             return cls(approved=True, verdict="APPROVED", raw_text=clean_text)
 
         return cls(approved=False, verdict="REJECTED", raw_text=clean_text)

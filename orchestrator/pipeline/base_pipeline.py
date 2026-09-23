@@ -1,13 +1,12 @@
 """Base Pipeline defining common lifecycle, telemetry, git ops, and execution loops."""
 
 from abc import ABC, abstractmethod
-import os
 import re
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from openhands.sdk import Conversation
 
@@ -19,7 +18,7 @@ from orchestrator.config import (
 from orchestrator.control import BudgetGuard, HumanChannel, PipelineController
 from orchestrator.guards.preflight import PreFlightGuard
 from orchestrator.memory import ConversationMemoryStore
-from orchestrator.pipeline.checkpoint import PipelineCheckpoint, PipelineCheckpointManager
+from orchestrator.pipeline.checkpoint import PipelineCheckpoint
 from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import (
@@ -33,10 +32,8 @@ from orchestrator.utils import (
     GraftContextProvider,
     InteractiveLogExplorer,
     OrchestratorLiveVisualizer,
-    PytestOutputParser,
     SessionLogStore,
 )
-
 
 
 class BasePipeline(ABC):
@@ -68,27 +65,46 @@ class BasePipeline(ABC):
         task_description: str,
         mode: str,
         banner_title: str,
-    ) -> Tuple[TelemetryRecorder, ConversationMemoryStore, SessionLogStore, OrchestratorLiveVisualizer, str]:
+    ) -> Tuple[
+        TelemetryRecorder,
+        ConversationMemoryStore,
+        SessionLogStore,
+        OrchestratorLiveVisualizer,
+        str,
+    ]:
         """Initialize git isolation branch, telemetry recorder, memory store, and logger."""
         # 0. State Machine Initialization
-        if self.state_machine.current_phase != PipelinePhase.INIT and self.state_machine.can_transition(PipelinePhase.INIT):
+        if (
+            self.state_machine.current_phase != PipelinePhase.INIT
+            and self.state_machine.can_transition(PipelinePhase.INIT)
+        ):
             self.state_machine.transition_to(PipelinePhase.INIT)
 
         # 1. Git task branch isolation
         self.git.init_if_needed()
         if self.git.is_dirty():
-            ConsoleOutput.warning("Workspace has uncommitted changes. Stashing or proceeding on working tree.")
-        task_slug = re.sub(r"[^a-zA-Z0-9_\-]+", "-", task_description.lower())[:30].strip("-") or "task"
+            ConsoleOutput.warning(
+                "Workspace has uncommitted changes. Stashing or proceeding on working tree."
+            )
+        task_slug = (
+            re.sub(r"[^a-zA-Z0-9_\-]+", "-", task_description.lower())[:30].strip("-")
+            or "task"
+        )
         branch_name = f"agent/{task_slug}-{int(time.time())}"
         if self.git.create_and_checkout_branch(branch_name):
-            ConsoleOutput.agent_step("GIT", f"Isolated task branch created: [bold]{branch_name}[/bold]")
+            ConsoleOutput.agent_step(
+                "GIT", f"Isolated task branch created: [bold]{branch_name}[/bold]"
+            )
 
         # 2. Output and Telemetry
         ConsoleOutput.banner(
             banner_title,
-            f"Workspace: {self.workspace_path} | Max Iterations: {self.config.max_iterations} | Budget: ${self.config.max_budget_usd:.2f}"
+            f"Workspace: {self.workspace_path} | Max Iterations: {self.config.max_iterations} | Budget: ${self.config.max_budget_usd:.2f}",
         )
-        ConsoleOutput.agent_step("SYSTEM", f"Loaded Skills: {', '.join(sorted(self.skill_manager.available_skills))}")
+        ConsoleOutput.agent_step(
+            "SYSTEM",
+            f"Loaded Skills: {', '.join(sorted(self.skill_manager.available_skills))}",
+        )
 
         recorder = TelemetryRecorder(
             task_description=task_description,
@@ -99,21 +115,29 @@ class BasePipeline(ABC):
         )
         memory_store = ConversationMemoryStore(DEFAULT_DIAGNOSTICS_DIR)
         log_store = SessionLogStore(self.workspace_path)
-        visualizer = OrchestratorLiveVisualizer(log_store=log_store, verbosity=self.config.verbosity)
+        visualizer = OrchestratorLiveVisualizer(
+            log_store=log_store, verbosity=self.config.verbosity
+        )
 
         # 3. Graft Architecture Context
         graft_map = GraftContextProvider.get_compact_map(self.workspace_path)
         if graft_map:
-            ConsoleOutput.agent_step("GRAFT", "Injected zero-token codebase architecture map.")
+            ConsoleOutput.agent_step(
+                "GRAFT", "Injected zero-token codebase architecture map."
+            )
 
         return recorder, memory_store, log_store, visualizer, graft_map
 
-    def _run_conv(self, conv: Conversation, role_name: str, max_retries: int = 2) -> None:
+    def _run_conv(
+        self, conv: Conversation, role_name: str, max_retries: int = 2
+    ) -> None:
         """Run agent conversation with exponential backoff retry and 300s timeout guard."""
         timeout_seconds = 300.0
         for attempt in range(max_retries + 1):
             if not self.controller.check_should_continue():
-                ConsoleOutput.warning(f"Conversation execution halted by controller for {role_name}.")
+                ConsoleOutput.warning(
+                    f"Conversation execution halted by controller for {role_name}."
+                )
                 return
 
             timer = threading.Timer(timeout_seconds, lambda: None)
@@ -125,11 +149,15 @@ class BasePipeline(ABC):
                 break
             except Exception as e:
                 if attempt < max_retries:
-                    backoff = 2 ** attempt
-                    ConsoleOutput.warning(f"{role_name} conversation failed (attempt {attempt + 1}): {e}. Retrying in {backoff}s...")
+                    backoff = 2**attempt
+                    ConsoleOutput.warning(
+                        f"{role_name} conversation failed (attempt {attempt + 1}): {e}. Retrying in {backoff}s..."
+                    )
                     time.sleep(backoff)
                 else:
-                    ConsoleOutput.error(f"{role_name} conversation failed after {max_retries + 1} attempts: {e}")
+                    ConsoleOutput.error(
+                        f"{role_name} conversation failed after {max_retries + 1} attempts: {e}"
+                    )
                     raise
             finally:
                 timer.cancel()
@@ -151,9 +179,19 @@ class BasePipeline(ABC):
 
         if not syntax_ok or not import_ok:
             combined_err = f"{syntax_err}\n\n{import_err}".strip()
-            ConsoleOutput.warning(f"Pre-flight validation failed in iteration {iteration}! Routing errors to Developer.")
-            log_store.add_step(f"Pre-flight code error in iteration {iteration}", is_error=True, observation=combined_err)
-            recorder.record_incident(f"Iteration_{iteration}_Preflight", "preflight_error", combined_err[:300])
+            ConsoleOutput.warning(
+                f"Pre-flight validation failed in iteration {iteration}! Routing errors to Developer."
+            )
+            log_store.add_step(
+                f"Pre-flight code error in iteration {iteration}",
+                is_error=True,
+                observation=combined_err,
+            )
+            recorder.record_incident(
+                f"Iteration_{iteration}_Preflight",
+                "preflight_error",
+                combined_err[:300],
+            )
 
             t_syntax_fix = time.perf_counter()
             dev_conv.send_message(
@@ -164,7 +202,11 @@ class BasePipeline(ABC):
             dur_syntax = time.perf_counter() - t_syntax_fix
             u_dev_syntax = get_llm_usage(developer_agent.llm)
             recorder.record_step(
-                "developer", "fix_syntax", iteration, dur_syntax, True,
+                "developer",
+                "fix_syntax",
+                iteration,
+                dur_syntax,
+                True,
                 prompt_tokens=u_dev_syntax["prompt_tokens"],
                 completion_tokens=u_dev_syntax["completion_tokens"],
                 total_tokens=u_dev_syntax["total_tokens"],
@@ -173,7 +215,9 @@ class BasePipeline(ABC):
             return False
         return True
 
-    def _execute_pytest(self, timeout_seconds: int = 60) -> WorkspaceTerminalObservation:
+    def _execute_pytest(
+        self, timeout_seconds: int = 60
+    ) -> WorkspaceTerminalObservation:
         """Execute pytest against the workspace directory."""
         if (self.workspace_path / "pyproject.toml").exists():
             pytest_cmd = "pytest -v"
@@ -183,7 +227,9 @@ class BasePipeline(ABC):
             pytest_cmd = "pytest -v"
 
         return execute_terminal_action(
-            WorkspaceTerminalAction(command=pytest_cmd, timeout_seconds=timeout_seconds),
+            WorkspaceTerminalAction(
+                command=pytest_cmd, timeout_seconds=timeout_seconds
+            ),
             base_dir=self.workspace_path,
         )
 
@@ -211,7 +257,7 @@ class BasePipeline(ABC):
             if "before_commit" in self.config.approval_gates:
                 gate_decision = self.human_channel.prompt_gate(
                     "before_commit",
-                    context_preview="All tests and checks passed. Confirm Git commit."
+                    context_preview="All tests and checks passed. Confirm Git commit.",
                 )
                 if gate_decision == "rejected":
                     ConsoleOutput.warning("Git commit cancelled by human operator.")
@@ -245,7 +291,9 @@ class BasePipeline(ABC):
                 task=task_description,
                 summary=f"Pipeline concluded with {status_str} in {iteration} iteration(s).",
                 tests_passed=success,
-                lessons=recorder.recommendations[0] if recorder.recommendations else None,
+                lessons=recorder.recommendations[0]
+                if recorder.recommendations
+                else None,
             )
         except Exception:
             pass

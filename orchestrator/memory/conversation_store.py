@@ -5,7 +5,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 from pydantic import BaseModel, Field
 
 from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
@@ -13,8 +13,11 @@ from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
 
 class MemoryEntry(BaseModel):
     """Schema for persisted task execution memory."""
+
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     task: str
     summary: str
     files_touched: list[str] = Field(default_factory=list)
@@ -23,10 +26,44 @@ class MemoryEntry(BaseModel):
 
 
 COMMON_TASK_STOPWORDS: set[str] = {
-    "create", "implement", "build", "write", "add", "make", "with", "test", "tests",
-    "file", "files", "using", "from", "service", "code", "the", "and", "for", "that",
-    "this", "into", "onto", "then", "should", "must", "have", "will", "does", "done",
-    "what", "when", "where", "which", "your", "task", "class", "function", "module",
+    "create",
+    "implement",
+    "build",
+    "write",
+    "add",
+    "make",
+    "with",
+    "test",
+    "tests",
+    "file",
+    "files",
+    "using",
+    "from",
+    "service",
+    "code",
+    "the",
+    "and",
+    "for",
+    "that",
+    "this",
+    "into",
+    "onto",
+    "then",
+    "should",
+    "must",
+    "have",
+    "will",
+    "does",
+    "done",
+    "what",
+    "when",
+    "where",
+    "which",
+    "your",
+    "task",
+    "class",
+    "function",
+    "module",
 }
 
 
@@ -53,7 +90,10 @@ class ConversationStore:
             tests_passed=tests_passed,
             lessons=lessons,
         )
-        file_path = self.memory_dir / f"{entry.id}_{int(datetime.now(timezone.utc).timestamp())}.json"
+        file_path = (
+            self.memory_dir
+            / f"{entry.id}_{int(datetime.now(timezone.utc).timestamp())}.json"
+        )
         file_path.write_text(entry.model_dump_json(indent=2), encoding="utf-8")
         return file_path
 
@@ -83,7 +123,8 @@ class ConversationStore:
             return []
 
         task_words = {
-            w for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", task.lower())
+            w
+            for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", task.lower())
             if w not in COMMON_TASK_STOPWORDS
         }
         target_files = set(f.lower() for f in (files or []))
@@ -92,7 +133,10 @@ class ConversationStore:
         for mem in all_memories:
             score = 0.0
             mem_words = {
-                w for w in re.findall(r"\b[a-zA-Z0-9_-]{3,}\b", (mem.task + " " + mem.summary).lower())
+                w
+                for w in re.findall(
+                    r"\b[a-zA-Z0-9_-]{3,}\b", (mem.task + " " + mem.summary).lower()
+                )
                 if w not in COMMON_TASK_STOPWORDS
             }
             overlap_count = 0
@@ -124,7 +168,9 @@ class ConversationStore:
         min_score: float = 3.0,
     ) -> Optional[str]:
         """Format matching memories into a prompt injection block if relevance threshold met."""
-        relevant = self.find_relevant_memories(task, files, max_results=2, min_score=min_score)
+        relevant = self.find_relevant_memories(
+            task, files, max_results=2, min_score=min_score
+        )
         if not relevant:
             return None
 

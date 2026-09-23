@@ -16,7 +16,9 @@ class GraftContextProvider:
         return shutil.which("graft") is not None
 
     @classmethod
-    def build_index(cls, workspace: Path, force: bool = False, max_age_seconds: float = 300.0) -> bool:
+    def build_index(
+        cls, workspace: Path, force: bool = False, max_age_seconds: float = 300.0
+    ) -> bool:
         """Build or refresh local graft/ context graph in workspace if stale or forced."""
         if not cls.is_graft_available():
             return False
