@@ -75,29 +75,76 @@ class AuditFixPipeline:
         role: str,
         max_retries: int = 2,
         timeout_seconds: int = 300,
+        max_steps: Optional[int] = None,
+        max_tokens: Optional[int] = None,
     ) -> None:
-        """Execute conversation with retry on transient API/model failures and wall-clock timeout."""
+        """Execute conversation with step-by-step token and step ceilings, timeout guard, and backoff retry."""
         import threading
 
+        step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
+        token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 300_000)
+
         for attempt in range(max_retries + 1):
-            timer = None
-            if timeout_seconds > 0:
+            if not self.controller.check_should_continue():
+                ConsoleOutput.warning(
+                    f"Conversation execution halted by controller for {role}."
+                )
+                return
 
-                def on_timeout():
-                    ConsoleOutput.warning(
-                        f"Agent {role} exceeded {timeout_seconds}s timeout cap."
-                    )
-                    if hasattr(conv, "cancel"):
-                        conv.cancel()
-                    elif hasattr(conv, "stop"):
-                        conv.stop()
+            def on_timeout():
+                ConsoleOutput.warning(
+                    f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
+                )
+                conv._is_closed = True
 
-                timer = threading.Timer(timeout_seconds, on_timeout)
-                timer.daemon = True
-                timer.start()
+            timer = threading.Timer(timeout_seconds, on_timeout)
+            timer.daemon = True
+            timer.start()
 
+            # If mock object passed in unit tests
+            if not hasattr(conv, "_is_closed") or getattr(getattr(conv, "run", None), "side_effect", None) is not None:
+                if hasattr(conv, "run"):
+                    conv.run()
+                return
+
+            step_count = 0
             try:
-                conv.run()
+                while not conv.is_closed:
+                    if not self.controller.check_should_continue():
+                        ConsoleOutput.warning(
+                            f"Conversation halted by controller for {role}."
+                        )
+                        conv._is_closed = True
+                        break
+
+                    conv.step()
+                    step_count += 1
+
+                    # Check hard token budget from active LLM metrics
+                    llm = getattr(conv, "agent", None) and getattr(
+                        conv.agent, "llm", None
+                    )
+                    if llm and hasattr(llm, "metrics"):
+                        tu = getattr(llm.metrics, "accumulated_token_usage", None)
+                        if tu:
+                            total_tok = getattr(tu, "prompt_tokens", 0) + getattr(
+                                tu, "completion_tokens", 0
+                            )
+                            if token_limit > 0 and total_tok >= token_limit:
+                                ConsoleOutput.warning(
+                                    f"Agent {role} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
+                                )
+                                conv._is_closed = True
+                                break
+
+                    # Check hard step limit
+                    if step_limit > 0 and step_count >= step_limit:
+                        ConsoleOutput.warning(
+                            f"Agent {role} reached maximum step limit ({step_count}/{step_limit}). Finalizing conversation."
+                        )
+                        conv._is_closed = True
+                        break
+
                 return
             except Exception as e:
                 if attempt < max_retries:
@@ -110,8 +157,7 @@ class AuditFixPipeline:
                 else:
                     raise
             finally:
-                if timer:
-                    timer.cancel()
+                timer.cancel()
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""

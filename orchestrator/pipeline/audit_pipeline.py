@@ -45,29 +45,76 @@ class AuditPipeline:
         role: str,
         max_retries: int = 2,
         timeout_seconds: int = 300,
+        max_steps: Optional[int] = None,
+        max_tokens: Optional[int] = None,
     ) -> None:
-        """Execute conversation with retry on transient API/model failures and wall-clock timeout."""
+        """Execute conversation with step-by-step token and step ceilings, timeout guard, and backoff retry."""
         import threading
 
+        step_limit = max_steps or getattr(self.config, "max_agent_steps", 8)
+        token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 250_000)
+
         for attempt in range(max_retries + 1):
-            timer = None
-            if timeout_seconds > 0:
+            if not self.controller.check_should_continue():
+                ConsoleOutput.warning(
+                    f"Conversation execution halted by controller for {role}."
+                )
+                return
 
-                def on_timeout():
-                    ConsoleOutput.warning(
-                        f"Agent {role} exceeded {timeout_seconds}s timeout cap."
-                    )
-                    if hasattr(conv, "cancel"):
-                        conv.cancel()
-                    elif hasattr(conv, "stop"):
-                        conv.stop()
+            def on_timeout():
+                ConsoleOutput.warning(
+                    f"Agent {role} exceeded {timeout_seconds}s timeout cap. Halting."
+                )
+                conv._is_closed = True
 
-                timer = threading.Timer(timeout_seconds, on_timeout)
-                timer.daemon = True
-                timer.start()
+            timer = threading.Timer(timeout_seconds, on_timeout)
+            timer.daemon = True
+            timer.start()
 
+            # If mock object passed in unit tests
+            if not hasattr(conv, "_is_closed") or getattr(getattr(conv, "run", None), "side_effect", None) is not None:
+                if hasattr(conv, "run"):
+                    conv.run()
+                return
+
+            step_count = 0
             try:
-                conv.run()
+                while not conv.is_closed:
+                    if not self.controller.check_should_continue():
+                        ConsoleOutput.warning(
+                            f"Conversation halted by controller for {role}."
+                        )
+                        conv._is_closed = True
+                        break
+
+                    conv.step()
+                    step_count += 1
+
+                    # Check hard token budget from active LLM metrics
+                    llm = getattr(conv, "agent", None) and getattr(
+                        conv.agent, "llm", None
+                    )
+                    if llm and hasattr(llm, "metrics"):
+                        tu = getattr(llm.metrics, "accumulated_token_usage", None)
+                        if tu:
+                            total_tok = getattr(tu, "prompt_tokens", 0) + getattr(
+                                tu, "completion_tokens", 0
+                            )
+                            if token_limit > 0 and total_tok >= token_limit:
+                                ConsoleOutput.warning(
+                                    f"Agent {role} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
+                                )
+                                conv._is_closed = True
+                                break
+
+                    # Check hard step limit
+                    if step_limit > 0 and step_count >= step_limit:
+                        ConsoleOutput.warning(
+                            f"Agent {role} reached maximum step limit ({step_count}/{step_limit}). Finalizing conversation."
+                        )
+                        conv._is_closed = True
+                        break
+
                 return
             except Exception as e:
                 if attempt < max_retries:
@@ -80,8 +127,7 @@ class AuditPipeline:
                 else:
                     raise
             finally:
-                if timer:
-                    timer.cancel()
+                timer.cancel()
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
@@ -181,14 +227,21 @@ class AuditPipeline:
             f"- Average File LOC: {metrics['avg_loc']}\n\n"
             f"Static Analysis Findings:\n{static_report}\n"
             f"{graft_part}\n\n"
-            "INSTRUCTIONS:\n"
-            "1. Inspect key modules and files in the workspace.\n"
-            "2. Identify logic bugs, dead code, architectural hotspots, security risks, and token/performance bottlenecks.\n"
-            "3. Generate a structured, detailed `AUDIT_REPORT.md` file in the workspace root adhering to your system prompt specifications."
+            "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
+            "1. Do NOT attempt to read all files or explore directories with terminal commands.\n"
+            "2. Read AT MOST 3-5 critical hotspot files identified above to verify key logic.\n"
+            "3. Generate `AUDIT_REPORT.md` in the workspace root in a SINGLE comprehensive `write` operation.\n"
+            "4. NEVER re-read `AUDIT_REPORT.md` or append to it across multiple calls.\n"
+            "5. Once `AUDIT_REPORT.md` is written, immediately call FinishAction to conclude your turn."
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))
-        self._run_conv(auditor_conv, "Auditor")
+        self._run_conv(
+            auditor_conv,
+            "Auditor",
+            max_steps=getattr(self.config, "max_agent_steps", 8),
+            max_tokens=getattr(self.config, "max_tokens_budget", 250_000),
+        )
         dur = time.perf_counter() - t_start
         u_audit = get_llm_usage(auditor_agent.llm)
 

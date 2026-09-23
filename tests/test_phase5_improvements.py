@@ -109,3 +109,11 @@ def test_pipeline_controller_and_budget_guard():
     assert exceeded2
     assert guard.is_exhausted
     assert guard.remaining_budget == 0.0
+
+    # BudgetGuard token limit tests
+    token_guard = BudgetGuard(max_budget_usd=0.0, max_budget_tokens=1000)
+    assert not token_guard.is_exhausted
+    assert not token_guard.update_cost(0.0, tokens=500)
+    assert not token_guard.is_exhausted
+    assert token_guard.update_cost(0.0, tokens=1200)
+    assert token_guard.is_exhausted

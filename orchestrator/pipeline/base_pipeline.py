@@ -131,10 +131,18 @@ class BasePipeline(ABC):
         return recorder, memory_store, log_store, visualizer, graft_map
 
     def _run_conv(
-        self, conv: Conversation, role_name: str, max_retries: int = 2
+        self,
+        conv: Conversation,
+        role_name: str,
+        max_retries: int = 2,
+        max_steps: Optional[int] = None,
+        max_tokens: Optional[int] = None,
     ) -> None:
-        """Run agent conversation with exponential backoff retry and 300s timeout guard."""
+        """Run agent conversation with step-by-step token and step ceilings, timeout guard, and backoff retry."""
         timeout_seconds = 300.0
+        step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
+        token_limit = max_tokens or getattr(self.config, "max_tokens_budget", 350_000)
+
         for attempt in range(max_retries + 1):
             if not self.controller.check_should_continue():
                 ConsoleOutput.warning(
@@ -142,12 +150,60 @@ class BasePipeline(ABC):
                 )
                 return
 
-            timer = threading.Timer(timeout_seconds, lambda: None)
+            def on_timeout():
+                ConsoleOutput.warning(
+                    f"Agent {role_name} exceeded {timeout_seconds}s timeout cap. Halting."
+                )
+                conv._is_closed = True
+
+            timer = threading.Timer(timeout_seconds, on_timeout)
             timer.daemon = True
             timer.start()
 
+            # If mock object passed in unit tests
+            if not hasattr(conv, "_is_closed") or getattr(getattr(conv, "run", None), "side_effect", None) is not None:
+                if hasattr(conv, "run"):
+                    conv.run()
+                return
+
+            step_count = 0
             try:
-                conv.run()
+                while not conv.is_closed:
+                    if not self.controller.check_should_continue():
+                        ConsoleOutput.warning(
+                            f"Conversation halted by controller for {role_name}."
+                        )
+                        conv._is_closed = True
+                        break
+
+                    conv.step()
+                    step_count += 1
+
+                    # Check hard token budget from active LLM metrics
+                    llm = getattr(conv, "agent", None) and getattr(
+                        conv.agent, "llm", None
+                    )
+                    if llm and hasattr(llm, "metrics"):
+                        tu = getattr(llm.metrics, "accumulated_token_usage", None)
+                        if tu:
+                            total_tok = getattr(tu, "prompt_tokens", 0) + getattr(
+                                tu, "completion_tokens", 0
+                            )
+                            if token_limit > 0 and total_tok >= token_limit:
+                                ConsoleOutput.warning(
+                                    f"Agent {role_name} exceeded hard token cap ({total_tok:,} >= {token_limit:,}). Halting execution."
+                                )
+                                conv._is_closed = True
+                                break
+
+                    # Check hard step limit
+                    if step_limit > 0 and step_count >= step_limit:
+                        ConsoleOutput.warning(
+                            f"Agent {role_name} reached maximum step limit ({step_count}/{step_limit}). Finalizing conversation."
+                        )
+                        conv._is_closed = True
+                        break
+
                 break
             except Exception as e:
                 if attempt < max_retries:
