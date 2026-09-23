@@ -1,5 +1,6 @@
 """Zero-token API and model connectivity validation utility."""
 
+import os
 from typing import Any, Dict, List, Optional
 import httpx
 from rich.table import Table
@@ -167,6 +168,35 @@ class ConnectivityChecker:
                     "[green][OK] Configured[/green]"
                     if config.anthropic_api_key
                     else "[yellow]Awaiting Key[/yellow]"
+                )
+            elif model_str.startswith("gemini/") or "gemini" in model_str:
+                has_gemini = bool(
+                    config.gemini_api_key or os.environ.get("GEMINI_API_KEY")
+                )
+                provider_status = (
+                    "[green][OK] GEMINI_API_KEY Active[/green]"
+                    if has_gemini
+                    else "[red][ERR] Missing GEMINI_API_KEY[/red]"
+                )
+                model_status = (
+                    "[green][OK] Ready[/green]"
+                    if has_gemini
+                    else "[red]Unauthenticated[/red]"
+                )
+            elif model_str.startswith("groq/") or "groq" in model_str:
+                has_groq = bool(
+                    getattr(config, "groq_api_key", None)
+                    or os.environ.get("GROQ_API_KEY")
+                )
+                provider_status = (
+                    "[green][OK] GROQ_API_KEY Active[/green]"
+                    if has_groq
+                    else "[red][ERR] Missing GROQ_API_KEY[/red]"
+                )
+                model_status = (
+                    "[green][OK] Ready[/green]"
+                    if has_groq
+                    else "[red]Unauthenticated[/red]"
                 )
 
             table.add_row(

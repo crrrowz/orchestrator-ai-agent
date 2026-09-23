@@ -121,6 +121,10 @@ def test_git_ops_get_compact_diff_truncation(tmp_path: Path):
 def test_cost_estimator_calculation():
     """CostEstimator should calculate tokens and pricing for dev-test and full modes."""
     cfg = OrchestratorConfig()
+    cfg.developer.model = "openrouter/qwen/qwen3.8-27b:free"
+    cfg.tester.model = "openrouter/qwen/qwen3.8-27b:free"
+    cfg.architect.model = "openrouter/qwen/qwen3.8-27b:free"
+    cfg.reviewer.model = "openrouter/qwen/qwen3.8-27b:free"
 
     # dev-test mode
     res_dev = CostEstimator.estimate(

@@ -97,7 +97,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         except Exception:
             self._live = None
 
-    def close(self) -> None:
+    def close(self, success: bool = True) -> None:
         """Stop live rendering when agent conversation completes."""
         if self._live is not None:
             try:
@@ -107,9 +107,14 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             self._live = None
         role = self.store.current_role or "Agent"
         elapsed = round(time.time() - self.store.phase_start_time, 1)
-        self._safe_print(
-            f"[dim]✓ Finished {role} phase in {elapsed}s {self._tokens_str}[/dim]"
-        )
+        if success:
+            self._safe_print(
+                f"[dim]✓ Finished {role} phase in {elapsed}s {self._tokens_str}[/dim]"
+            )
+        else:
+            self._safe_print(
+                f"[dim yellow]✗ Interrupted {role} phase after {elapsed}s[/dim yellow]"
+            )
 
     def _safe_print(self, *args, **kwargs) -> None:
         """Safely print to console with fallback for legacy Windows terminal charmap encoding."""

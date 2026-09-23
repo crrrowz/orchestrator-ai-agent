@@ -3,8 +3,10 @@
 import argparse
 import logging
 import os
+import re
 import sys
 from pathlib import Path
+from typing import Any, Optional
 
 # Force UTF-8 encoding for standard streams on Windows to prevent UnicodeEncodeError
 if sys.platform == "win32":
@@ -174,6 +176,50 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _extract_clean_error_message(raw: str) -> str:
+    """Extract human-readable core error string from raw LiteLLM/OpenHands exception payloads."""
+    if not raw:
+        return "Unknown runtime exception occurred."
+
+    # 1. Check for JSON "message": "..." structure inside the error
+    m = re.search(r'"message":\s*"([^"]+)"', raw)
+    if m:
+        msg = m.group(1).replace("\\n", " ").strip()
+        if msg:
+            return msg
+
+    # 2. Extract inner exception from litellm/OpenHands wrappers
+    if "litellm." in raw:
+        parts = raw.split("litellm.")
+        inner = parts[-1].strip()
+        cleaned = re.sub(r"[\{\}\"]", "", inner).strip()
+        if cleaned:
+            return cleaned
+
+    # 3. Strip Conversation run failed for id=...
+    cleaned = re.sub(r"Conversation run failed for id=[a-f0-9\-]+:\s*", "", raw)
+    first_line = cleaned.splitlines()[0] if cleaned else raw
+    return first_line.strip()
+
+
+def _detect_provider_name(err_text: str, config: Optional[Any] = None) -> str:
+    """Detect upstream provider from error string or configuration."""
+    low = err_text.lower()
+    if "gemini" in low or "google" in low:
+        return "Google Gemini"
+    if "openrouter" in low:
+        return "OpenRouter"
+    if "groq" in low:
+        return "Groq"
+    if "anthropic" in low or "claude" in low:
+        return "Anthropic"
+    if "openai" in low:
+        return "OpenAI"
+    if config and getattr(config, "provider", None):
+        return str(config.provider).capitalize()
+    return "LLM Provider"
+
+
 def main() -> None:
     """CLI application entry point."""
     args = parse_args()
@@ -324,32 +370,76 @@ def main() -> None:
         ConsoleOutput.quota_error(e)
         sys.exit(1)
     except OrchestratorException as e:
-        ConsoleOutput.error(f"Execution halted: {e}")
+        ConsoleOutput.execution_error(
+            title="Orchestrator Execution Halted",
+            message=str(e),
+        )
         sys.exit(1)
     except KeyboardInterrupt:
         ConsoleOutput.warning("Execution interrupted by user.")
         sys.exit(130)
     except Exception as e:
         err_text = str(e)
+        provider = _detect_provider_name(err_text, config)
+
         if (
             "429" in err_text
             or "RateLimitError" in err_text
             or "free-models-per-day" in err_text
+            or "insufficient_quota" in err_text
         ):
             ConsoleOutput.quota_error(
                 ProviderQuotaExceededError(
-                    provider="OpenRouter"
-                    if "openrouter" in err_text.lower()
-                    else "LLM Provider",
-                    message="Daily free-tier request limit has been exhausted (1,000 requests/day).",
+                    provider=provider,
+                    message="Daily free-tier request limit has been exhausted (or rate ceiling reached).",
                     reset_info="Quota resets daily at 00:00 UTC (or upgrade to paid credits).",
-                    remedy="Provide GEMINI_API_KEY or GROQ_API_KEY in .env, or add funds to OpenRouter.",
+                    remedy="Provide GEMINI_API_KEY or GROQ_API_KEY in .env, or add funds to your account.",
                 )
             )
             sys.exit(1)
+
+        # Detect 404 Model Not Found / Deprecated
+        if (
+            "404" in err_text
+            or "NotFoundError" in err_text
+            or "no longer available" in err_text
+            or "NOT_FOUND" in err_text
+        ):
+            clean_msg = _extract_clean_error_message(err_text)
+            ConsoleOutput.provider_error(
+                provider=provider,
+                error_type="Model Not Found / Deprecated",
+                code=404,
+                message=clean_msg,
+                remedy="Update MODEL in .env (e.g. MODEL=gemini/gemini-3.6-flash or MODEL=openrouter/z-ai/glm-5.2:free).",
+            )
+            sys.exit(1)
+
+        # Detect 401/403 Authentication Error
+        if (
+            "401" in err_text
+            or "403" in err_text
+            or "AuthenticationError" in err_text
+            or "PermissionDenied" in err_text
+            or "invalid_api_key" in err_text.lower()
+        ):
+            ConsoleOutput.provider_error(
+                provider=provider,
+                error_type="Authentication Failed",
+                code=401,
+                message="The upstream API key is invalid, missing, or unauthorized.",
+                remedy=f"Verify your {provider.upper().replace(' ', '_')}_API_KEY in .env.",
+            )
+            sys.exit(1)
+
         if os.environ.get("DEBUG") == "true" or os.environ.get("VERBOSITY") == "debug":
             raise
-        ConsoleOutput.error(f"Execution failed: {e}")
+
+        ConsoleOutput.execution_error(
+            title="Pipeline Runtime Error",
+            message=_extract_clean_error_message(err_text),
+            hint="Run with --verbose or check .env configuration.",
+        )
         sys.exit(1)
 
 

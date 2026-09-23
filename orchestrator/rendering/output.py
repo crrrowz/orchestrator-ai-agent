@@ -121,3 +121,53 @@ class ConsoleOutput:
             padding=(1, 2),
         )
         console.print(panel)
+
+    @staticmethod
+    def provider_error(
+        provider: str = "LLM Provider",
+        error_type: str = "Provider Error",
+        message: str = "",
+        remedy: str = "",
+        code: Optional[int] = None,
+    ) -> None:
+        """Render a formatted, high-visibility card for any upstream LLM provider error."""
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold yellow", width=14)
+        grid.add_column(style="white")
+        grid.add_row("Provider:", f"[bold cyan]{provider}[/bold cyan]")
+        status_text = f"[bold red]{error_type}{f' ({code})' if code else ''}[/bold red]"
+        grid.add_row("Status:", status_text)
+        grid.add_row("Details:", f"[yellow]{message}[/yellow]")
+        if remedy:
+            grid.add_row("Action Needed:", f"[bold green]{remedy}[/bold green]")
+
+        panel = Panel(
+            grid,
+            title=f"[bold red]◈ Upstream Provider Error ({provider})[/bold red]",
+            border_style="red",
+            padding=(1, 2),
+        )
+        console.print(panel)
+
+    @staticmethod
+    def execution_error(
+        title: str = "Execution Error",
+        message: str = "",
+        hint: str = "",
+    ) -> None:
+        """Render a formatted, high-visibility panel for runtime errors."""
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold yellow", width=14)
+        grid.add_column(style="white")
+        grid.add_row("Status:", f"[bold red]{title}[/bold red]")
+        grid.add_row("Details:", f"[yellow]{message}[/yellow]")
+        if hint:
+            grid.add_row("Action Needed:", f"[bold green]{hint}[/bold green]")
+
+        panel = Panel(
+            grid,
+            title=f"[bold red]◈ {title}[/bold red]",
+            border_style="red",
+            padding=(1, 2),
+        )
+        console.print(panel)

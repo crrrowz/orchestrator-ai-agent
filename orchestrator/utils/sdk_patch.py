@@ -99,8 +99,66 @@ def resilient_parse_tool_call_arguments(raw_arguments: str) -> dict[str, Any]:
     return {}
 
 
+def patch_openhands_telemetry() -> None:
+    """Patch OpenHands telemetry and LiteLLM token details to avoid AttributeError on pruned token fields."""
+    try:
+        from openhands.sdk.llm.utils.telemetry import Telemetry
+        from litellm.types.utils import Usage
+
+        orig_cache_buckets = Telemetry._cache_buckets
+
+        @staticmethod
+        def safe_cache_buckets(usage: Any) -> tuple[int, int]:
+            if isinstance(usage, Usage):
+                details = getattr(usage, "prompt_tokens_details", None)
+                if details is None:
+                    return 0, 0
+                cache_write = (
+                    getattr(details, "cache_creation_tokens", 0)
+                    or getattr(details, "cache_write_tokens", 0)
+                    or 0
+                )
+                cached = getattr(details, "cached_tokens", 0) or 0
+                return int(cached or 0), int(cache_write or 0)
+            return orig_cache_buckets(usage)
+
+        Telemetry._cache_buckets = safe_cache_buckets
+    except Exception as e:
+        logger.debug(f"Could not patch Telemetry._cache_buckets: {e}")
+
+    try:
+        from litellm.types.utils import PromptTokensDetailsWrapper
+
+        _orig_getattr = getattr(PromptTokensDetailsWrapper, "__getattr__", None)
+
+        def _safe_wrapper_getattr(self: Any, name: str) -> Any:
+            if name in (
+                "cache_creation_tokens",
+                "cache_write_tokens",
+                "tool_use_tokens",
+                "query_count",
+                "web_search_requests",
+                "character_count",
+                "image_count",
+                "video_length_seconds",
+                "audio_length_seconds",
+                "google_maps_grounding_requests",
+                "cache_creation_token_details",
+            ):
+                return None
+            if _orig_getattr:
+                return _orig_getattr(self, name)
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+        PromptTokensDetailsWrapper.__getattr__ = _safe_wrapper_getattr
+    except Exception as e:
+        logger.debug(f"Could not patch PromptTokensDetailsWrapper: {e}")
+
+
 def apply_sdk_patches() -> None:
-    """Patch openhands.sdk.agent to use resilient tool argument parsing."""
+    """Patch openhands.sdk and litellm for runtime stability and resilient JSON parsing."""
     try:
         import openhands.sdk.agent.utils as agent_utils
         import openhands.sdk.agent.agent as agent_module
@@ -110,3 +168,5 @@ def apply_sdk_patches() -> None:
             agent_module.parse_tool_call_arguments = resilient_parse_tool_call_arguments
     except Exception as e:
         logger.debug(f"Could not patch openhands SDK: {e}")
+
+    patch_openhands_telemetry()

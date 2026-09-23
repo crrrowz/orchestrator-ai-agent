@@ -153,6 +153,7 @@ class BasePipeline(ABC):
         visualizer = OrchestratorLiveVisualizer(
             log_store=log_store, verbosity=self.config.verbosity
         )
+        self.visualizer = visualizer
 
         # 3. Graft Architecture Context
         graft_map = GraftContextProvider.get_compact_map(self.workspace_path)
@@ -313,14 +314,24 @@ class BasePipeline(ABC):
 
             try:
                 conv.run()
+                vis = getattr(conv, "visualizer", None) or getattr(
+                    self, "visualizer", None
+                )
+                if vis and hasattr(vis, "close"):
+                    try:
+                        vis.close(success=True)
+                    except Exception:
+                        pass
                 return
             except Exception as e:
                 err_text = str(e)
-                # Safely close attached visualizer immediately to release console TTY buffer
-                vis = getattr(conv, "visualizer", None)
+                # Safely close attached visualizer immediately to release console TTY buffer before printing anything
+                vis = getattr(conv, "visualizer", None) or getattr(
+                    self, "visualizer", None
+                )
                 if vis and hasattr(vis, "close"):
                     try:
-                        vis.close()
+                        vis.close(success=False)
                     except Exception:
                         pass
 
@@ -352,6 +363,26 @@ class BasePipeline(ABC):
                         reset_info="Quota resets daily at 00:00 UTC (or upgrade to paid credits).",
                         remedy="Provide GEMINI_API_KEY or GROQ_API_KEY in .env, or add funds to OpenRouter.",
                     ) from e
+
+                # Fast-fail on non-retryable upstream errors (404 Not Found, 401/403 Auth, 400 Bad Request)
+                is_not_found = (
+                    "404" in err_text
+                    or "NotFoundError" in err_text
+                    or "no longer available" in err_text
+                    or "NOT_FOUND" in err_text
+                )
+                is_auth_error = (
+                    "401" in err_text
+                    or "403" in err_text
+                    or "AuthenticationError" in err_text
+                    or "PermissionDenied" in err_text
+                    or "invalid_api_key" in err_text.lower()
+                )
+                is_bad_request = "400" in err_text or "BadRequestError" in err_text
+
+                if is_not_found or is_auth_error or is_bad_request:
+                    # Permanent upstream error - retrying will fail repeatedly and clutter terminal output
+                    raise
 
                 # Truncate giant nested json/traceback strings for clean console warnings
                 concise_msg = err_text.splitlines()[0] if err_text else str(e)
