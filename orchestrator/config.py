@@ -106,9 +106,19 @@ class SkillManager:
         )
 
 
+def normalize_model_slug(model: str) -> str:
+    """Normalize model slug to include :free suffix for free-tier models."""
+    resolved = model or "openrouter/qwen/qwen3.8-27b:free"
+    if resolved == "qwen/qwen3.8-27b":
+        resolved = "qwen/qwen3.8-27b:free"
+    elif resolved == "openrouter/qwen/qwen3.8-27b":
+        resolved = "openrouter/qwen/qwen3.8-27b:free"
+    return resolved
+
+
 def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig) -> LLM:
-    """Factory to create an OpenHands LLM instance with appropriate credentials."""
-    model = role_config.model
+    """Factory to create an OpenHands LLM instance with appropriate credentials and failover."""
+    model = normalize_model_slug(role_config.model)
     api_key_val = role_config.api_key
 
     # Resolve API Key by provider prefix if not explicitly set
@@ -138,5 +148,14 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
     if model.startswith("openrouter/"):
         llm_kwargs["openrouter_site_url"] = "https://github.com/Antigravity-Agent-API"
         llm_kwargs["openrouter_app_name"] = "Antigravity Multi-Agent Orchestrator"
+
+        # OpenRouter Model-Layer Failover Array
+        model_slug = model[len("openrouter/"):]
+        fallback_models = (
+            [model_slug, "openrouter/free"]
+            if ":free" in model_slug and model_slug != "openrouter/free"
+            else [model_slug]
+        )
+        llm_kwargs["litellm_extra_body"] = {"models": fallback_models}
 
     return LLM(**llm_kwargs)
