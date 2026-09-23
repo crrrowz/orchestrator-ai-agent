@@ -360,7 +360,9 @@ def main() -> None:
         default_task = "Autonomous codebase defect and optimization fix loop." if args.mode == "audit-fix" else "Comprehensive codebase architecture, security, and bug audit."
         task = resolve_task_input(args.task) if args.task else default_task
         mode = args.mode
-        workspace = resolve_workspace_dir(args.workspace, config.workspace_path)
+        # Default audit and audit-fix to the current codebase (project root) when --workspace is not specified
+        default_ws = Path.cwd().resolve() if not args.workspace else config.workspace_path
+        workspace = resolve_workspace_dir(args.workspace, default_ws)
     elif not args.task:
         task, mode, workspace = interactive_wizard(config, skill_manager, default_mode=args.mode)
     else:
