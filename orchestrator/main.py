@@ -63,21 +63,17 @@ def handle_list_skills(skill_manager: SkillManager) -> None:
 
 
 def handle_check_config(config: OrchestratorConfig) -> None:
-    ConsoleOutput.banner("Orchestrator Configuration & Model Matrix")
-    print(f"Workspace: {config.workspace_path}")
-    print(f"Max Iterations: {config.max_iterations}")
-    print(f"Auto-commit: {config.auto_commit}")
-    print("-" * 50)
-    print(f"Developer Model:   {config.developer.model} (Skills: {', '.join(config.developer.skills)})")
-    print(f"Tester Model:      {config.tester.model} (Skills: {', '.join(config.tester.skills)})")
-    print(f"Reviewer Model:    {config.reviewer.model} (Skills: {', '.join(config.reviewer.skills)})")
-    print(f"Architect Model:   {config.architect.model} (Skills: {', '.join(config.architect.skills)})")
-    print("-" * 50)
-    print("API Key Status:")
-    print(f"  Anthropic:  {'Set' if config.anthropic_api_key else 'Missing'}")
-    print(f"  OpenAI:     {'Set' if config.openai_api_key else 'Missing'}")
-    print(f"  Gemini:     {'Set' if config.gemini_api_key else 'Missing'}")
-    print(f"  OpenRouter: {'Set' if config.openrouter_api_key else 'Missing'}")
+    from orchestrator.utils import ConnectivityChecker
+    ConnectivityChecker.run_zero_token_audit(config)
+    print("\n" + "=" * 50)
+    print("Environment & Cost Safety Controls:")
+    print(f"  Workspace:             {config.workspace_path}")
+    print(f"  Max Iterations Cap:    {config.max_iterations}")
+    print(f"  Max Output Tokens:     {config.max_tokens_per_call}")
+    print(f"  Max Budget (USD):      ${config.max_budget_usd:.2f}")
+    print(f"  Circuit Breaker:       Trigger on {config.circuit_breaker_threshold} identical consecutive failures")
+    print(f"  Auto Git Commit:       {config.auto_commit}")
+    print("=" * 50)
 
 
 def interactive_wizard(config: OrchestratorConfig, skill_manager: SkillManager) -> tuple[str, str, Path]:
