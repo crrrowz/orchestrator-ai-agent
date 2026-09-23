@@ -101,7 +101,7 @@ class SkillManager:
         return AgentContext(
             skills=role_skills,
             load_project_skills=True,
-            load_user_skills=True,
+            load_user_skills=False,
             load_memory=True
         )
 
@@ -130,6 +130,9 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
         "temperature": role_config.temperature,
         "max_output_tokens": config.max_tokens_per_call,
         "usage_id": f"agent-{role_config.role}",
+        "num_retries": 5,
+        "retry_min_wait": 3,
+        "retry_max_wait": 30,
     }
 
     if model.startswith("openrouter/"):
