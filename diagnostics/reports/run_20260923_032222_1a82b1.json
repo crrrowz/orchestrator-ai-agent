@@ -1,0 +1,19 @@
+{
+  "report_id": "run_20260923_032222_1a82b1",
+  "task_description": "Test stopped task",
+  "pipeline_mode": "dev-test",
+  "start_time": "2026-09-23T03:22:22.095400Z",
+  "end_time": "2026-09-23T03:22:22.112265Z",
+  "total_duration_seconds": 0.02,
+  "total_iterations": 1,
+  "completed_successfully": false,
+  "circuit_breaker_triggered": false,
+  "budget_exhausted": false,
+  "total_tokens": 0,
+  "total_cost_usd": 0.0,
+  "metrics": [],
+  "incidents": [],
+  "recommendations": [
+    "Task did not pass all tests within iteration budget. Consider increasing max_iterations or decomposing task."
+  ]
+}

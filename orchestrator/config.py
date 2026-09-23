@@ -14,6 +14,10 @@ from openhands.sdk.skills import Skill, load_project_skills
 # Load environment variables from .env if present
 load_dotenv()
 
+# Package root and persistent diagnostics directory
+ORCHESTRATOR_ROOT: Path = Path(__file__).resolve().parent.parent
+DEFAULT_DIAGNOSTICS_DIR: Path = ORCHESTRATOR_ROOT / "diagnostics"
+
 
 class AgentRoleConfig(BaseModel):
     """Configuration for a specific agent role."""
@@ -73,7 +77,7 @@ class SkillManager:
     """Discovers, validates, and provisions skills to agents."""
 
     def __init__(self, project_root: Optional[Path] = None):
-        self.project_root = (project_root or Path.cwd()).resolve()
+        self.project_root = (project_root or ORCHESTRATOR_ROOT).resolve()
         self._skills_cache: Dict[str, Skill] = {}
         self.refresh()
 

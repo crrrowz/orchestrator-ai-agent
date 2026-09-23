@@ -17,6 +17,7 @@ from rich.live import Live
 
 from openhands.sdk.conversation.visualizer import ConversationVisualizerBase
 from openhands.sdk.event import Event
+from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
 
 
 @dataclass
@@ -96,7 +97,7 @@ class SessionLogStore:
         return step
 
     def save_to_file(self, target_dir: Optional[Path] = None) -> Path:
-        out_dir = target_dir or Path("diagnostics/logs")
+        out_dir = target_dir or (DEFAULT_DIAGNOSTICS_DIR / "logs")
         out_dir.mkdir(parents=True, exist_ok=True)
         file_path = out_dir / "latest_session.json"
         data = {

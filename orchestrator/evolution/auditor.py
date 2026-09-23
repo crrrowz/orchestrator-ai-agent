@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
 from orchestrator.telemetry.schemas import DiagnosticReport
 from orchestrator.utils import ConsoleOutput
 
@@ -14,7 +15,7 @@ class SystemAuditor:
     """Offline audit engine that reads execution telemetry and generates self-improvement recommendations."""
 
     def __init__(self, reports_dir: Optional[Path] = None):
-        self.reports_dir = (reports_dir or Path("diagnostics/reports")).resolve()
+        self.reports_dir = (reports_dir or DEFAULT_DIAGNOSTICS_DIR / "reports").resolve()
 
     def load_reports(self) -> list[DiagnosticReport]:
         """Load and validate all JSON diagnostic reports from disk."""

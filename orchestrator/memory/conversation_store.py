@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
+from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
+
 
 class MemoryEntry(BaseModel):
     """Schema for persisted task execution memory."""
@@ -24,7 +26,7 @@ class ConversationStore:
     """Manages persistent cross-run task memory stored in diagnostics/memory/."""
 
     def __init__(self, memory_dir: Optional[Path] = None):
-        self.memory_dir = (memory_dir or Path("diagnostics/memory")).resolve()
+        self.memory_dir = (memory_dir or DEFAULT_DIAGNOSTICS_DIR / "memory").resolve()
         self.memory_dir.mkdir(parents=True, exist_ok=True)
 
     def save_run_memory(

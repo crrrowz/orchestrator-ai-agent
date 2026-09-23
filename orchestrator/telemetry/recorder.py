@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
+from orchestrator.control.budget_guard import BudgetGuard
 from orchestrator.telemetry.schemas import DiagnosticReport, StepIncident, StepMetric
 
 
@@ -22,6 +24,21 @@ def get_llm_usage(llm) -> dict:
     prompt = getattr(tu, "prompt_tokens", 0) if tu else 0
     completion = getattr(tu, "completion_tokens", 0) if tu else 0
     cost = getattr(metrics, "accumulated_cost", 0.0)
+    try:
+        cost = float(cost)
+    except (TypeError, ValueError):
+        cost = 0.0
+
+    try:
+        prompt = int(prompt)
+    except (TypeError, ValueError):
+        prompt = 0
+
+    try:
+        completion = int(completion)
+    except (TypeError, ValueError):
+        completion = 0
+
     return {
         "prompt_tokens": prompt,
         "completion_tokens": completion,
@@ -45,11 +62,12 @@ class TelemetryRecorder:
         self.pipeline_mode = pipeline_mode
         now_utc = datetime.now(timezone.utc)
         self.report_id = f"run_{now_utc.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
-        self.reports_dir = (reports_dir or Path("diagnostics/reports")).resolve()
+        self.reports_dir = (reports_dir or DEFAULT_DIAGNOSTICS_DIR / "reports").resolve()
         self.reports_dir.mkdir(parents=True, exist_ok=True)
         
         self.circuit_breaker_threshold = circuit_breaker_threshold
         self.max_budget_usd = max_budget_usd
+        self.budget_guard = BudgetGuard(max_budget_usd=max_budget_usd)
         self.start_time = now_utc
         self._start_perf = time.perf_counter()
         
@@ -107,9 +125,14 @@ class TelemetryRecorder:
         )
         self.incidents.append(incident)
 
+    @property
+    def remaining_budget(self) -> float:
+        """Calculate remaining dollar budget before ceiling."""
+        return self.budget_guard.remaining_budget
+
     def check_budget(self, total_cost: float) -> bool:
         """Check if accumulated spend has exceeded max_budget_usd."""
-        if self.max_budget_usd > 0 and total_cost >= self.max_budget_usd:
+        if self.budget_guard.update_cost(total_cost):
             self.budget_exhausted = True
             self.record_incident(
                 step_name="BudgetGuard",

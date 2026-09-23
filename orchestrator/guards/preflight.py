@@ -14,7 +14,11 @@ class PreFlightGuard:
         """Compile all Python files in the workspace. Returns (is_valid, error_message)."""
         py_files: List[Path] = [
             p for p in workspace.rglob("*.py")
-            if not any(part.startswith(".") or part in ("__pycache__", ".venv", "build", "dist") for part in p.parts)
+            if not any(
+                part.startswith(".")
+                or part in ("__pycache__", ".venv", "venv", "build", "dist", "site-packages", "node_modules")
+                for part in p.parts
+            )
         ]
 
         if not py_files:

@@ -167,13 +167,14 @@ def handle_self_audit() -> None:
 
 
 def handle_view_logs() -> None:
+    from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
     from orchestrator.utils import SessionLogStore, InteractiveLogExplorer
     from orchestrator.utils.visualizer import LogStep
     import json
 
-    log_file = Path("diagnostics/logs/latest_session.json")
+    log_file = DEFAULT_DIAGNOSTICS_DIR / "logs" / "latest_session.json"
     if not log_file.exists():
-        ConsoleOutput.warning("No session log found at diagnostics/logs/latest_session.json. Run a development task first.")
+        ConsoleOutput.warning(f"No session log found at {log_file}. Run a development task first.")
         return
 
     try:
@@ -198,7 +199,8 @@ def main() -> None:
     elif args.quiet:
         config.verbosity = "quiet"
 
-    skill_manager = SkillManager(Path.cwd())
+    from orchestrator.config import ORCHESTRATOR_ROOT
+    skill_manager = SkillManager(ORCHESTRATOR_ROOT)
 
     if args.list_skills:
         handle_list_skills(skill_manager)
@@ -217,6 +219,7 @@ def main() -> None:
         sys.exit(0)
 
     # Check for --resume or run wizard / command line arguments
+    cp = None
     if args.resume:
         from orchestrator.pipeline.checkpoint import PipelineCheckpointManager
         target_ws = args.workspace or config.workspace_path
@@ -246,6 +249,7 @@ def main() -> None:
         task=task,
         mode=mode,
         workspace_override=workspace,
+        checkpoint=cp,
     )
 
 

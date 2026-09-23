@@ -13,7 +13,11 @@ class BudgetGuard:
 
     def update_cost(self, cost_usd: float) -> bool:
         """Update current cost. Returns True if budget is exceeded."""
-        self._current_cost_usd = cost_usd
+        try:
+            self._current_cost_usd = float(cost_usd)
+        except (TypeError, ValueError):
+            self._current_cost_usd = 0.0
+
         if self.max_budget_usd > 0 and self._current_cost_usd >= self.max_budget_usd:
             self.is_exhausted = True
             return True

@@ -22,9 +22,10 @@ from orchestrator.utils import (
     PytestOutputParser,
     SessionLogStore,
 )
-from orchestrator.control import HumanInterventionChannel
+from orchestrator.control import HumanInterventionChannel, PipelineController
 from orchestrator.memory import ConversationStore
-from orchestrator.pipeline.checkpoint import PipelineCheckpointManager
+from orchestrator.pipeline.checkpoint import PipelineCheckpoint, PipelineCheckpointManager
+from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
 
 
 class DevTestLoop:
@@ -36,6 +37,8 @@ class DevTestLoop:
         skill_manager: SkillManager,
         workspace_path: Optional[Path] = None,
         human_channel: Optional[HumanInterventionChannel] = None,
+        controller: Optional[PipelineController] = None,
+        checkpoint: Optional[PipelineCheckpoint] = None,
     ):
         self.config = config
         self.skill_manager = skill_manager
@@ -44,6 +47,26 @@ class DevTestLoop:
         self.human_channel = human_channel or HumanInterventionChannel(
             enabled=config.interactive or bool(config.approval_gates)
         )
+        self.controller = controller or PipelineController()
+        self.checkpoint = checkpoint
+        self.state_machine = PipelineStateMachine(initial_phase=PipelinePhase.INIT)
+
+    def _run_conv(self, conv: Conversation, role: str, max_retries: int = 2) -> None:
+        """Execute conversation with retry on transient API/model failures."""
+        for attempt in range(max_retries + 1):
+            try:
+                conv.run()
+                return
+            except Exception as e:
+                if attempt < max_retries:
+                    delay = 2 ** attempt
+                    ConsoleOutput.warning(
+                        f"Agent {role} execution failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                        f"Retrying in {delay}s..."
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
 
     def run(self, task_description: str) -> dict:
         """Execute the Dev-Test pipeline with circuit breaker protection."""
@@ -76,39 +99,51 @@ class DevTestLoop:
             return get_llm_usage(developer_agent.llm)["estimated_cost_usd"] + get_llm_usage(tester_agent.llm)["estimated_cost_usd"]
 
         try:
+            if not self.controller.check_should_continue():
+                ConsoleOutput.warning("Execution stopped by controller before developer phase.")
+                diag_report = recorder.finalize(completed_successfully=False)
+                return {"status": "STOPPED", "report_id": diag_report.report_id}
+
+            self.state_machine.transition_to(PipelinePhase.DEVELOP)
+
             # Step 1: Initial Implementation by Developer
-            t0 = time.perf_counter()
-            log_store.set_agent_context("Developer", "Initial Implementation", model=developer_agent.llm.model, llm=developer_agent.llm)
-            ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", details=f"Task: {task_description}", model=developer_agent.llm.model)
-            # Graft zero-token codebase context injection
-            graft_map = GraftContextProvider.get_compact_map(self.workspace_path)
-            graft_part = f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
-
-            # Memory cross-run intelligence injection
-            memory_store = ConversationStore()
-            memory_ctx = memory_store.format_memory_context(task_description)
-            memory_part = f"\n\n{memory_ctx}" if memory_ctx else ""
-
             dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
-            dev_prompt = (
-                f"Implement the following software task:\n\n{task_description}\n\n"
-                "Ensure full implementation, type safety, and adhere to clean-python-architecture."
-                f"{graft_part}"
-                f"{memory_part}"
-            )
-            dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
-            dev_conv.run()
-            duration_dev = time.perf_counter() - t0
-            curr_diff = self.git.get_diff() or self.git.get_status()
-            u_dev = get_llm_usage(developer_agent.llm)
-            recorder.record_step(
-                "developer", "initial_implementation", 1, duration_dev, True, curr_diff,
-                prompt_tokens=u_dev["prompt_tokens"],
-                completion_tokens=u_dev["completion_tokens"],
-                total_tokens=u_dev["total_tokens"],
-                estimated_cost_usd=u_dev["estimated_cost_usd"],
-            )
-            ConsoleOutput.success(f"Developer completed implementation phase (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f}).")
+
+            if self.checkpoint and "developer" in self.checkpoint.completed_phases:
+                ConsoleOutput.success("Developer phase already completed in checkpoint. Skipping initial implementation.")
+                log_store.add_step("Skipped developer initial implementation (loaded from checkpoint).")
+            else:
+                t0 = time.perf_counter()
+                log_store.set_agent_context("Developer", "Initial Implementation", model=developer_agent.llm.model, llm=developer_agent.llm)
+                ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", details=f"Task: {task_description}", model=developer_agent.llm.model)
+                # Graft zero-token codebase context injection
+                graft_map = GraftContextProvider.get_compact_map(self.workspace_path)
+                graft_part = f"\n\n[Codebase Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
+
+                # Memory cross-run intelligence injection
+                memory_store = ConversationStore()
+                memory_ctx = memory_store.format_memory_context(task_description)
+                memory_part = f"\n\n{memory_ctx}" if memory_ctx else ""
+
+                dev_prompt = (
+                    f"Implement the following software task:\n\n{task_description}\n\n"
+                    "Ensure full implementation, type safety, and adhere to clean-python-architecture."
+                    f"{graft_part}"
+                    f"{memory_part}"
+                )
+                dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
+                self._run_conv(dev_conv, "Developer")
+                duration_dev = time.perf_counter() - t0
+                curr_diff = self.git.get_diff() or self.git.get_status()
+                u_dev = get_llm_usage(developer_agent.llm)
+                recorder.record_step(
+                    "developer", "initial_implementation", 1, duration_dev, True, curr_diff,
+                    prompt_tokens=u_dev["prompt_tokens"],
+                    completion_tokens=u_dev["completion_tokens"],
+                    total_tokens=u_dev["total_tokens"],
+                    estimated_cost_usd=u_dev["estimated_cost_usd"],
+                )
+                ConsoleOutput.success(f"Developer completed implementation phase (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f}).")
 
             if recorder.check_budget(_get_total_cost()):
                 ConsoleOutput.error("Budget ceiling reached after initial implementation. Halting.")
@@ -143,7 +178,14 @@ class DevTestLoop:
             tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
 
             while iteration <= self.config.max_iterations:
+                if not self.controller.check_should_continue():
+                    ConsoleOutput.warning(f"Execution stopped by controller before iteration {iteration}.")
+                    break
+
                 # Step 2a: Zero-Token Pre-flight Syntax Check (<50ms)
+                if self.state_machine.can_transition(PipelinePhase.PREFLIGHT):
+                    self.state_machine.transition_to(PipelinePhase.PREFLIGHT)
+
                 syntax_ok, syntax_err = PreFlightGuard.check_syntax(self.workspace_path)
                 if not syntax_ok:
                     ConsoleOutput.warning(f"Pre-flight syntax check failed in iteration {iteration}! Prompting Developer immediately without wasting test tokens.")
@@ -154,7 +196,7 @@ class DevTestLoop:
                         f"Pre-flight syntax validation detected syntax errors:\n\n{syntax_err}\n\n"
                         "Please correct syntax immediately so tests can run."
                     )
-                    dev_conv.run()
+                    self._run_conv(dev_conv, "Developer")
                     dur_syntax = time.perf_counter() - t_syntax_fix
                     u_dev_syntax = get_llm_usage(developer_agent.llm)
                     recorder.record_step(
@@ -165,6 +207,9 @@ class DevTestLoop:
                         estimated_cost_usd=u_dev_syntax["estimated_cost_usd"],
                     )
 
+                if self.state_machine.can_transition(PipelinePhase.TEST):
+                    self.state_machine.transition_to(PipelinePhase.TEST)
+
                 t_test = time.perf_counter()
                 if iteration == 1:
                     # Iteration 1: Tester creates test suite
@@ -173,18 +218,16 @@ class DevTestLoop:
                         "Write comprehensive pytest tests in tests/ directory and run pytest. "
                         "Ensure edge cases and boundary conditions are covered as per pytest-rigorous-testing."
                     )
-                    tester_conv.run()
+                    self._run_conv(tester_conv, "Tester")
                 else:
-                    # Iteration 2+: Reuse tester conversation to verify fixes
-                    tester_conv.send_message(
-                        f"Iteration {iteration}: Developer updated the code to address previous failures. "
-                        "Run pytest -v to re-verify the test suite. If needed, update tests."
-                    )
-                    tester_conv.run()
+                    # Iteration 2+: Zero-Token Optimization:
+                    # Skip invoking Tester LLM (saves 5k-15k tokens). Run pytest directly via subprocess below.
+                    ConsoleOutput.info(f"Iteration {iteration}: Directly running test suite to verify fixes (0 token overhead).")
 
                 # Run pytest directly in workspace
+                pytest_cmd = "pytest tests/ -v" if (self.workspace_path / "tests").exists() else "pytest -v"
                 test_run = execute_terminal_action(
-                    WorkspaceTerminalAction(command="pytest -v", timeout_seconds=60),
+                    WorkspaceTerminalAction(command=pytest_cmd, timeout_seconds=60),
                     base_dir=self.workspace_path,
                 )
                 dur_test = time.perf_counter() - t_test
@@ -232,6 +275,9 @@ class DevTestLoop:
                     ConsoleOutput.warning(f"Tests failed in iteration {iteration}. Initiating Developer fix (reusing conversation context).")
 
                     # Step 3: Developer receives test output and fixes (REUSING dev_conv to preserve context)
+                    if self.state_machine.can_transition(PipelinePhase.FIX):
+                        self.state_machine.transition_to(PipelinePhase.FIX)
+
                     t_fix = time.perf_counter()
                     log_store.set_agent_context("Developer", f"Fix Iteration {iteration}", model=developer_agent.llm.model, llm=developer_agent.llm)
                     ConsoleOutput.agent_step("Developer", f"Fixing failures (Iteration {iteration})...", model=developer_agent.llm.model)
@@ -242,7 +288,7 @@ class DevTestLoop:
                         "Please diagnose the failure using the systematic-debugging skill and update the code."
                     )
                     dev_conv.send_message(self.human_channel.inject_into_prompt(failure_summary))
-                    dev_conv.run()
+                    self._run_conv(dev_conv, "Developer")
                     dur_fix = time.perf_counter() - t_fix
                     new_diff = self.git.get_diff() or self.git.get_status()
                     u_dev_fix = get_llm_usage(developer_agent.llm)
@@ -268,6 +314,9 @@ class DevTestLoop:
             # Step 4: Commit on success
             commit_hash = ""
             if tests_passed and self.config.auto_commit:
+                if self.state_machine.can_transition(PipelinePhase.COMMIT):
+                    self.state_machine.transition_to(PipelinePhase.COMMIT)
+
                 can_commit = True
                 if "before_commit" in self.config.approval_gates:
                     gate_decision = self.human_channel.prompt_gate("before_commit", context_preview="All tests passed. Confirm Git commit.")
@@ -281,6 +330,13 @@ class DevTestLoop:
                     if commit_res:
                         commit_hash = commit_res
                         ConsoleOutput.success(f"Created Git commit: {commit_hash[:8]}")
+
+            if tests_passed:
+                if self.state_machine.can_transition(PipelinePhase.COMPLETED):
+                    self.state_machine.transition_to(PipelinePhase.COMPLETED)
+            else:
+                if self.state_machine.can_transition(PipelinePhase.FAILED):
+                    self.state_machine.transition_to(PipelinePhase.FAILED)
 
             status_str = "SUCCESS" if tests_passed else ("CIRCUIT_BREAKER_ABORT" if recorder.circuit_breaker_triggered else "FAILED")
             ConsoleOutput.summary_table(iteration, status_str, commit_hash)
@@ -311,6 +367,9 @@ class DevTestLoop:
                 "workspace": str(self.workspace_path)
             }
         except KeyboardInterrupt:
+            self.controller.request_abort()
+            if self.state_machine.can_transition(PipelinePhase.ABORTED):
+                self.state_machine.transition_to(PipelinePhase.ABORTED)
             ConsoleOutput.warning("Pipeline execution interrupted by user.")
             log_store.add_step("Session interrupted by user (KeyboardInterrupt).", is_error=True)
             recorder.record_incident("Pipeline", "user_interruption", "Session interrupted by user (KeyboardInterrupt).")
@@ -318,6 +377,8 @@ class DevTestLoop:
             ConsoleOutput.warning(f"Partial telemetry saved: {diag_report.report_id}")
             raise
         except Exception as e:
+            if self.state_machine.can_transition(PipelinePhase.FAILED):
+                self.state_machine.transition_to(PipelinePhase.FAILED)
             ConsoleOutput.error(f"Pipeline crashed: {e}")
             recorder.record_incident("Pipeline", "unhandled_exception", str(e))
             recorder.finalize(completed_successfully=False)
