@@ -1,5 +1,6 @@
 """Generic fallback project adapter for unmanaged or polyglot environments."""
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -47,11 +48,10 @@ class GenericAdapter(ProjectAdapter):
     def collect_codebase_metrics(self, workspace: Path) -> Dict[str, Any]:
         ignored = {".git", ".venv", "node_modules", "dist", "build"}
         files: List[Path] = []
-        for p in workspace.rglob("*"):
-            if p.is_file() and not any(
-                part in ignored or part.startswith(".") for part in p.parts
-            ):
-                files.append(p)
+        for root, dirs, files_in_dir in os.walk(workspace):
+            dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+            for f in files_in_dir:
+                files.append(Path(root) / f)
 
         total_lines = 0
         file_metrics = []

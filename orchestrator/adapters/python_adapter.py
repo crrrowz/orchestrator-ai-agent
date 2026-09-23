@@ -1,5 +1,6 @@
 """Python ecosystem project adapter."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -152,11 +153,11 @@ class PythonAdapter(ProjectAdapter):
             "node_modules",
         }
         py_files: List[Path] = []
-        for p in workspace.rglob("*.py"):
-            if not any(
-                part in ignored_dirs or part.startswith(".") for part in p.parts
-            ):
-                py_files.append(p)
+        for root, dirs, files in os.walk(workspace):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+            for f in files:
+                if f.endswith(".py"):
+                    py_files.append(Path(root) / f)
 
         total_lines = 0
         file_metrics = []

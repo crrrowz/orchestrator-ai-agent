@@ -1,6 +1,7 @@
 """Node.js and TypeScript ecosystem project adapter."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -264,11 +265,11 @@ class NodeAdapter(ProjectAdapter):
         }
         source_exts = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
         src_files: List[Path] = []
-        for p in workspace.rglob("*"):
-            if p.is_file() and p.suffix in source_exts:
-                if not any(
-                    part in ignored_dirs or part.startswith(".") for part in p.parts
-                ):
+        for root, dirs, files in os.walk(workspace):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+            for f in files:
+                p = Path(root) / f
+                if p.suffix in source_exts:
                     src_files.append(p)
 
         total_lines = 0

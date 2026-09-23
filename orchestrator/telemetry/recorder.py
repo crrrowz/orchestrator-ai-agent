@@ -95,12 +95,17 @@ class TelemetryRecorder:
         self.budget_exhausted: bool = False
 
     def reset(self) -> None:
-        """Reset circuit breaker state for a fresh pipeline run.
+        """Reset circuit breaker, metrics, incidents, budget guard, and timing for a fresh pipeline run.
 
-        This clears all accumulated failure tracking so that a reused
-        recorder starts with a clean slate and cannot be falsely tripped
-        by stale state from a prior invocation.
+        This clears all accumulated state so that a reused recorder starts with
+        a clean slate and zero state leaks across runs.
         """
+        self.start_time = datetime.now(timezone.utc)
+        self._start_perf = time.perf_counter()
+        self.metrics.clear()
+        self.incidents.clear()
+        self.recommendations.clear()
+        self.budget_guard = BudgetGuard(max_budget_usd=self.max_budget_usd)
         self._last_diff_hash = None
         self._last_error_hash = None
         self._last_error_text = None

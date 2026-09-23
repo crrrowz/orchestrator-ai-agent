@@ -1,5 +1,4 @@
-"""Zero-Token Pre-Flight Syntax and Compilation Guard."""
-
+import os
 import py_compile
 import subprocess
 from pathlib import Path
@@ -12,24 +11,24 @@ class PreFlightGuard:
     @staticmethod
     def check_syntax(workspace: Path) -> Tuple[bool, str]:
         """Compile all Python files in the workspace. Returns (is_valid, error_message)."""
-        py_files: List[Path] = [
-            p
-            for p in workspace.rglob("*.py")
-            if not any(
-                part.startswith(".")
-                or part
-                in (
-                    "__pycache__",
-                    ".venv",
-                    "venv",
-                    "build",
-                    "dist",
-                    "site-packages",
-                    "node_modules",
-                )
-                for part in p.parts
-            )
-        ]
+        ignored = {
+            "__pycache__",
+            ".venv",
+            "venv",
+            "build",
+            "dist",
+            "site-packages",
+            "node_modules",
+            ".git",
+            ".pytest_cache",
+            ".ruff_cache",
+        }
+        py_files: List[Path] = []
+        for root, dirs, files in os.walk(workspace):
+            dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+            for f in files:
+                if f.endswith(".py"):
+                    py_files.append(Path(root) / f)
 
         if not py_files:
             return True, ""

@@ -178,7 +178,7 @@ class DevTestLoop(BasePipeline):
 
             # Approval Gate: after_developer
             if "after_developer" in self.config.approval_gates:
-                diff_preview = self.git.get_diff() or self.git.get_status()
+                diff_preview = curr_diff or self.git.get_diff() or self.git.get_status()
                 gate_decision = self.human_channel.prompt_gate(
                     "after_developer", context_preview=diff_preview[:1500]
                 )

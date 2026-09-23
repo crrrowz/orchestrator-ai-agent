@@ -1,5 +1,7 @@
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -73,6 +75,27 @@ def _matches_path_scope(rel_posix: str, scope: str) -> bool:
     return False
 
 
+def is_sensitive_file(path: Path) -> bool:
+    """Detect whether a path references sensitive credentials, tokens, or secret configs."""
+    name = path.name.lower()
+    if name == ".env" or name.startswith(".env.") or name.startswith(".env"):
+        return True
+    sensitive_substrings = (
+        "id_rsa",
+        "id_ed25519",
+        "id_dsa",
+        "id_ecdsa",
+        "credentials.json",
+        ".secret",
+        ".token",
+    )
+    if any(s in name for s in sensitive_substrings):
+        return True
+    if path.suffix.lower() in (".pem", ".key", ".pfx", ".p12"):
+        return True
+    return False
+
+
 def execute_file_action(
     action: WorkspaceFileAction,
     conversation=None,
@@ -107,6 +130,30 @@ def execute_file_action(
             success=False,
             message=err_msg,
         )
+
+    # Secret Protection: Block read/write/edit/delete on sensitive credential files
+    if is_sensitive_file(target_path):
+        channel = getattr(conversation, "human_channel", None) or get_active_channel()
+        rel_posix = target_path.relative_to(workspace_root).as_posix()
+        is_pre_authorized = channel.is_path_approved(rel_posix) if channel else False
+        if not is_pre_authorized:
+            granted = False
+            feedback = ""
+            if channel:
+                granted, feedback = channel.request_permission(
+                    role="agent",
+                    action_type="sensitive_file_access",
+                    target=rel_posix,
+                    reason=f"Accessing sensitive credential/environment file '{target_path.name}'.",
+                )
+            if not granted:
+                err_msg = f"Security restriction: Access to sensitive file '{action.path}' is blocked. {feedback}".strip()
+                return WorkspaceFileObservation(
+                    content=[TextContent(text=err_msg)],
+                    is_error=True,
+                    success=False,
+                    message=err_msg,
+                )
 
     # RBAC Permission Enforcement
     if action.operation in ("write", "edit", "delete"):
@@ -253,21 +300,30 @@ def execute_file_action(
             ignored_dirs = {
                 ".git",
                 ".venv",
+                "venv",
                 "__pycache__",
                 ".pytest_cache",
+                ".ruff_cache",
                 "node_modules",
                 "dist",
                 "build",
+                ".idea",
+                ".vscode",
             }
             file_list = []
-            for p in search_dir.rglob("*"):
-                if p.is_file() and not any(
-                    part in ignored_dirs or part.startswith(".") for part in p.parts
-                ):
-                    file_list.append(str(p.relative_to(workspace_root)))
+            for root, dirs, files in os.walk(search_dir):
+                dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+                for f in files:
+                    full_p = Path(root) / f
+                    try:
+                        file_list.append(str(full_p.relative_to(workspace_root)))
+                    except ValueError:
+                        file_list.append(str(full_p))
                     if len(file_list) >= 100:
                         file_list.append("... [Additional files omitted for brevity]")
                         break
+                if len(file_list) >= 101:
+                    break
             files_str = (
                 "\n".join(file_list) if file_list else "(No files found in directory)"
             )
@@ -445,22 +501,47 @@ def get_allowed_command_binaries() -> set[str]:
 ALLOWED_COMMAND_BINARIES = DEFAULT_ALLOWED_COMMANDS
 
 
-def is_command_allowed(command: str) -> bool:
-    """Validate that the command base binary is in the allowlist."""
+DANGEROUS_CHAINING_TOKENS = {";", "&&", "||", "|", "&"}
+
+
+def split_and_validate_command(command: str) -> tuple[bool, list[str], str]:
+    """Parse command into argv tokens, verify allowlist, and block chaining injection."""
     clean = (command or "").strip()
     if not clean:
-        return False
-    parts = clean.split()
-    base_cmd = Path(parts[0].strip("'\"")).name.lower()
+        return False, [], "Empty command string."
+    try:
+        tokens = shlex.split(clean, posix=True)
+    except ValueError as e:
+        return False, [], f"Command parse syntax error: {e}"
+
+    if not tokens:
+        return False, [], "No executable tokens found."
+
+    # Block shell chaining injection tokens outside quoted arguments
+    for tok in tokens:
+        if tok in DANGEROUS_CHAINING_TOKENS:
+            return False, tokens, f"Security violation: Chained commands or pipeline operator '{tok}' are not permitted."
+
+    base_cmd = Path(tokens[0].strip("'\"")).name.lower()
     if base_cmd.endswith(".exe"):
         base_cmd = base_cmd[:-4]
-    return base_cmd in get_allowed_command_binaries()
+
+    if base_cmd not in get_allowed_command_binaries():
+        return False, tokens, f"Command binary '{base_cmd}' is not in permitted whitelist."
+
+    return True, tokens, ""
+
+
+def is_command_allowed(command: str) -> bool:
+    """Validate that the command base binary is in the allowlist and contains no chaining."""
+    allowed, _, _ = split_and_validate_command(command)
+    return allowed
 
 
 def execute_terminal_action(
     action: WorkspaceTerminalAction, conversation=None, base_dir: Optional[Path] = None
 ) -> WorkspaceTerminalObservation:
-    """Execute terminal command safely inside workspace directory."""
+    """Execute terminal command safely inside workspace directory using parameterized execution."""
     workspace_root = (
         base_dir
         or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
@@ -472,7 +553,8 @@ def execute_terminal_action(
         channel.is_command_approved(action.command) if channel else False
     )
 
-    if not is_command_allowed(action.command) and not is_pre_authorized:
+    valid, cmd_tokens, reason = split_and_validate_command(action.command)
+    if not valid and not is_pre_authorized:
         granted = False
         feedback = ""
         allowed_list = sorted(get_allowed_command_binaries())
@@ -481,11 +563,11 @@ def execute_terminal_action(
                 role="agent",
                 action_type="terminal_command",
                 target=action.command,
-                reason=f"Command binary is outside permitted whitelist {allowed_list}",
+                reason=reason or f"Command binary is outside permitted whitelist {allowed_list}",
             )
         if not granted:
             err_msg = (
-                f"Security policy violation: Command binary is not permitted. {feedback} "
+                f"Security policy violation: {reason or 'Command binary is not permitted.'} {feedback} "
                 f"Allowed tools: {allowed_list}"
             ).strip()
             return WorkspaceTerminalObservation(
@@ -496,6 +578,11 @@ def execute_terminal_action(
                 stderr=err_msg,
                 timed_out=False,
             )
+        if not cmd_tokens:
+            try:
+                cmd_tokens = shlex.split(action.command, posix=True)
+            except Exception:
+                cmd_tokens = action.command.split()
 
     # Sanitize env to prevent leaking sensitive API keys / secrets to commands or child processes
     sensitive_keywords = {"KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "CREDENTIAL"}
@@ -509,20 +596,34 @@ def execute_terminal_action(
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
 
-    exec_cmd = action.command
-    if os.name == "nt" or sys.platform == "win32":
-        s = exec_cmd.strip()
-        if s == "pwd":
-            exec_cmd = "cd"
-        elif s in ("ls", "ls -la", "ls -l", "ls -a"):
-            exec_cmd = "dir"
-        elif s.startswith("cat "):
-            exec_cmd = "type " + s[4:]
+    # Command translation for Windows builtins or direct executable resolution
+    base_name = Path(cmd_tokens[0]).name.lower()
+    if base_name.endswith(".exe"):
+        base_name = base_name[:-4]
+
+    # Map unix shell aliases to windows builtins if on windows
+    if sys.platform == "win32" or os.name == "nt":
+        if base_name == "pwd":
+            cmd_tokens = ["cd"]
+            base_name = "cd"
+        elif base_name == "ls":
+            cmd_tokens = ["dir", *cmd_tokens[1:]]
+            base_name = "dir"
+        elif base_name == "cat":
+            cmd_tokens = ["type", *cmd_tokens[1:]]
+            base_name = "type"
+
+    shell_builtins = {"dir", "type", "cd", "echo", "where"}
+    if (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
+        exec_args = ["cmd.exe", "/c", *cmd_tokens]
+    else:
+        resolved_bin = shutil.which(cmd_tokens[0]) or cmd_tokens[0]
+        exec_args = [resolved_bin, *cmd_tokens[1:]]
 
     try:
         proc = subprocess.run(
-            exec_cmd,
-            shell=True,
+            exec_args,
+            shell=False,
             cwd=str(workspace_root),
             capture_output=True,
             text=True,
