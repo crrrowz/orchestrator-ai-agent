@@ -6,10 +6,17 @@ import logging
 
 # Suppress OpenHands banner box & debug spam immediately before any SDK import
 os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
-os.environ["LITELLM_LOG"] = "ERROR"
+os.environ["LITELLM_LOG"] = "CRITICAL"
 
-for _logger_name in ["openhands", "litellm", "httpx", "httpcore", "urllib3", "asyncio"]:
-    logging.getLogger(_logger_name).setLevel(logging.ERROR)
+for _logger_name in ["openhands", "litellm", "LiteLLM", "httpx", "httpcore", "urllib3", "asyncio"]:
+    logging.getLogger(_logger_name).setLevel(logging.CRITICAL)
+
+try:
+    import litellm
+    litellm.suppress_debug_info = True
+    litellm.set_verbose = False
+except ImportError:
+    pass
 
 import argparse
 from pathlib import Path

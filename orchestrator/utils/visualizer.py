@@ -77,6 +77,10 @@ class SessionLogStore:
         self.milestones.append(short_msg)
         if len(self.milestones) > 6:
             self.milestones.pop(0)
+        try:
+            self.save_to_file()
+        except Exception:
+            pass
         return step
 
     def save_to_file(self, target_dir: Optional[Path] = None) -> Path:

@@ -143,9 +143,9 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
         "temperature": role_config.temperature,
         "max_output_tokens": config.max_tokens_per_call,
         "usage_id": f"agent-{role_config.role}",
-        "num_retries": 5,
-        "retry_min_wait": 3,
-        "retry_max_wait": 30,
+        "num_retries": 2,
+        "retry_min_wait": 1,
+        "retry_max_wait": 5,
     }
 
     if model.startswith("openrouter/"):
@@ -154,23 +154,28 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
 
         # OpenRouter Model-Layer Failover Array
         model_slug = model[len("openrouter/"):]
-        fallback_models = (
-            [model_slug, "openrouter/free"]
-            if ":free" in model_slug and model_slug not in ("free", "openrouter/free")
-            else [model_slug]
-        )
+        if model_slug in ("free", "openrouter/free"):
+            fallback_models = ["qwen/qwen3.8-27b:free", "openrouter/free"]
+            primary_fb_target = "openrouter/qwen/qwen3.8-27b:free"
+        elif ":free" in model_slug:
+            fallback_models = [model_slug, "qwen/qwen3.8-27b:free", "openrouter/free"]
+            primary_fb_target = "openrouter/openrouter/free"
+        else:
+            fallback_models = [model_slug]
+            primary_fb_target = "openrouter/openrouter/free"
+
         llm_kwargs["litellm_extra_body"] = {"models": fallback_models}
 
-        # Native OpenHands SDK FallbackStrategy to openrouter/openrouter/free
-        if model != "openrouter/openrouter/free":
-            from openhands.sdk.llm import FallbackStrategy
-            fb_kwargs = dict(llm_kwargs)
-            fb_kwargs["model"] = "openrouter/openrouter/free"
-            fb_kwargs["usage_id"] = f"{role_config.role}-fallback-free"
-            fb_kwargs["litellm_extra_body"] = {"models": ["openrouter/free"]}
-            fallback_llm = LLM(**fb_kwargs)
-            strat = FallbackStrategy(fallback_llms=["openrouter-free-fallback"])
-            strat._resolved = [fallback_llm]
-            llm_kwargs["fallback_strategy"] = strat
+        # Native OpenHands SDK FallbackStrategy for resilient recovery
+        from openhands.sdk.llm.fallback_strategy import FallbackStrategy
+        fb_kwargs = dict(llm_kwargs)
+        fb_kwargs["model"] = primary_fb_target
+        fb_kwargs["usage_id"] = f"{role_config.role}-fallback-resilient"
+        fb_kwargs["litellm_extra_body"] = {"models": ["qwen/qwen3.8-27b:free", "openrouter/free"]}
+        fb_kwargs.pop("fallback_strategy", None)
+        fallback_llm = LLM(**fb_kwargs)
+        strat = FallbackStrategy(fallback_llms=["openrouter-resilient-fallback"])
+        strat._resolved = [fallback_llm]
+        llm_kwargs["fallback_strategy"] = strat
 
     return LLM(**llm_kwargs)

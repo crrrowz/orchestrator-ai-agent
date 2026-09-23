@@ -50,3 +50,11 @@ def test_openrouter_model_normalization_and_fallback():
     assert len(llm.fallback_strategy._resolved) == 1
     assert llm.fallback_strategy._resolved[0].model == "openrouter/openrouter/free"
 
+    # Test reverse fallback when openrouter/free is the primary model
+    role_cfg_free = AgentRoleConfig(role="developer", model="openrouter/free")
+    llm_free = create_llm_for_role(cfg, role_cfg_free)
+    assert llm_free.model == "openrouter/openrouter/free"
+    assert llm_free.fallback_strategy is not None
+    assert llm_free.fallback_strategy._resolved[0].model == "openrouter/qwen/qwen3.8-27b:free"
+
+

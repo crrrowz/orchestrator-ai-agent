@@ -58,113 +58,118 @@ class DevTestLoop:
         developer_agent = create_developer_agent(self.config, self.skill_manager, self.workspace_path)
         tester_agent = create_tester_agent(self.config, self.skill_manager, self.workspace_path)
 
-        # Step 1: Initial Implementation by Developer
-        t0 = time.perf_counter()
-        log_store.set_agent_context("Developer", "Initial Implementation")
-        ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", task_description)
-        dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
-        dev_conv.send_message(
-            f"Implement the following software task:\n\n{task_description}\n\n"
-            "Ensure full implementation, type safety, and adhere to clean-python-architecture."
-        )
-        dev_conv.run()
-        duration_dev = time.perf_counter() - t0
-        curr_diff = self.git.get_diff() or self.git.get_status()
-        recorder.record_step("developer", "initial_implementation", 1, duration_dev, True, curr_diff)
-        ConsoleOutput.success("Developer completed implementation phase.")
-
-        # Step 2: Iterative Test & Fix Loop
-        iteration = 1
-        tests_passed = False
-
-        while iteration <= self.config.max_iterations:
-            ConsoleOutput.agent_step("Tester", f"Running test verification (Iteration {iteration}/{self.config.max_iterations})...")
-            
-            t_test = time.perf_counter()
-            log_store.set_agent_context("Tester", f"Test Iteration {iteration}")
-            tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
-            tester_conv.send_message(
-                f"Task: {task_description}\n\n"
-                "Write comprehensive pytest tests in tests/ directory and run pytest. "
-                "Ensure edge cases and boundary conditions are covered as per pytest-rigorous-testing."
+        try:
+            # Step 1: Initial Implementation by Developer
+            t0 = time.perf_counter()
+            log_store.set_agent_context("Developer", "Initial Implementation")
+            ConsoleOutput.agent_step("Developer", "Implementing solution based on skills...", task_description)
+            dev_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+            dev_conv.send_message(
+                f"Implement the following software task:\n\n{task_description}\n\n"
+                "Ensure full implementation, type safety, and adhere to clean-python-architecture."
             )
-            tester_conv.run()
+            dev_conv.run()
+            duration_dev = time.perf_counter() - t0
+            curr_diff = self.git.get_diff() or self.git.get_status()
+            recorder.record_step("developer", "initial_implementation", 1, duration_dev, True, curr_diff)
+            ConsoleOutput.success("Developer completed implementation phase.")
 
-            # Run pytest directly in workspace
-            test_run = execute_terminal_action(
-                WorkspaceTerminalAction(command="pytest -v", timeout_seconds=60),
-                base_dir=self.workspace_path,
-            )
-            dur_test = time.perf_counter() - t_test
+            # Step 2: Iterative Test & Fix Loop
+            iteration = 1
+            tests_passed = False
 
-            if test_run.exit_code == 0:
-                tests_passed = True
-                recorder.record_step("tester", "pytest_verification", iteration, dur_test, True)
-                log_store.add_step(f"All pytest tests passed in iteration {iteration}.", is_error=False, observation=test_run.stdout)
-                ConsoleOutput.success(f"All tests passed in iteration {iteration}!")
-                break
-            else:
-                error_output = f"{test_run.stdout}\n{test_run.stderr}".strip()
-                recorder.record_step("tester", "pytest_verification", iteration, dur_test, False, error_summary=error_output[:500])
-                recorder.record_incident(f"Iteration_{iteration}_Pytest", "test_failure", error_output[:300])
-                log_store.add_step(f"Tests failed in iteration {iteration} (Exit code {test_run.exit_code})", is_error=True, observation=error_output[:600])
-
-                # Check Circuit Breaker before proceeding to fix
-                curr_diff = self.git.get_diff() or self.git.get_status()
-                if recorder.check_circuit_breaker(curr_diff, error_output):
-                    ConsoleOutput.error("Circuit Breaker Tripped! Runaway loop detected with identical failure. Halting to save budget.")
-                    break
-
-                if iteration == self.config.max_iterations:
-                    ConsoleOutput.error("Max iterations reached without achieving all passing tests.")
-                    break
-
-                ConsoleOutput.warning(f"Tests failed in iteration {iteration}. Initiating Developer fix.")
-
-                # Step 3: Developer receives test output and fixes
-                t_fix = time.perf_counter()
-                log_store.set_agent_context("Developer", f"Fix Iteration {iteration}")
-                dev_fix_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
-                failure_summary = (
-                    f"Pytest execution failed with exit code {test_run.exit_code}.\n"
-                    f"STDOUT:\n{test_run.stdout}\n"
-                    f"STDERR:\n{test_run.stderr}\n\n"
-                    "Please diagnose the failure using the systematic-debugging skill and update the code."
+            while iteration <= self.config.max_iterations:
+                ConsoleOutput.agent_step("Tester", f"Running test verification (Iteration {iteration}/{self.config.max_iterations})...")
+                
+                t_test = time.perf_counter()
+                log_store.set_agent_context("Tester", f"Test Iteration {iteration}")
+                tester_conv = Conversation(agent=tester_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+                tester_conv.send_message(
+                    f"Task: {task_description}\n\n"
+                    "Write comprehensive pytest tests in tests/ directory and run pytest. "
+                    "Ensure edge cases and boundary conditions are covered as per pytest-rigorous-testing."
                 )
-                dev_fix_conv.send_message(failure_summary)
-                dev_fix_conv.run()
-                dur_fix = time.perf_counter() - t_fix
-                new_diff = self.git.get_diff() or self.git.get_status()
-                recorder.record_step("developer", "fix_code", iteration, dur_fix, True, new_diff)
+                tester_conv.run()
 
-            iteration += 1
+                # Run pytest directly in workspace
+                test_run = execute_terminal_action(
+                    WorkspaceTerminalAction(command="pytest -v", timeout_seconds=60),
+                    base_dir=self.workspace_path,
+                )
+                dur_test = time.perf_counter() - t_test
 
-        # Finalize telemetry report
-        diag_report = recorder.finalize(completed_successfully=tests_passed)
-        ConsoleOutput.success(f"Telemetry report logged: {diag_report.report_id}")
+                if test_run.exit_code == 0:
+                    tests_passed = True
+                    recorder.record_step("tester", "pytest_verification", iteration, dur_test, True)
+                    log_store.add_step(f"All pytest tests passed in iteration {iteration}.", is_error=False, observation=test_run.stdout)
+                    ConsoleOutput.success(f"All tests passed in iteration {iteration}!")
+                    break
+                else:
+                    error_output = f"{test_run.stdout}\n{test_run.stderr}".strip()
+                    recorder.record_step("tester", "pytest_verification", iteration, dur_test, False, error_summary=error_output[:500])
+                    recorder.record_incident(f"Iteration_{iteration}_Pytest", "test_failure", error_output[:300])
+                    log_store.add_step(f"Tests failed in iteration {iteration} (Exit code {test_run.exit_code})", is_error=True, observation=error_output[:600])
 
-        # Step 4: Commit on success
-        commit_hash = ""
-        if tests_passed and self.config.auto_commit:
-            commit_msg = f"feat: {task_description[:50]} (verified by multi-agent tests)"
-            commit_res = self.git.commit(commit_msg)
-            if commit_res:
-                commit_hash = commit_res
-                ConsoleOutput.success(f"Created Git commit: {commit_hash[:8]}")
+                    # Check Circuit Breaker before proceeding to fix
+                    curr_diff = self.git.get_diff() or self.git.get_status()
+                    if recorder.check_circuit_breaker(curr_diff, error_output):
+                        ConsoleOutput.error("Circuit Breaker Tripped! Runaway loop detected with identical failure. Halting to save budget.")
+                        break
 
-        status_str = "SUCCESS" if tests_passed else ("CIRCUIT_BREAKER_ABORT" if recorder.circuit_breaker_triggered else "FAILED")
-        ConsoleOutput.summary_table(iteration, status_str, commit_hash)
+                    if iteration == self.config.max_iterations:
+                        ConsoleOutput.error("Max iterations reached without achieving all passing tests.")
+                        break
 
-        # Save session logs and present interactive explorer
-        log_store.save_to_file()
-        InteractiveLogExplorer(log_store).run()
+                    ConsoleOutput.warning(f"Tests failed in iteration {iteration}. Initiating Developer fix.")
 
-        return {
-            "status": status_str,
-            "iterations": iteration,
-            "tests_passed": tests_passed,
-            "circuit_breaker": recorder.circuit_breaker_triggered,
-            "commit_hash": commit_hash,
-            "report_id": diag_report.report_id,
-            "workspace": str(self.workspace_path)
-        }
+                    # Step 3: Developer receives test output and fixes
+                    t_fix = time.perf_counter()
+                    log_store.set_agent_context("Developer", f"Fix Iteration {iteration}")
+                    dev_fix_conv = Conversation(agent=developer_agent, workspace=str(self.workspace_path), visualizer=visualizer)
+                    failure_summary = (
+                        f"Pytest execution failed with exit code {test_run.exit_code}.\n"
+                        f"STDOUT:\n{test_run.stdout}\n"
+                        f"STDERR:\n{test_run.stderr}\n\n"
+                        "Please diagnose the failure using the systematic-debugging skill and update the code."
+                    )
+                    dev_fix_conv.send_message(failure_summary)
+                    dev_fix_conv.run()
+                    dur_fix = time.perf_counter() - t_fix
+                    new_diff = self.git.get_diff() or self.git.get_status()
+                    recorder.record_step("developer", "fix_code", iteration, dur_fix, True, new_diff)
+
+                iteration += 1
+
+            # Finalize telemetry report
+            diag_report = recorder.finalize(completed_successfully=tests_passed)
+            ConsoleOutput.success(f"Telemetry report logged: {diag_report.report_id}")
+
+            # Step 4: Commit on success
+            commit_hash = ""
+            if tests_passed and self.config.auto_commit:
+                commit_msg = f"feat: {task_description[:50]} (verified by multi-agent tests)"
+                commit_res = self.git.commit(commit_msg)
+                if commit_res:
+                    commit_hash = commit_res
+                    ConsoleOutput.success(f"Created Git commit: {commit_hash[:8]}")
+
+            status_str = "SUCCESS" if tests_passed else ("CIRCUIT_BREAKER_ABORT" if recorder.circuit_breaker_triggered else "FAILED")
+            ConsoleOutput.summary_table(iteration, status_str, commit_hash)
+
+            InteractiveLogExplorer(log_store).run()
+
+            return {
+                "status": status_str,
+                "iterations": iteration,
+                "tests_passed": tests_passed,
+                "circuit_breaker": recorder.circuit_breaker_triggered,
+                "commit_hash": commit_hash,
+                "report_id": diag_report.report_id,
+                "workspace": str(self.workspace_path)
+            }
+        except KeyboardInterrupt:
+            ConsoleOutput.warning("Pipeline execution interrupted by user.")
+            log_store.add_step("Session interrupted by user (KeyboardInterrupt).", is_error=True)
+            raise
+        finally:
+            log_store.save_to_file()
