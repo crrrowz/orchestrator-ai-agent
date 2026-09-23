@@ -40,11 +40,17 @@ def execute_file_action(
     workspace_root = base_dir or Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve()
     workspace_root.mkdir(parents=True, exist_ok=True)
 
-    target_path = (workspace_root / action.path.lstrip("/\\")).resolve()
+    raw_path = Path(action.path)
+    if raw_path.is_absolute():
+        target_path = raw_path.resolve()
+    else:
+        target_path = (workspace_root / action.path.lstrip("/\\")).resolve()
 
     # Sandboxing check
-    if not str(target_path).startswith(str(workspace_root)):
-        err_msg = f"Access denied: path '{action.path}' escapes workspace directory."
+    try:
+        target_path.relative_to(workspace_root)
+    except ValueError:
+        err_msg = f"Access denied: path '{action.path}' escapes workspace directory '{workspace_root}'."
         return WorkspaceFileObservation(
             content=[TextContent(text=err_msg)],
             is_error=True,
@@ -240,9 +246,9 @@ class WorkspaceTerminalAction(Action):
 
 class WorkspaceTerminalObservation(Observation):
     """Observation resulting from terminal command execution."""
-    exit_code: int
-    stdout: str
-    stderr: str
+    exit_code: int = 0
+    stdout: str = ""
+    stderr: str = ""
     timed_out: bool = False
 
 
@@ -266,26 +272,32 @@ def execute_terminal_action(
             cwd=str(workspace_root),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=action.timeout_seconds,
             env=env
         )
-        output_text = f"Exit code: {proc.returncode}\nStdout:\n{proc.stdout}\nStderr:\n{proc.stderr}"
+        stdout_text = proc.stdout or ""
+        stderr_text = proc.stderr or ""
+        output_text = f"Exit code: {proc.returncode}\nStdout:\n{stdout_text}\nStderr:\n{stderr_text}"
         return WorkspaceTerminalObservation(
             content=[TextContent(text=output_text)],
             is_error=(proc.returncode != 0),
             exit_code=proc.returncode,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            stdout=stdout_text,
+            stderr=stderr_text,
             timed_out=False
         )
     except subprocess.TimeoutExpired as te:
         timeout_msg = "Command timed out after specified seconds."
+        stdout_str = te.stdout if isinstance(te.stdout, str) else (te.stdout.decode("utf-8", errors="replace") if te.stdout else "")
+        stderr_str = te.stderr if isinstance(te.stderr, str) else (te.stderr.decode("utf-8", errors="replace") if te.stderr else timeout_msg)
         return WorkspaceTerminalObservation(
             content=[TextContent(text=timeout_msg)],
             is_error=True,
             exit_code=-1,
-            stdout=te.stdout.decode() if te.stdout else "",
-            stderr=timeout_msg,
+            stdout=stdout_str,
+            stderr=stderr_str,
             timed_out=True
         )
     except Exception as e:

@@ -75,3 +75,20 @@ def test_workspace_tools_agent_resolution(tmp_path: Path):
     assert "workspace_terminal" in agent._tools
 
 
+def test_terminal_tool_utf8_output(tmp_path: Path):
+    # Output non-ASCII UTF-8 characters (em-dash, quotes, Arabic)
+    act = WorkspaceTerminalAction(command="python -c \"import sys; sys.stdout.buffer.write('— “Hello” مرحبا'.encode('utf-8'))\"")
+    res = execute_terminal_action(act, base_dir=tmp_path)
+    assert res.exit_code == 0
+    assert "—" in res.stdout or "مرحبا" in res.stdout
+
+
+def test_observation_defaults():
+    from orchestrator.tools.workspace_tools import WorkspaceTerminalObservation
+    obs = WorkspaceTerminalObservation(exit_code=0)
+    assert obs.stdout == ""
+    assert obs.stderr == ""
+    assert obs.timed_out is False
+
+
+
