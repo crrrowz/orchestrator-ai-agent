@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Literal, Optional, Sequence, Any
 from pydantic import ConfigDict, Field
@@ -508,9 +509,19 @@ def execute_terminal_action(
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
 
+    exec_cmd = action.command
+    if os.name == "nt" or sys.platform == "win32":
+        s = exec_cmd.strip()
+        if s == "pwd":
+            exec_cmd = "cd"
+        elif s in ("ls", "ls -la", "ls -l", "ls -a"):
+            exec_cmd = "dir"
+        elif s.startswith("cat "):
+            exec_cmd = "type " + s[4:]
+
     try:
         proc = subprocess.run(
-            action.command,
+            exec_cmd,
             shell=True,
             cwd=str(workspace_root),
             capture_output=True,

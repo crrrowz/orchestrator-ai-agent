@@ -1,5 +1,6 @@
 """Autonomous Codebase Audit & Fix Pipeline: Scan -> Remediate -> Verify Loop without Git."""
 
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -28,6 +29,21 @@ from orchestrator.utils import (
     OrchestratorLiveVisualizer,
     SessionLogStore,
 )
+
+
+def extract_affected_files(issues: List[str], workspace_path: Path) -> List[str]:
+    """Extract distinct relative file paths mentioned in issues and error traces."""
+    affected = set()
+    for text in issues:
+        matches = re.findall(
+            r"([\w\-./\\]+\.(?:py|ts|tsx|js|jsx|json|toml|yaml|yml|md))", text
+        )
+        for m in matches:
+            clean = m.replace("\\", "/").strip("./:")
+            candidate = workspace_path / clean
+            if candidate.exists() and candidate.is_file():
+                affected.add(clean)
+    return sorted(list(affected))
 
 
 class AuditFixPipeline:
@@ -291,24 +307,55 @@ class AuditFixPipeline:
                 else "Audit and auto-fix all codebase defects and optimizations."
             )
 
+            affected_files = extract_affected_files(all_issues, self.workspace_path)
+            if affected_files:
+                file_bullets = "\n".join(f"- `{f}`" for f in affected_files)
+                scope_constraint = (
+                    f"CRITICAL TARGET SCOPE LOCK:\n"
+                    f"The issues are strictly isolated to the following file(s):\n"
+                    f"{file_bullets}\n\n"
+                    "MANDATORY PLAN-FIRST WORKFLOW:\n"
+                    "1. First, state a concise 2-line plan:\n"
+                    "   - Target File: <file>\n"
+                    "   - Precise Fix: <exact lines or imports to modify>\n"
+                    "2. You are STRICTLY FORBIDDEN from reading unmentioned files, diagnostics, or listing directories (`ls`, `dir`, `pwd`).\n"
+                    "3. Open and modify ONLY the locked file(s) above using `workspace_file`.\n"
+                    "4. Apply the fix and stop immediately."
+                )
+            else:
+                scope_constraint = (
+                    "MANDATORY PLAN-FIRST WORKFLOW:\n"
+                    "1. First, state a concise 2-line plan (Target File and Planned Change).\n"
+                    "2. Inspect ONLY the specific affected file where errors were reported.\n"
+                    "3. Do NOT read unmentioned files or list unrelated directories to conserve token context.\n"
+                    "4. Apply the targeted fix directly and stop."
+                )
+
+            test_status_note = ""
+            if tests_clean:
+                test_status_note = (
+                    "\nNOTICE: All project unit tests are currently PASSING (100% green).\n"
+                    "Do NOT run pytest or examine test suites or diagnostics. Focus ONLY on the static issues above."
+                )
+
+            effective_graft = graft_part if len(graft_part) < 1500 else ""
+
             dev_prompt = (
                 f"Task: {user_directive}\n\n"
                 f"Iteration {iteration} of {self.config.max_iterations} - Auto-Fix Remediation Directive:\n"
                 f"The automated audit detected the following issues that must be solved in this {self.adapter.language_name.capitalize()} project:\n\n"
                 f"{issues_text}\n"
-                f"{graft_part}\n\n"
-                "INSTRUCTIONS:\n"
-                "1. Inspect ONLY the specific affected files where errors/failures were reported.\n"
-                "2. Do NOT read unmentioned files or list unrelated directories to conserve token context.\n"
-                f"3. Apply robust, production-grade fixes directly to the files adhering to {self.adapter.language_name} best practices.\n"
-                "4. Ensure all syntax, type errors, lint issues, and test failures are completely resolved.\n"
-                "5. Do NOT use git commands (all changes must be made directly to the workspace files).\n\n"
+                f"{test_status_note}\n\n"
+                f"{scope_constraint}\n\n"
+                f"{effective_graft}\n\n"
                 f"{self.adapter.get_developer_prompt_guidance()}"
             )
 
             t_dev = time.perf_counter()
             dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
             self._run_conv(dev_conv, "Developer")
+            if hasattr(visualizer, "close"):
+                visualizer.close()
             dur_dev = time.perf_counter() - t_dev
             u_dev = get_llm_usage(developer_agent.llm)
 

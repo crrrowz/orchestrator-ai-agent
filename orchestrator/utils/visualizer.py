@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Set
 
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -168,7 +169,7 @@ class SessionLogStore:
 
 
 class OrchestratorLiveVisualizer(ConversationVisualizerBase):
-    """Quiet, informative live visualizer showing agent, model, execution time, and tokens in real time."""
+    """Quiet, informative live visualizer maintaining a live frozen status card in-place."""
 
     def __init__(
         self,
@@ -181,6 +182,88 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         self.console = console or Console(legacy_windows=False)
         self.verbosity = (verbosity or "normal").lower()
         self._last_thought: Optional[str] = None
+        self._live: Optional[Live] = None
+        self._current_action: str = "Starting agent execution..."
+        self._target_file: str = ""
+        self._last_status: str = ""
+        self._tokens_str: str = ""
+        self._is_tty: bool = (
+            sys.stdout.isatty() if hasattr(sys.stdout, "isatty") else False
+        )
+
+    def _render_box(self) -> Panel:
+        t_now = time.strftime("%H:%M:%S")
+        elapsed = round(time.time() - self.store.phase_start_time, 1)
+        role = self.store.current_role or "Agent"
+        model = self.store.current_model or "LLM"
+
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold cyan", width=14)
+        grid.add_column(style="white")
+
+        grid.add_row(
+            "Agent / Role:",
+            f"[bold magenta]{role}[/bold magenta] [blue]({model})[/blue]",
+        )
+        grid.add_row(
+            "Runtime:",
+            f"[yellow]⏱ {elapsed}s[/yellow] [dim]({t_now})[/dim]  {self._tokens_str}",
+        )
+        if self._target_file:
+            grid.add_row(
+                "Target File:", f"[bold green]{self._target_file}[/bold green]"
+            )
+        grid.add_row("Action:", f"[bold white]{self._current_action}[/bold white]")
+        if self._last_status:
+            grid.add_row("Result:", f"{self._last_status}")
+        if self._last_thought and self.verbosity != "quiet":
+            tp = self._last_thought.replace("\n", " ").strip()
+            if len(tp) > 95:
+                tp = tp[:92] + "..."
+            grid.add_row("Plan / Thought:", f"[dim italic]{tp}[/dim italic]")
+
+        border_color = (
+            "magenta"
+            if role == "Developer"
+            else ("green" if role == "Tester" else "cyan")
+        )
+        return Panel(
+            grid,
+            title=f"[bold cyan]◈ Live Agent Activity ({role})[/bold cyan]",
+            border_style=border_color,
+            padding=(0, 1),
+        )
+
+    def _update_live(self) -> None:
+        if not self._is_tty or self.verbosity == "quiet":
+            return
+        try:
+            if self._live is None:
+                self._live = Live(
+                    self._render_box(),
+                    console=self.console,
+                    refresh_per_second=4,
+                    transient=True,
+                )
+                self._live.start()
+            else:
+                self._live.update(self._render_box())
+        except Exception:
+            self._live = None
+
+    def close(self) -> None:
+        """Stop live rendering when agent conversation completes."""
+        if self._live is not None:
+            try:
+                self._live.stop()
+            except Exception:
+                pass
+            self._live = None
+        role = self.store.current_role or "Agent"
+        elapsed = round(time.time() - self.store.phase_start_time, 1)
+        self._safe_print(
+            f"[dim]✓ Finished {role} phase in {elapsed}s {self._tokens_str}[/dim]"
+        )
 
     def _safe_print(self, *args, **kwargs) -> None:
         """Safely print to console with fallback for legacy Windows terminal charmap encoding."""
@@ -270,25 +353,31 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     if cost > 0:
                         tokens_str += f" [dim](${cost:.4f})[/dim]"
 
-            self._safe_print(
-                f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
-                f"[blue]({model})[/blue] "
-                f"[bold white]{summary}[/bold white] "
-                f"[yellow]⏱ {elapsed}s[/yellow]"
-                f"{tokens_str}"
-            )
-            if self._last_thought and self.verbosity != "quiet":
-                if self.verbosity in ("verbose", "debug"):
-                    self._safe_print(
-                        f"       [dim italic]💭 {self._last_thought}[/dim italic]"
-                    )
-                else:
-                    thought_preview = self._last_thought.replace("\n", " ").strip()
-                    if len(thought_preview) > 110:
-                        thought_preview = thought_preview[:107] + "..."
-                    self._safe_print(
-                        f"       [dim italic]💭 {thought_preview}[/dim italic]"
-                    )
+            self._current_action = summary
+            self._target_file = path
+            self._tokens_str = tokens_str
+            self._update_live()
+
+            if not self._is_tty:
+                self._safe_print(
+                    f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
+                    f"[blue]({model})[/blue] "
+                    f"[bold white]{summary}[/bold white] "
+                    f"[yellow]⏱ {elapsed}s[/yellow]"
+                    f"{tokens_str}"
+                )
+                if self._last_thought and self.verbosity != "quiet":
+                    if self.verbosity in ("verbose", "debug"):
+                        self._safe_print(
+                            f"       [dim italic]💭 {self._last_thought}[/dim italic]"
+                        )
+                    else:
+                        thought_preview = self._last_thought.replace("\n", " ").strip()
+                        if len(thought_preview) > 110:
+                            thought_preview = thought_preview[:107] + "..."
+                        self._safe_print(
+                            f"       [dim italic]💭 {thought_preview}[/dim italic]"
+                        )
 
         # 2. Capture Tool Observations
         elif event_name == "ObservationEvent":
@@ -310,24 +399,23 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     last_step.observation = str(text_res).strip()
                     last_step.is_error = is_err
 
-            if self.verbosity != "quiet" or is_err:
-                if self.verbosity == "debug":
-                    icon = (
-                        "[bold red]✗ ERR[/bold red]"
-                        if is_err
-                        else "[bold green]✓ OK[/bold green]"
-                    )
-                    self._safe_print(f"       {icon} [dim]{text_res}[/dim]")
-                else:
-                    obs_preview = str(text_res).replace("\n", " ").strip()
-                    if len(obs_preview) > 95:
-                        obs_preview = obs_preview[:92] + "..."
-                    icon = (
-                        "[bold red]✗ ERR[/bold red]"
-                        if is_err
-                        else "[bold green]✓ OK[/bold green]"
-                    )
-                    self._safe_print(f"       {icon} [dim]{obs_preview}[/dim]")
+            obs_preview = str(text_res).replace("\n", " ").strip()
+            if len(obs_preview) > 95:
+                obs_preview = obs_preview[:92] + "..."
+            icon = (
+                "[bold red]✗ ERR[/bold red]"
+                if is_err
+                else "[bold green]✓ OK[/bold green]"
+            )
+            self._last_status = f"{icon} [dim]{obs_preview}[/dim]"
+            self._update_live()
+
+            if not self._is_tty:
+                if self.verbosity != "quiet" or is_err:
+                    if self.verbosity == "debug":
+                        self._safe_print(f"       {icon} [dim]{text_res}[/dim]")
+                    else:
+                        self._safe_print(f"       {self._last_status}")
 
         # 3. Capture General Messages & Errors
         elif event_name in ("ConversationErrorEvent", "AgentErrorEvent"):
@@ -339,9 +427,10 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 is_error=True,
                 observation=str(err_msg),
             )
-            self._safe_print(
-                f"       [bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]"
-            )
+            self._last_status = f"[bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]"
+            self._update_live()
+            if not self._is_tty:
+                self._safe_print(f"       {self._last_status}")
 
 
 class InteractiveLogExplorer:
