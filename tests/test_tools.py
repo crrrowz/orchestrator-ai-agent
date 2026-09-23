@@ -303,7 +303,9 @@ async def fetch_data():
     code_file.write_text(sample_code, encoding="utf-8")
 
     # 1. Extract top-level function
-    act_fn = WorkspaceFileAction(operation="symbol", path="sample.py", symbol="helper_one")
+    act_fn = WorkspaceFileAction(
+        operation="symbol", path="sample.py", symbol="helper_one"
+    )
     obs_fn = execute_file_action(act_fn, base_dir=tmp_path)
     assert obs_fn.is_error is False
     assert "def helper_one():" in obs_fn.file_content
@@ -311,21 +313,27 @@ async def fetch_data():
     assert "Calculator" not in obs_fn.file_content
 
     # 2. Extract class
-    act_cls = WorkspaceFileAction(operation="symbol", path="sample.py", symbol="Calculator")
+    act_cls = WorkspaceFileAction(
+        operation="symbol", path="sample.py", symbol="Calculator"
+    )
     obs_cls = execute_file_action(act_cls, base_dir=tmp_path)
     assert obs_cls.is_error is False
     assert "class Calculator:" in obs_cls.file_content
     assert "def add(self, a, b):" in obs_cls.file_content
 
     # 3. Extract qualified method
-    act_m = WorkspaceFileAction(operation="symbol", path="sample.py", symbol="Calculator.add")
+    act_m = WorkspaceFileAction(
+        operation="symbol", path="sample.py", symbol="Calculator.add"
+    )
     obs_m = execute_file_action(act_m, base_dir=tmp_path)
     assert obs_m.is_error is False
     assert "def add(self, a, b):" in obs_m.file_content
     assert "helper_one" not in obs_m.file_content
 
     # 4. Extract non-existent symbol
-    act_missing = WorkspaceFileAction(operation="symbol", path="sample.py", symbol="non_existent")
+    act_missing = WorkspaceFileAction(
+        operation="symbol", path="sample.py", symbol="non_existent"
+    )
     obs_missing = execute_file_action(act_missing, base_dir=tmp_path)
     assert obs_missing.is_error is True
     assert "Symbol 'non_existent' not found" in obs_missing.message

@@ -90,7 +90,10 @@ def test_classify_action_phases():
         )
         == TokenPhase.INVESTIGATION
     )
-    assert DynamicTokenGovernor.classify_action("ThinkAction", {}) == TokenPhase.INVESTIGATION
+    assert (
+        DynamicTokenGovernor.classify_action("ThinkAction", {})
+        == TokenPhase.INVESTIGATION
+    )
 
     # Edits and writes are implementation
     assert (

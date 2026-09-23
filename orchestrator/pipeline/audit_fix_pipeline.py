@@ -100,15 +100,30 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
                     fallback_text = m_rec.group(1).strip()
 
         if fallback_text:
-            findings.append(
-                {
-                    "id": "1.0",
-                    "severity": "HIGH",
-                    "weight": 1,
-                    "title": "Actionable Audit Recommendations",
-                    "content": fallback_text,
-                }
+            clean_static = (
+                "[clean]" in report_content.lower()
+                or "0 defects detected" in report_content.lower()
             )
+            generic_phrases = [
+                "address any ast syntax failures and static linter warnings listed above",
+                "address any ast syntax failures",
+            ]
+            is_generic_advice = any(
+                gp in fallback_text.lower() for gp in generic_phrases
+            )
+            if clean_static and is_generic_advice and "###" not in fallback_text:
+                pass
+            else:
+                findings.append(
+                    {
+                        "id": "1.0",
+                        "severity": "HIGH",
+                        "weight": 1,
+                        "title": "Actionable Audit Recommendations",
+                        "content": fallback_text,
+                    }
+                )
+
 
     findings.sort(key=lambda x: (x["weight"], x["id"]))
     return findings
@@ -635,7 +650,11 @@ class AuditFixPipeline(BasePipeline):
                 else "MEDIUM"
             )
             finding_context = (
-                (current_finding.get("title", "") + " " + current_finding.get("content", ""))
+                (
+                    current_finding.get("title", "")
+                    + " "
+                    + current_finding.get("content", "")
+                )
                 if current_finding
                 else issues_text
             )
@@ -661,7 +680,9 @@ class AuditFixPipeline(BasePipeline):
                 "Developer",
                 max_steps=step_limit,
                 governor=governor,
-                task_complexity="high" if governor.allocation.total_budget > 100_000 else "medium",
+                task_complexity="high"
+                if governor.allocation.total_budget > 100_000
+                else "medium",
             )
             if hasattr(visualizer, "close"):
                 visualizer.close()
@@ -766,8 +787,12 @@ class AuditFixPipeline(BasePipeline):
                         )
                         continue
                 else:
-                    finding_title = current_finding["title"] if current_finding else "Active Task"
-                    consecutive_zero_mods[finding_title] = consecutive_zero_mods.get(finding_title, 0) + 1
+                    finding_title = (
+                        current_finding["title"] if current_finding else "Active Task"
+                    )
+                    consecutive_zero_mods[finding_title] = (
+                        consecutive_zero_mods.get(finding_title, 0) + 1
+                    )
                     fail_count = consecutive_zero_mods[finding_title]
 
                     ConsoleOutput.warning(

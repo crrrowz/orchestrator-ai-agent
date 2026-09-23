@@ -223,17 +223,29 @@ class BasePipeline(ABC):
                                 # If governor is attached, track actions and enforce phase budget
                                 if governor:
                                     # Inspect conversation events to detect code modifications
-                                    ev_list = getattr(getattr(conv, "state", None), "events", []) or []
+                                    ev_list = (
+                                        getattr(
+                                            getattr(conv, "state", None), "events", []
+                                        )
+                                        or []
+                                    )
                                     for ev in ev_list:
                                         act = getattr(ev, "action", ev)
-                                        act_type = getattr(act, "__class__", type(act)).__name__
+                                        act_type = getattr(
+                                            act, "__class__", type(act)
+                                        ).__name__
                                         args = getattr(act, "arguments", {}) or {}
                                         phase = governor.classify_action(act_type, args)
                                         if phase == TokenPhase.IMPLEMENTATION:
                                             governor.has_performed_edit = True
 
-                                    if not governor.has_performed_edit:
-                                        governor.allocation.investigation_consumed = delta_tok
+                                    if (
+                                        not governor.has_performed_edit
+                                        and not role_name.lower().startswith("auditor")
+                                    ):
+                                        governor.allocation.investigation_consumed = (
+                                            delta_tok
+                                        )
                                         if governor.is_investigation_exhausted():
                                             ConsoleOutput.warning(
                                                 f"Agent {role_name} exhausted investigation token budget "
@@ -343,9 +355,7 @@ class BasePipeline(ABC):
     def _execute_tests(self, timeout_seconds: int = 60) -> WorkspaceTerminalObservation:
         """Execute project test suite using detected language adapter."""
         test_cmd = (
-            self.adapter.get_test_command(self.workspace_path)
-            if self.adapter
-            else None
+            self.adapter.get_test_command(self.workspace_path) if self.adapter else None
         ) or "pytest -v"
 
         return execute_terminal_action(

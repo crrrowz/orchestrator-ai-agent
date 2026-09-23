@@ -15,7 +15,6 @@ from orchestrator.control.budget_guard import BudgetGuard
 from orchestrator.telemetry.schemas import DiagnosticReport, StepIncident, StepMetric
 
 
-
 def get_llm_usage(llm) -> dict:
     """Safely extract prompt/completion tokens and cost from an OpenHands LLM instance."""
     metrics = getattr(llm, "metrics", None)
@@ -200,7 +199,6 @@ class TelemetryRecorder:
                 total_tokens=u["total_tokens"],
                 estimated_cost_usd=u["estimated_cost_usd"],
             )
-
 
     def record_incident(self, step_name: str, incident_type: str, details: str) -> None:
         """Log a failure or anomaly during execution."""

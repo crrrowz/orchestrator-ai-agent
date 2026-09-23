@@ -7,7 +7,11 @@ from typing import Optional
 from openhands.sdk import Conversation
 from orchestrator.agents import create_auditor_agent
 from orchestrator.config import OrchestratorConfig, SkillManager
-from orchestrator.control import HumanInterventionChannel, PipelineController
+from orchestrator.control import (
+    DynamicTokenGovernor,
+    HumanInterventionChannel,
+    PipelineController,
+)
 from orchestrator.control.human_channel import set_active_channel
 from orchestrator.pipeline.audit_report_io import locate_and_normalize_report
 from orchestrator.pipeline.base_pipeline import BasePipeline
@@ -91,7 +95,7 @@ class AuditPipeline(BasePipeline):
         )
 
         # Step 2: LLM Auditor Agent
-        log_store = SessionLogStore()
+        log_store = SessionLogStore(workspace_path=self.workspace_path)
         visualizer = OrchestratorLiveVisualizer(
             log_store, verbosity=self.config.verbosity
         )
@@ -155,18 +159,28 @@ class AuditPipeline(BasePipeline):
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))
+        auditor_governor = DynamicTokenGovernor.compute_iteration_budget(
+            role="auditor",
+            severity="HIGH",
+            affected_files_count=metrics.get("total_files", 10),
+            task_text=focus_directive,
+            hard_ceiling=getattr(self.config, "max_tokens_budget", 400_000),
+        )
         self._run_conv(
             auditor_conv,
             "Auditor",
             max_steps=getattr(self.config, "max_agent_steps", 8),
-            max_tokens=getattr(self.config, "max_tokens_budget", 250_000),
+            max_tokens=auditor_governor.allocation.total_budget,
             task_complexity="high",
+            governor=auditor_governor,
         )
         dur = time.perf_counter() - t_start
         u_audit = get_llm_usage(auditor_agent.llm)
 
         # Step 2: Locate and normalize AUDIT_REPORT.md
-        report_file = locate_and_normalize_report(self.workspace_path, "AUDIT_REPORT.md")
+        report_file = locate_and_normalize_report(
+            self.workspace_path, "AUDIT_REPORT.md"
+        )
         if not report_file:
             report_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
             report_file.parent.mkdir(parents=True, exist_ok=True)
@@ -176,6 +190,17 @@ class AuditPipeline(BasePipeline):
             top_files_md = "\n".join(
                 f"- `{f}` ({loc} LOC)" for f, loc in metrics["top_files"]
             )
+            if "CLEAN" in static_report:
+                rec_text = (
+                    "- Workspace static analysis is clean; zero syntax or linter defects detected.\n"
+                    "- Review file size hotspots exceeding 300 LOC for decomposition."
+                )
+            else:
+                rec_text = (
+                    "- Address any AST syntax failures and static linter warnings listed above.\n"
+                    "- Review file size hotspots exceeding 300 LOC for decomposition."
+                )
+
             fallback_content = (
                 f"# Codebase Architecture & Security Audit Report\n\n"
                 f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n"
@@ -190,10 +215,10 @@ class AuditPipeline(BasePipeline):
                 f"## 3. Architecture Overview\n"
                 f"```text\n{graft_map or 'No Graft map available.'}\n```\n\n"
                 f"## 4. Key Recommendations\n"
-                f"- Address any AST syntax failures and static linter warnings listed above.\n"
-                f"- Review file size hotspots exceeding 300 LOC for decomposition.\n"
+                f"{rec_text}\n"
             )
             report_file.write_text(fallback_content, encoding="utf-8")
+
 
         telemetry.record_step(
             "auditor",

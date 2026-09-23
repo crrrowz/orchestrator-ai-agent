@@ -146,4 +146,3 @@ def test_audit_report_io_normalization_and_reading(tmp_path: Path):
     # read_report should return content
     content = read_report(tmp_path, "AUDIT_REPORT.md")
     assert "Root Audit" in content
-

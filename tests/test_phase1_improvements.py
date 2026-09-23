@@ -120,11 +120,12 @@ def test_telemetry_timed_step_and_per(tmp_path: Path):
     assert recorder.metrics[0].duration_seconds >= 0.0
 
     # PER calculation
-    per = TelemetryRecorder.calculate_per(resolved_findings_delta=2, tokens_consumed=50_000)
+    per = TelemetryRecorder.calculate_per(
+        resolved_findings_delta=2, tokens_consumed=50_000
+    )
     assert per == 4.0
 
     # Finalize with PER
     report = recorder.finalize(completed_successfully=True, resolved_findings_delta=1)
     assert report.completed_successfully is True
     assert report.progress_efficiency_ratio >= 0.0
-

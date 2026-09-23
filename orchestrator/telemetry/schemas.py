@@ -50,4 +50,3 @@ class DiagnosticReport(BaseModel):
     metrics: List[StepMetric] = Field(default_factory=list)
     incidents: List[StepIncident] = Field(default_factory=list)
     recommendations: List[str] = Field(default_factory=list)
-

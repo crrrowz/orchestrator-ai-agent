@@ -84,8 +84,9 @@ class DynamicTokenGovernor:
         "decouple",
     }
 
-    def __init__(self, allocation: PhaseBudgetAllocation):
+    def __init__(self, allocation: PhaseBudgetAllocation, role: str = "developer"):
         self.allocation = allocation
+        self.role: str = (role or "developer").lower()
         self.has_performed_edit: bool = False
         self.investigation_exhausted: bool = False
 
@@ -101,6 +102,7 @@ class DynamicTokenGovernor:
         """Compute task-aware iteration budget and allocate into operational phases."""
         sev = (severity or "MEDIUM").strip().upper()
         text_lower = (task_text or "").lower()
+        role_lower = (role or "developer").lower()
 
         # 1. Base budget by affected file count
         if affected_files_count <= 1:
@@ -132,14 +134,17 @@ class DynamicTokenGovernor:
         total = min(max(base_budget, 35_000), hard_ceiling)
 
         # 4. Partition into Phase Allocations
-        # Investigation: 25-30%
-        # Implementation: 45-50%
-        # Testing: 15-20%
-        # Reserve: 10%
-        investigation = int(total * 0.28)
-        implementation = int(total * 0.47)
-        testing = int(total * 0.15)
-        reserve = total - (investigation + implementation + testing)
+        if "auditor" in role_lower:
+            # Auditor's primary role is investigation and generating AUDIT_REPORT.md
+            investigation = int(total * 0.70)
+            implementation = int(total * 0.20)
+            testing = 0
+            reserve = total - (investigation + implementation)
+        else:
+            investigation = int(total * 0.28)
+            implementation = int(total * 0.47)
+            testing = int(total * 0.15)
+            reserve = total - (investigation + implementation + testing)
 
         alloc = PhaseBudgetAllocation(
             total_budget=total,
@@ -148,9 +153,10 @@ class DynamicTokenGovernor:
             testing_budget=testing,
             reserve_budget=reserve,
         )
-        governor = cls(alloc)
+        governor = cls(alloc, role=role_lower)
         governor.suggested_max_steps = max_agent_steps
         return governor
+
 
     @staticmethod
     def classify_action(
@@ -204,8 +210,11 @@ class DynamicTokenGovernor:
 
     def is_investigation_exhausted(self) -> bool:
         """Indicates whether the agent has exhausted exploration tokens with zero edits."""
+        if "auditor" in getattr(self, "role", ""):
+            return False
         return (
             not self.has_performed_edit
             and self.allocation.investigation_consumed
             >= self.allocation.investigation_budget
         )
+

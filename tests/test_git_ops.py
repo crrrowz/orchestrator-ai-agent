@@ -24,7 +24,10 @@ def test_git_branch_sanitization_and_creation(tmp_path: Path):
     git.init_repo()
 
     # Sanitize test
-    assert GitOps.sanitize_branch_name("Fix: /special & symbols! (now)") == "fix-special-symbols-now"
+    assert (
+        GitOps.sanitize_branch_name("Fix: /special & symbols! (now)")
+        == "fix-special-symbols-now"
+    )
     assert GitOps.sanitize_branch_name("   ") == "task"
 
     # Branch creation
@@ -32,4 +35,3 @@ def test_git_branch_sanitization_and_creation(tmp_path: Path):
     assert branch is not None
     assert branch.startswith("agent/implement-user-auth-")
     assert git.get_current_branch() == branch
-

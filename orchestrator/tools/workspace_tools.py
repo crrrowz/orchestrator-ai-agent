@@ -80,7 +80,10 @@ def extract_ast_symbol(
         for node in tree.body:
             if isinstance(node, ast.ClassDef) and node.name == cls_name:
                 for sub in node.body:
-                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)) and sub.name == m_name:
+                    if (
+                        isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and sub.name == m_name
+                    ):
                         match_node = sub
                         break
 
@@ -91,7 +94,12 @@ def extract_ast_symbol(
         return extracted, start_ln, end_ln, None
 
     avail_str = ", ".join(all_symbols[:15]) if all_symbols else "None"
-    return None, None, None, f"Symbol '{target}' not found in '{file_path.name}'. Available symbols: {avail_str}"
+    return (
+        None,
+        None,
+        None,
+        f"Symbol '{target}' not found in '{file_path.name}'. Available symbols: {avail_str}",
+    )
 
 
 class WorkspaceFileObservation(Observation):
@@ -369,7 +377,9 @@ def execute_file_action(
                 )
 
             annotated_lines = []
-            for idx, line in enumerate((extracted or "").splitlines(), start=start_ln or 1):
+            for idx, line in enumerate(
+                (extracted or "").splitlines(), start=start_ln or 1
+            ):
                 annotated_lines.append(f"{idx:4d}: {line}")
             annotated_content = "\n".join(annotated_lines)
             selected_content = sanitize_output_secrets(annotated_content)

@@ -212,11 +212,25 @@ class SkillManager:
         filtered_names = list(skill_names)
         if task_text:
             text_lower = task_text.lower()
-            if "docker" not in text_lower and "container" not in text_lower and "dockerfile" not in text_lower:
-                filtered_names = [n for n in filtered_names if n != "docker-devops-containerization"]
-            if "graft" not in text_lower and "graph" not in text_lower and "dependency" not in text_lower:
+            if (
+                "docker" not in text_lower
+                and "container" not in text_lower
+                and "dockerfile" not in text_lower
+            ):
+                filtered_names = [
+                    n for n in filtered_names if n != "docker-devops-containerization"
+                ]
+            if (
+                "graft" not in text_lower
+                and "graph" not in text_lower
+                and "dependency" not in text_lower
+            ):
                 if len(filtered_names) > 2:
-                    filtered_names = [n for n in filtered_names if n != "graft-architecture-intelligence"]
+                    filtered_names = [
+                        n
+                        for n in filtered_names
+                        if n != "graft-architecture-intelligence"
+                    ]
 
         role_skills = self.get_skills_for_role(filtered_names)
         if compact:

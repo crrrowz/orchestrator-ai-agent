@@ -148,9 +148,9 @@ class GitOps:
         """Sanitize a task or feature name into a valid, clean git branch component."""
         import re
 
-        clean_slug = re.sub(
-            r"[^a-zA-Z0-9_\-]+", "-", task_name.strip().lower()
-        ).strip("-")[:max_length]
+        clean_slug = re.sub(r"[^a-zA-Z0-9_\-]+", "-", task_name.strip().lower()).strip(
+            "-"
+        )[:max_length]
         return clean_slug or "task"
 
     def create_task_branch(self, task_name: str) -> Optional[str]:
