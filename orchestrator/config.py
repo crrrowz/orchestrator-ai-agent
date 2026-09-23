@@ -27,8 +27,11 @@ class AgentRoleConfig(BaseModel):
 class OrchestratorConfig(BaseModel):
     """Global configuration for orchestrator execution."""
     workspace_path: Path = Field(default_factory=lambda: Path(os.environ.get("WORKSPACE_PATH", "./workspace")).resolve())
-    max_iterations: int = Field(default=int(os.environ.get("MAX_ITERATIONS", "5")))
+    max_iterations: int = Field(default=int(os.environ.get("MAX_ITERATIONS", "4")))
     auto_commit: bool = Field(default=os.environ.get("AUTO_COMMIT", "true").lower() == "true")
+    max_budget_usd: float = Field(default=float(os.environ.get("MAX_BUDGET_USD", "0.50")))
+    max_tokens_per_call: int = Field(default=int(os.environ.get("MAX_TOKENS_PER_CALL", "4096")))
+    circuit_breaker_threshold: int = Field(default=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "2")))
     
     # Provider keys
     anthropic_api_key: Optional[str] = Field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY"))
@@ -39,25 +42,25 @@ class OrchestratorConfig(BaseModel):
     # Role configs
     developer: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="developer",
-        model=os.environ.get("DEVELOPER_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
+        model=os.environ.get("DEVELOPER_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "anthropic/claude-sonnet-4-5-20250929"),
         temperature=0.2,
         skills=["clean-python-architecture", "systematic-debugging", "docker-devops-containerization"],
     ))
     tester: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="tester",
-        model=os.environ.get("TESTER_MODEL", "openai/gpt-4o-mini"),
+        model=os.environ.get("TESTER_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "openai/gpt-4o-mini"),
         temperature=0.0,
         skills=["pytest-rigorous-testing"],
     ))
     reviewer: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="reviewer",
-        model=os.environ.get("REVIEWER_MODEL", "openai/gpt-4o"),
+        model=os.environ.get("REVIEWER_MODEL", "openrouter/google/gemini-2.0-flash-exp:free" if os.environ.get("OPENROUTER_API_KEY") else "openai/gpt-4o"),
         temperature=0.1,
         skills=["code-review-standards", "security-audit-hardening"],
     ))
     architect: AgentRoleConfig = Field(default_factory=lambda: AgentRoleConfig(
         role="architect",
-        model=os.environ.get("ARCHITECT_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
+        model=os.environ.get("ARCHITECT_MODEL", "openrouter/qwen/qwen3.8-27b:free" if os.environ.get("OPENROUTER_API_KEY") else "anthropic/claude-sonnet-4-5-20250929"),
         temperature=0.3,
         skills=["architectural-decomposition", "api-design-contract"],
     ))
@@ -121,9 +124,16 @@ def create_llm_for_role(config: OrchestratorConfig, role_config: AgentRoleConfig
 
     secret = SecretStr(api_key_val) if api_key_val else None
 
-    return LLM(
-        model=model,
-        api_key=secret,
-        temperature=role_config.temperature,
-        usage_id=f"agent-{role_config.role}",
-    )
+    llm_kwargs = {
+        "model": model,
+        "api_key": secret,
+        "temperature": role_config.temperature,
+        "max_output_tokens": config.max_tokens_per_call,
+        "usage_id": f"agent-{role_config.role}",
+    }
+
+    if model.startswith("openrouter/"):
+        llm_kwargs["openrouter_site_url"] = "https://github.com/Antigravity-Agent-API"
+        llm_kwargs["openrouter_app_name"] = "Antigravity Multi-Agent Orchestrator"
+
+    return LLM(**llm_kwargs)

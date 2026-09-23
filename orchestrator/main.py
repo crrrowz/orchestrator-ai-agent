@@ -42,10 +42,9 @@ def parse_args() -> argparse.Namespace:
         help="Check configured models, API keys, and settings.",
     )
     parser.add_argument(
-        "-i",
-        "--interactive",
+        "--self-audit",
         action="store_true",
-        help="Launch interactive setup wizard.",
+        help="Run offline self-evolution analysis on historical execution reports.",
     )
     return parser.parse_args()
 
@@ -110,6 +109,16 @@ def interactive_wizard(config: OrchestratorConfig, skill_manager: SkillManager) 
         sys.exit(0)
 
 
+def handle_self_audit() -> None:
+    from orchestrator.evolution import SystemAuditor
+    auditor = SystemAuditor()
+    report_file = auditor.audit_and_generate_report()
+    ConsoleOutput.banner("System Evolution & Self-Improvement Audit")
+    ConsoleOutput.success(f"Audit report generated at: {report_file}")
+    if report_file.exists():
+        print("\n" + report_file.read_text(encoding="utf-8"))
+
+
 def main() -> None:
     args = parse_args()
     config = OrchestratorConfig()
@@ -123,8 +132,12 @@ def main() -> None:
         handle_check_config(config)
         sys.exit(0)
 
+    if args.self_audit:
+        handle_self_audit()
+        sys.exit(0)
+
     # If no task is provided, run the friendly interactive wizard
-    if not args.task or args.interactive:
+    if not args.task:
         task, mode, workspace = interactive_wizard(config, skill_manager)
     else:
         task = args.task

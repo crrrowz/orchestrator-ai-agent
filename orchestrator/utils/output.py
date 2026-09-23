@@ -35,15 +35,15 @@ class ConsoleOutput:
 
     @staticmethod
     def success(message: str) -> None:
-        console.print(f"[success]✔[/success] {message}")
+        console.print(f"[success][OK][/success] {message}")
 
     @staticmethod
     def error(message: str) -> None:
-        console.print(f"[danger]✘[/danger] {message}")
+        console.print(f"[danger][ERR][/danger] {message}")
 
     @staticmethod
     def warning(message: str) -> None:
-        console.print(f"[warning]⚠[/warning] {message}")
+        console.print(f"[warning][WARN][/warning] {message}")
 
     @staticmethod
     def summary_table(iterations: int, status: str, commit_hash: str = "") -> None:
