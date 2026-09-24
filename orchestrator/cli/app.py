@@ -43,6 +43,9 @@ except ImportError:
 
 from orchestrator.cli.handlers import (  # noqa: E402
     handle_check_config,
+    handle_diagnostics_clean,
+    handle_diagnostics_dashboard,
+    handle_diagnostics_search,
     handle_list_skills,
     handle_self_audit,
     handle_sentinel_heal,
@@ -194,6 +197,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Probe cloud fallback mesh readiness and verify provider circuit breakers.",
     )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Display unified diagnostics intelligence dashboard (telemetry, memory, sentinel, logs).",
+    )
+    parser.add_argument(
+        "--diagnostics-search",
+        type=str,
+        default=None,
+        metavar="QUERY",
+        help="Search across all reports, task memories, sentinel incidents, and session logs.",
+    )
+    parser.add_argument(
+        "--diagnostics-clean",
+        action="store_true",
+        help="Clean up test artifacts, prune old logs/memories, and regenerate the central diagnostics catalog.",
+    )
     return parser.parse_args()
 
 
@@ -324,6 +344,18 @@ def main() -> None:
 
     if args.sentinel_test_mesh:
         handle_sentinel_test_mesh(config)
+        sys.exit(0)
+
+    if args.diagnostics:
+        handle_diagnostics_dashboard()
+        sys.exit(0)
+
+    if args.diagnostics_search:
+        handle_diagnostics_search(args.diagnostics_search)
+        sys.exit(0)
+
+    if args.diagnostics_clean:
+        handle_diagnostics_clean()
         sys.exit(0)
 
     # Check for --resume, direct audit/docs modes, or interactive wizard

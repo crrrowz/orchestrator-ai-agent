@@ -378,3 +378,40 @@ def handle_sentinel_test_mesh(config: Optional[Any] = None) -> None:
         )
 
     console.print(table)
+
+
+def handle_diagnostics_dashboard(diagnostics_dir: Optional[Path] = None) -> None:
+    """Display the unified multi-subsystem diagnostics intelligence dashboard."""
+    from orchestrator.diagnostics import DiagnosticsManager
+
+    manager = DiagnosticsManager(diagnostics_dir=diagnostics_dir)
+    manager.render_dashboard()
+
+
+def handle_diagnostics_search(
+    query: str, diagnostics_dir: Optional[Path] = None
+) -> None:
+    """Execute a universal full-text search across reports, memories, sentinel incidents, and logs."""
+    from orchestrator.diagnostics import DiagnosticsManager
+
+    manager = DiagnosticsManager(diagnostics_dir=diagnostics_dir)
+    manager.search(query)
+
+
+def handle_diagnostics_clean(diagnostics_dir: Optional[Path] = None) -> None:
+    """Clean test artifacts, prune stale files, and regenerate diagnostic indexes."""
+    from orchestrator.diagnostics import DiagnosticsManager
+
+    manager = DiagnosticsManager(diagnostics_dir=diagnostics_dir)
+    results = manager.clean()
+
+    ConsoleOutput.banner(
+        "Diagnostics System Cleanup & Indexing", f"Directory: {manager.base_dir}"
+    )
+    ConsoleOutput.success(
+        f"Removed {results['test_log_dirs_removed']} test log directories, "
+        f"pruned {results['stale_memory_files_pruned']} old memories, "
+        f"pruned {results['stale_reports_pruned']} old reports, "
+        f"cleaned {results['tmp_files_removed']} temporary files."
+    )
+    ConsoleOutput.info(f"Regenerated catalog index: {manager.base_dir / 'INDEX.md'}")

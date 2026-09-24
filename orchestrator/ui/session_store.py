@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from orchestrator.core.constants import DEFAULT_DIAGNOSTICS_DIR
+from orchestrator.core.constants import DEFAULT_DIAGNOSTICS_DIR, ORCHESTRATOR_ROOT
 
 
 @dataclass
@@ -32,10 +32,12 @@ class SessionLogStore:
         self,
         workspace_path: Optional[Path] = None,
         max_retained_sessions: int = 10,
+        diagnostics_dir: Optional[Path] = None,
     ):
         self._lock = threading.Lock()
         self.steps: List[LogStep] = []
         self.workspace_path = workspace_path
+        self.diagnostics_dir = diagnostics_dir
         ws_name = workspace_path.name if workspace_path else "default"
         import re
 
@@ -143,7 +145,20 @@ class SessionLogStore:
         diagnostics_dir: Optional[Path] = None,
         filepath: Optional[Path] = None,
     ) -> Path:
-        out_dir = target_dir or diagnostics_dir or (DEFAULT_DIAGNOSTICS_DIR / "logs")
+        if target_dir:
+            out_dir = target_dir
+        elif diagnostics_dir:
+            out_dir = diagnostics_dir
+        elif self.diagnostics_dir:
+            out_dir = self.diagnostics_dir
+        elif (
+            self.workspace_path
+            and self.workspace_path.resolve() != ORCHESTRATOR_ROOT.resolve()
+        ):
+            out_dir = self.workspace_path / "diagnostics" / "logs"
+        else:
+            out_dir = DEFAULT_DIAGNOSTICS_DIR / "logs"
+
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Project-specific partitioned directory

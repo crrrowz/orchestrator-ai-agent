@@ -360,7 +360,55 @@ class TelemetryRecorder:
         # Automatically enforce report retention policy (FIFO auto-pruning)
         self._prune_old_reports()
 
+        # Update reports central index
+        self._rebuild_reports_index()
+
         return report
+
+    def _rebuild_reports_index(self) -> None:
+        """Rebuild index.json inside reports_dir for rapid lookups and human discovery."""
+        try:
+            import json
+
+            index_path = self.reports_dir / "index.json"
+            report_files = sorted(
+                self.reports_dir.glob("run_*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            entries = []
+            for rf in report_files:
+                try:
+                    data = json.loads(rf.read_text(encoding="utf-8"))
+                    entries.append(
+                        {
+                            "report_id": data.get("report_id", rf.stem),
+                            "start_time": data.get("start_time"),
+                            "mode": data.get("pipeline_mode", "unknown"),
+                            "task": data.get("task_description", "")[:120],
+                            "completed_successfully": data.get(
+                                "completed_successfully", False
+                            ),
+                            "duration_seconds": data.get("total_duration_seconds", 0.0),
+                            "total_tokens": data.get("total_tokens", 0),
+                            "total_cost_usd": data.get("total_cost_usd", 0.0),
+                            "incidents_count": len(data.get("incidents", [])),
+                            "file": rf.name,
+                        }
+                    )
+                except Exception:
+                    continue
+
+            index_data = {
+                "total_reports": len(entries),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "reports": entries,
+            }
+            tmp_index = index_path.with_suffix(".tmp")
+            tmp_index.write_text(json.dumps(index_data, indent=2), encoding="utf-8")
+            tmp_index.replace(index_path)
+        except Exception:
+            pass
 
     def _prune_old_reports(self) -> int:
         """Enforce retention policy by pruning oldest run_*.json files exceeding max_retained_reports."""

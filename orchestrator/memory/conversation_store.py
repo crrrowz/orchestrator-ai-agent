@@ -5,7 +5,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
@@ -68,12 +68,13 @@ COMMON_TASK_STOPWORDS: set[str] = {
 
 
 class ConversationStore:
-    """Manages persistent cross-run task memory stored in diagnostics/memory/."""
+    """Manages persistent cross-run task memory stored in diagnostics/memory/ with indexing and retention."""
 
     def __init__(
         self,
         memory_dir: Optional[Path] = None,
         workspace_path: Optional[Path] = None,
+        max_retained_memories: int = 30,
     ):
         if memory_dir:
             target = memory_dir
@@ -86,6 +87,8 @@ class ConversationStore:
             target = target / "memory"
         self.memory_dir = target.resolve()
         self.memory_dir.mkdir(parents=True, exist_ok=True)
+        self.max_retained_memories = max_retained_memories
+        self.index_file = self.memory_dir / "index.json"
 
     def save_run_memory(
         self,
@@ -95,7 +98,7 @@ class ConversationStore:
         tests_passed: bool = True,
         lessons: Optional[str] = None,
     ) -> Path:
-        """Persist a task execution memory entry to disk with atomic write."""
+        """Persist a task execution memory entry to disk with atomic write and index update."""
         entry = MemoryEntry(
             task=task,
             summary=summary,
@@ -110,12 +113,21 @@ class ConversationStore:
         tmp_path = file_path.with_suffix(".tmp")
         tmp_path.write_text(entry.model_dump_json(indent=2), encoding="utf-8")
         tmp_path.replace(file_path)
+
+        # Enforce FIFO retention policy
+        self._prune_old_memories()
+
+        # Re-build central memory index
+        self._rebuild_index()
+
         return file_path
 
     def load_all_memories(self) -> list[MemoryEntry]:
-        """Load all valid memory entries from disk."""
+        """Load all valid memory entries from disk sorted newest first."""
         entries: list[MemoryEntry] = []
         for p in self.memory_dir.glob("*.json"):
+            if p.name == "index.json":
+                continue
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
                 entries.append(MemoryEntry(**data))
@@ -175,6 +187,21 @@ class ConversationStore:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item[1] for item in scored[:max_results]]
 
+    def search_memories(self, query: str, limit: int = 10) -> list[MemoryEntry]:
+        """Perform a direct substring/token query across task, summary, and lessons."""
+        query_terms = [t.lower() for t in query.split() if t.strip()]
+        if not query_terms:
+            return self.load_all_memories()[:limit]
+
+        matches: list[MemoryEntry] = []
+        for mem in self.load_all_memories():
+            searchable = f"{mem.task} {mem.summary} {mem.lessons or ''} {' '.join(mem.files_touched)}".lower()
+            if any(term in searchable for term in query_terms):
+                matches.append(mem)
+                if len(matches) >= limit:
+                    break
+        return matches
+
     def format_memory_context(
         self,
         task: str,
@@ -201,6 +228,69 @@ class ConversationStore:
 
         res = "\n".join(lines).strip()
         return res[:max_chars]
+
+    def _prune_old_memories(self) -> int:
+        """Prune oldest memory JSON files when total exceeds max_retained_memories."""
+        if self.max_retained_memories <= 0:
+            return 0
+        try:
+            files = [
+                p for p in self.memory_dir.glob("*.json") if p.name != "index.json"
+            ]
+            files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            pruned = 0
+            if len(files) > self.max_retained_memories:
+                for old in files[self.max_retained_memories :]:
+                    try:
+                        old.unlink()
+                        pruned += 1
+                    except OSError:
+                        pass
+            return pruned
+        except Exception:
+            return 0
+
+    def _rebuild_index(self) -> None:
+        """Rebuild index.json with a structured overview of all stored memories."""
+        try:
+            memories = self.load_all_memories()
+            index_data = {
+                "total_memories": len(memories),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "memories": [
+                    {
+                        "id": m.id,
+                        "timestamp": m.timestamp,
+                        "task": m.task,
+                        "summary": m.summary[:150]
+                        + ("..." if len(m.summary) > 150 else ""),
+                        "tests_passed": m.tests_passed,
+                        "files_touched": m.files_touched,
+                        "has_lessons": bool(m.lessons),
+                    }
+                    for m in memories
+                ],
+            }
+            tmp_idx = self.index_file.with_suffix(".tmp")
+            tmp_idx.write_text(json.dumps(index_data, indent=2), encoding="utf-8")
+            tmp_idx.replace(self.index_file)
+        except Exception:
+            pass
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Aggregate stats on stored memories."""
+        memories = self.load_all_memories()
+        passed = sum(1 for m in memories if m.tests_passed)
+        failed = len(memories) - passed
+        unique_files = set()
+        for m in memories:
+            unique_files.update(m.files_touched)
+        return {
+            "total_memories": len(memories),
+            "passed_tasks": passed,
+            "failed_tasks": failed,
+            "unique_files_touched": len(unique_files),
+        }
 
 
 # Backward compatibility and contextual aliases
