@@ -303,12 +303,7 @@ def check_and_rotate_stale_reports(
             )
         )
 
-        if (
-            outcome == "CONVERGED_CLEAN"
-            and is_post_fix
-            and not has_remaining_backlog
-            and resolved_titles
-        ):
+        if outcome == "CONVERGED_CLEAN" and is_post_fix and not has_remaining_backlog:
             archive_dir = workspace_path / "diagnostics" / "reports" / "archive"
             archive_dir.mkdir(parents=True, exist_ok=True)
             ts = time.strftime("%Y%m%d_%H%M%S")

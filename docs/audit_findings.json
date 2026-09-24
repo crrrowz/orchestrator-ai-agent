@@ -1,9 +1,0 @@
-{
-  "status": "AUDIT_CLEAN",
-  "summary": "Workspace verified clean. Zero actionable defects detected.",
-  "findings": [],
-  "total_files_scanned": 146,
-  "total_loc": 22953,
-  "clean_static": true,
-  "timestamp": "2026-09-24 08:53:02 UTC"
-}
