@@ -171,8 +171,8 @@ class PythonAdapter(ProjectAdapter):
                 else "uv run python -m pytest -v"
             )
         elif has_tests_dir:
-            return "pytest tests/ -v"
-        return "pytest -v"
+            return "python -m pytest tests/ -v"
+        return "python -m pytest -v"
 
     def parse_test_failures(self, stdout: str, stderr: str) -> str:
         """Parse Pytest failure outputs into a minimal compact prompt snippet."""

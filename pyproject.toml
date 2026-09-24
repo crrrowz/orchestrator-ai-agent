@@ -1,7 +1,7 @@
 [project]
-name = "antigravity-agent-orchestrator"
+name = "oragai"
 version = "0.1.0"
-description = "Multi-Agent Software Development Orchestrator powered by OpenHands SDK"
+description = "ORAGAI: Autonomous Multi-Agent Orchestration & Self-Healing Engineering"
 readme = "docs/README.md"
 requires-python = ">=3.12"
 dependencies = [

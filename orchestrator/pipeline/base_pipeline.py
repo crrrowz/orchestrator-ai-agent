@@ -580,15 +580,48 @@ class BasePipeline(ABC):
         return True
 
     def _execute_tests(self, timeout_seconds: int = 60) -> WorkspaceTerminalObservation:
-        """Execute project test suite using detected language adapter."""
+        """Execute project test suite using detected language adapter with launcher crash recovery."""
         test_cmd = (
             self.adapter.get_test_command(self.workspace_path) if self.adapter else None
-        ) or "pytest -v"
+        ) or "python -m pytest -v"
 
-        return execute_terminal_action(
+        test_run = execute_terminal_action(
             WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),
             base_dir=self.workspace_path,
         )
+
+        if test_run.exit_code != 0:
+            from orchestrator.analysis.pytest_parser import PytestOutputParser
+
+            is_crash, _ = PytestOutputParser.is_runner_crash(
+                test_run.stdout, test_run.stderr
+            )
+            if is_crash:
+                # Auto-heal launcher command if it used bare pytest, uv trampoline, or launcher issues
+                fallback_cmd = None
+                if "uv run pytest" in test_cmd:
+                    fallback_cmd = test_cmd.replace("uv run pytest", "uv run python -m pytest")
+                elif "uv run python -m pytest" in test_cmd:
+                    fallback_cmd = test_cmd.replace("uv run python -m pytest", "python -m pytest")
+                elif "pytest" in test_cmd and "python -m pytest" not in test_cmd:
+                    fallback_cmd = test_cmd.replace("pytest", "python -m pytest")
+
+                if fallback_cmd and fallback_cmd != test_cmd:
+                    ConsoleOutput.info(
+                        f"Auto-healing test launcher command: `{test_cmd}` ➔ `{fallback_cmd}`"
+                    )
+                    retry_run = execute_terminal_action(
+                        WorkspaceTerminalAction(
+                            command=fallback_cmd, timeout_seconds=timeout_seconds
+                        ),
+                        base_dir=self.workspace_path,
+                    )
+                    if retry_run.exit_code == 0 or not PytestOutputParser.is_runner_crash(
+                        retry_run.stdout, retry_run.stderr
+                    )[0]:
+                        return retry_run
+
+        return test_run
 
     def _execute_pytest(
         self, timeout_seconds: int = 60

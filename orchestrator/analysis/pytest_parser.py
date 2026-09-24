@@ -1,10 +1,59 @@
 """Compact Pytest Failure Parser to minimize token consumption in fix prompts."""
 
 import re
+from typing import Tuple
 
 
 class PytestOutputParser:
     """Extracts only actionable test failure details, stripping passing tests and environment noise."""
+
+    @staticmethod
+    def is_runner_crash(stdout: str, stderr: str) -> Tuple[bool, str]:
+        """Detect whether test execution failed due to a launcher, trampoline, or environment crash rather than code logic."""
+        combined = f"{stdout}\n{stderr}".strip()
+        if not combined:
+            return False, ""
+
+        runner_crash_patterns = [
+            (
+                r"uv trampoline failed to canonicalize script path",
+                "uv launcher trampoline failure on Windows path with spaces",
+            ),
+            (
+                r"No module named pytest",
+                "pytest not installed in active virtual environment",
+            ),
+            (
+                r"is not recognized as an internal or external command",
+                "executable binary not found in Windows PATH",
+            ),
+            (
+                r"command not found",
+                "executable binary not found in system PATH",
+            ),
+            (
+                r"PermissionError: \[WinError 5\]",
+                "Windows filesystem permission denied during process invocation",
+            ),
+            (
+                r"executable file not found in %PATH%",
+                "executable binary missing from system PATH",
+            ),
+        ]
+
+        for pattern, explanation in runner_crash_patterns:
+            if re.search(pattern, combined, flags=re.IGNORECASE):
+                return True, f"Environment Runner Crash: {explanation}"
+
+        # If no tests were run and runner crashed on startup
+        if ("collected 0 items" in combined or "0 items" in combined) and (
+            "Traceback (most recent call last):" in combined
+            or "ModuleNotFoundError:" in combined
+            or "ImportError:" in combined
+        ):
+            return True, "Test runner failed during initialization before running test suite"
+
+        return False, ""
 
     @staticmethod
     def extract_compact_failures(
@@ -14,6 +63,14 @@ class PytestOutputParser:
         combined = f"{stdout}\n{stderr}".strip()
         if not combined:
             return "No output captured from pytest execution."
+
+        is_crash, crash_reason = PytestOutputParser.is_runner_crash(stdout, stderr)
+        if is_crash:
+            return (
+                f"[ENVIRONMENT RUNNER LAUNCHER CRASH - DO NOT MODIFY CODE LOGIC]\n"
+                f"Diagnostic: {crash_reason}\n"
+                f"Raw Output:\n{combined[:1000]}"
+            )
 
         lines = combined.splitlines()
         failures: list[str] = []

@@ -351,7 +351,7 @@ class AuditFixPipeline(BasePipeline):
         return self.adapter.run_static_analysis(self.workspace_path)
 
     def run_test_suite(self, timeout_seconds: int = 60) -> Tuple[bool, str]:
-        """Execute test suite via detected language adapter (e.g. uv run pytest tests/ -v)."""
+        """Execute test suite via detected language adapter with automated launcher crash auto-healing."""
         if not self.adapter.has_test_suite(self.workspace_path):
             return (
                 True,
@@ -372,6 +372,38 @@ class AuditFixPipeline(BasePipeline):
                 True,
                 f"All {self.adapter.language_name} unit tests passed successfully (`{test_cmd}`).",
             )
+
+        from orchestrator.analysis.pytest_parser import PytestOutputParser
+
+        is_crash, reason = PytestOutputParser.is_runner_crash(
+            test_run.stdout, test_run.stderr
+        )
+        if is_crash:
+            # Auto-heal launcher command if it used bare pytest, uv trampoline, or launcher issues
+            fallback_cmd = None
+            if "uv run pytest" in test_cmd:
+                fallback_cmd = test_cmd.replace("uv run pytest", "uv run python -m pytest")
+            elif "uv run python -m pytest" in test_cmd:
+                fallback_cmd = test_cmd.replace("uv run python -m pytest", "python -m pytest")
+            elif "pytest" in test_cmd and "python -m pytest" not in test_cmd:
+                fallback_cmd = test_cmd.replace("pytest", "python -m pytest")
+
+            if fallback_cmd and fallback_cmd != test_cmd:
+                ConsoleOutput.info(
+                    f"Auto-healing test launcher command: `{test_cmd}` ➔ `{fallback_cmd}`"
+                )
+                retry_run = execute_terminal_action(
+                    WorkspaceTerminalAction(
+                        command=fallback_cmd, timeout_seconds=timeout_seconds
+                    ),
+                    base_dir=self.workspace_path,
+                )
+                if retry_run.exit_code == 0:
+                    return (
+                        True,
+                        f"All {self.adapter.language_name} unit tests passed successfully via `{fallback_cmd}`.",
+                    )
+                test_run = retry_run
 
         compact = self.adapter.parse_test_failures(test_run.stdout, test_run.stderr)
         return (

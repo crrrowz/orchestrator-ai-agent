@@ -104,4 +104,22 @@ class TerminalCommandTranslator:
                     "Replaced /dev/null with $null for Windows PowerShell.",
                 )
 
+            # Translate python trampoline launcher commands on Windows to interpreter modules
+            trampoline_mappings = [
+                (r'^\s*uv\s+run\s+pytest(\s+.*)?$', r'uv run python -m pytest\1'),
+                (r'^\s*uv\s+run\s+ruff(\s+.*)?$', r'uv run python -m ruff\1'),
+                (r'^\s*uv\s+run\s+mypy(\s+.*)?$', r'uv run python -m mypy\1'),
+                (r'^\s*pytest(\s+.*)?$', r'python -m pytest\1'),
+                (r'^\s*ruff(\s+.*)?$', r'python -m ruff\1'),
+                (r'^\s*mypy(\s+.*)?$', r'python -m mypy\1'),
+            ]
+            for pattern, repl in trampoline_mappings:
+                if re.search(pattern, raw_cmd, flags=re.IGNORECASE):
+                    translated = re.sub(pattern, repl, raw_cmd, flags=re.IGNORECASE)
+                    return (
+                        True,
+                        translated,
+                        f"Translated Windows launcher command '{raw_cmd}' to interpreter module '{translated}'.",
+                    )
+
         return True, raw_cmd, "Command validated and passed as-is."

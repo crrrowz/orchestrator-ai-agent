@@ -41,7 +41,7 @@ class ProjectAdapter(ABC):
 
     def get_test_command(self, workspace: Path) -> str:
         """Return the shell command to execute the test suite."""
-        return "pytest -v"
+        return "python -m pytest -v"
 
     @abstractmethod
     def parse_test_failures(self, stdout: str, stderr: str) -> str:

@@ -1,6 +1,8 @@
-# Antigravity Orchestrator API & Component Reference
+# ORAGAI — Programmatic API & Architecture Contract
 
-Complete programmatic API and architecture contract for the Antigravity Multi-Agent Orchestrator framework.
+> **Autonomous Multi-Agent Orchestration & Self-Healing Engineering.**
+
+Complete programmatic API and architecture contract for the **ORAGAI** multi-agent framework.
 
 ---
 

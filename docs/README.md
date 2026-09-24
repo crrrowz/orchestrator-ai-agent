@@ -1,17 +1,20 @@
-# Antigravity Multi-Agent Orchestrator & Sentinel SRE Mesh
+# ORAGAI
 
-Autonomous, multi-agent software engineering framework powered by the **OpenHands Software Agent SDK** (`openhands-sdk v1.49.4`), `.agents/skills/` specification, and zero-token codebase intelligence (via Graft).
+> **Autonomous Multi-Agent Orchestration & Self-Healing Engineering.**  
+> *(Orchestrated Resilient Autonomous Generative AI)*
+
+**ORAGAI** is a high-performance, autonomous multi-agent software engineering framework powered by the **OpenHands Software Agent SDK** (`openhands-sdk v1.49.4`), `.agents/skills/` specification, and zero-token codebase intelligence (via Graft).
 
 ---
 
-## 🌟 System Overview & Reality
+## 🌟 System Overview
 
 ```
                                   USER TASK / SPEC FILE
                                             │
                                             ▼
  ┌──────────────────────────────────────────────────────────────────────────────────┐
- │                        ORCHESTRATOR CONTROL PLANE (Python 3.12+)                 │
+ │                           ORAGAI CONTROL PLANE (Python 3.12+)                    │
  │  FSM State Machine (12 Phases) │ ContextManager │ DynamicTokenGovernor           │
  └──────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────────┘
         │              │              │              │              │
@@ -44,30 +47,28 @@ Autonomous, multi-agent software engineering framework powered by the **OpenHand
 
 ```text
 .
-├── orchestrator-ai-agent/       # Core Multi-Agent Orchestration Package (Python 3.12+)
-│   ├── orchestrator/
-│   │   ├── adapters/            # Polyglot Project Adapters (Python, Node, Generic)
-│   │   ├── agents/              # Role Agent Factories (Architect, Developer, Tester, Reviewer, Auditor, Documentation)
-│   │   ├── analysis/            # Pytest parsing, Graft context, Finding validators
-│   │   ├── cli/                 # CLI handlers, argparse routing, interactive wizard
-│   │   ├── config/              # Pydantic schemas, cascading JSON/.env loaders
-│   │   ├── context/             # ContextManager, prompt builder, modular injectors
-│   │   ├── control/             # TokenGovernor, BudgetGuard, HumanInterventionChannel
-│   │   ├── core/                # Config, constants, exceptions, typing protocols
-│   │   ├── guards/              # Zero-token preflight syntax & importability guards
-│   │   ├── llm/                 # LLMManager, factory, pricing, model normalization
-│   │   ├── memory/              # Cross-run persistent conversation memory
-│   │   ├── pipeline/            # 5 Pipelines (DevTestLoop, FullPipeline, AuditPipeline, AuditFixPipeline, DocumentationPipeline)
-│   │   ├── rendering/           # Rich diff renderer, terminal styling, report generators
-│   │   ├── sentinel/            # Cognitive Sentinel: ASTGuard, SelfHealing, CloudMesh, DiagnosticsDB
-│   │   ├── skills/              # Skill manager, compressor, resolver, registry
-│   │   ├── tools/               # RBAC workspace file and parameterized terminal tools
-│   │   ├── ui/                  # SessionLogStore, OrchestratorLiveVisualizer, InteractiveLogExplorer
-│   │   └── vcs/                 # GitOps isolation, branching, diffs, checkpointing
-│   ├── tests/                   # 34 Test Modules (224 Passing Tests)
-│   ├── docs/                    # Package-level operational documentation
-│   └── pyproject.toml           # Hatchling build backend & project dependencies
-└── .agents/skills/              # 9 Standard YAML+Markdown engineering skills
+├── orchestrator/
+│   ├── adapters/            # Polyglot Project Adapters (Python, Node, Generic)
+│   ├── agents/              # Role Agent Factories (Architect, Developer, Tester, Reviewer, Auditor, Documentation)
+│   ├── analysis/            # Pytest parsing, Graft context, Finding validators
+│   ├── cli/                 # CLI handlers, argparse routing, interactive wizard
+│   ├── config/              # Pydantic schemas, cascading JSON/.env loaders
+│   ├── context/             # ContextManager, prompt builder, modular injectors
+│   ├── control/             # TokenGovernor, BudgetGuard, HumanInterventionChannel
+│   ├── core/                # Config, constants, exceptions, typing protocols
+│   ├── guards/              # Zero-token preflight syntax & importability guards
+│   ├── llm/                 # LLMManager, factory, pricing, model normalization
+│   ├── memory/              # Cross-run persistent conversation memory
+│   ├── pipeline/            # 5 Pipelines (DevTestLoop, FullPipeline, AuditPipeline, AuditFixPipeline, DocumentationPipeline)
+│   ├── rendering/           # Rich diff renderer, terminal styling, report generators
+│   ├── sentinel/            # Cognitive Sentinel: ASTGuard, SelfHealing, CloudMesh, DiagnosticsDB
+│   ├── skills/              # Skill manager, compressor, resolver, registry
+│   ├── tools/               # RBAC workspace file and parameterized terminal tools
+│   ├── ui/                  # SessionLogStore, OrchestratorLiveVisualizer, InteractiveLogExplorer
+│   └── vcs/                 # GitOps isolation, branching, diffs, checkpointing
+├── tests/                   # Comprehensive Test Modules (232 Passing Tests)
+├── docs/                    # Operational and architectural documentation
+└── pyproject.toml           # Project dependencies & build configuration
 ```
 
 ---
@@ -82,8 +83,6 @@ Autonomous, multi-agent software engineering framework powered by the **OpenHand
 ### 2. Installation & Configuration
 
 ```bash
-cd orchestrator-ai-agent
-
 # Install dependencies with uv
 uv sync
 
@@ -102,8 +101,8 @@ OPENROUTER_API_KEY=sk-or-v1-...
 # Verify setup offline (0 API tokens consumed)
 uv run python -m orchestrator.main --check-config
 
-# Run test suite (224 unit & integration tests)
-uv run pytest -q
+# Run test suite (232 unit & integration tests)
+uv run python -m pytest tests/ -q
 
 # Execute a software engineering task
 uv run python -m orchestrator.main "Build a rate limiter" --mode dev-test
@@ -131,16 +130,16 @@ uv run python -m orchestrator.main "Build a rate limiter" --mode dev-test
 
 ## 🧪 Testing & Verification
 
-The test suite contains **224 automated tests** across **34 test modules** covering:
+The test suite contains **232 automated tests** covering:
 - OpenHands SDK tool protocol compliance (`WorkspaceFileTool`, `WorkspaceTerminalTool`).
 - Circuit breaker state machines and semantic failure deduplication.
 - Dynamic token governance and phase allocation (`TokenPhase`).
 - Cognitive Sentinel supervision, AST guarding, and self-healing.
 - Project log rotation and multi-workspace partitioning.
+- Cross-platform Windows subprocess execution & launcher trampoline crash auto-healing.
 
 ```bash
-cd orchestrator-ai-agent
-uv run pytest -v
+uv run python -m pytest tests/ -v
 ```
 
-All 224 tests pass deterministically.
+All 232 tests pass deterministically.

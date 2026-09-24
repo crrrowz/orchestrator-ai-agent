@@ -1,9 +1,10 @@
-# 📖 Orchestrator Configuration Reference Manual (Enterprise V3)
+# 📖 ORAGAI Configuration Reference Manual
 
+> **ORAGAI: Autonomous Multi-Agent Orchestration & Self-Healing Engineering.**  
 > **Document Classification**: Enterprise Architecture & Runtime Specification  
 > **Target Version**: `1.0.0`  
-> **Schema Definition**: [`orchestrator/config/config_schema.json`](file:///d:/files/Contracted%20projects/IdeaProjects/Antigravity-Agent-API/orchestrator-ai-agent/orchestrator/config/config_schema.json)  
-> **Configuration Source**: [`orchestrator.config.json`](file:///d:/files/Contracted%20projects/IdeaProjects/Antigravity-Agent-API/orchestrator-ai-agent/orchestrator.config.json)
+> **Schema Definition**: `orchestrator/config/config_schema.json`  
+> **Configuration Source**: `orchestrator.config.json`
 
 ---
 

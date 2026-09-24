@@ -983,9 +983,12 @@ def execute_terminal_action(
         elif base_name == "clear":
             cmd_tokens = ["cls"]
             base_name = "cls"
-        elif base_name == "pytest":
-            cmd_tokens = ["python", "-m", "pytest", *cmd_tokens[1:]]
+        elif base_name in ("pytest", "ruff", "mypy"):
+            cmd_tokens = ["python", "-m", base_name, *cmd_tokens[1:]]
             base_name = "python"
+        elif base_name == "uv" and len(cmd_tokens) >= 3 and cmd_tokens[1] == "run":
+            if cmd_tokens[2] in ("pytest", "ruff", "mypy"):
+                cmd_tokens = ["uv", "run", "python", "-m", cmd_tokens[2], *cmd_tokens[3:]]
 
     shell_builtins = {
         "dir",

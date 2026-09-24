@@ -1,9 +1,10 @@
 # PROJECT_STATE.md
 
 ## Executive Summary
-- Project: Antigravity Multi-Agent Orchestrator (`Antigravity-Agent-API` / `orchestrator-ai-agent`)
-- Purpose: Autonomous, multi-agent software engineering system using OpenHands SDK (v1.49.4) and `.agents/skills/` specification. Coordinates Architect, Developer, Tester, and Reviewer agents across dual pipelines (`dev-test`, `full`) with strict token budgeting, Git safety, zero-token static gatekeepers, and interactive TUI telemetry.
-- End Goal: Production-grade autonomous software engineering framework with zero-token codebase orientation (via Graft), resilient OpenRouter free-tier failover, automated code audit pipeline (`--mode audit`), and self-healing execution loops.
+- Project: **ORAGAI** (Orchestrated Resilient Autonomous Generative AI)
+- Slogan: **"Autonomous Multi-Agent Orchestration & Self-Healing Engineering"**
+- Purpose: Autonomous, multi-agent software engineering system using OpenHands SDK (v1.49.4) and `.agents/skills/` specification. Coordinates Architect, Developer, Tester, and Reviewer agents across dual pipelines (`dev-test`, `full`, `audit-fix`, `audit`, `docs`) with strict token budgeting, Git safety, zero-token static gatekeepers, and interactive TUI telemetry.
+- End Goal: Production-grade autonomous software engineering framework with zero-token codebase orientation (via Graft), resilient cloud provider failover, automated code audit pipeline (`--mode audit`), and self-healing execution loops.
 
 ## Completed Tasks
 - [DONE] OpenHands SDK v1.49.4 ToolProtocol compliance: Subclassed `ToolDefinition[ActionT, ObservationT]` with concrete `create()` factory and custom `ToolExecutor` implementations (`WorkspaceFileTool`, `WorkspaceTerminalTool`).
