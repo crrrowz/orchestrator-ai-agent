@@ -16,16 +16,24 @@ class GraftContextProvider:
     def is_graft_available() -> bool:
         """Check if graft CLI binary or powershell script exists in system PATH."""
         return (
-            shutil.which("graft") is not None
-            or shutil.which("graft.ps1") is not None
+            shutil.which("graft") is not None or shutil.which("graft.ps1") is not None
         )
 
     @classmethod
-    def _run_graft_cmd(cls, args: list[str], workspace: Path, timeout: int = 10) -> subprocess.CompletedProcess:
+    def _run_graft_cmd(
+        cls, args: list[str], workspace: Path, timeout: int = 10
+    ) -> subprocess.CompletedProcess:
         """Run graft command with cross-platform handling for Windows powershell scripts."""
         is_windows = sys.platform == "win32" or os.name == "nt"
         if is_windows and not shutil.which("graft") and shutil.which("graft.ps1"):
-            cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "graft", *args]
+            cmd = [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "graft",
+                *args,
+            ]
         else:
             cmd = ["graft", *args]
 
@@ -70,7 +78,9 @@ class GraftContextProvider:
         cls.build_index(workspace)
 
         try:
-            res = cls._run_graft_cmd(["map", "--format", "compact"], workspace, timeout=10)
+            res = cls._run_graft_cmd(
+                ["map", "--format", "compact"], workspace, timeout=10
+            )
             out = res.stdout.strip()
             if res.returncode == 0 and out:
                 return out[:max_chars]

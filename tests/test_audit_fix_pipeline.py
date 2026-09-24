@@ -352,3 +352,141 @@ def test_audit_fix_pipeline_executes_pytest_command_resolution(tmp_path: Path):
     test_cmd = pipeline.adapter.get_test_command(tmp_path)
     assert "pytest" in test_cmd
     assert "-v" in test_cmd
+
+
+def test_extract_audit_findings_list_ignores_failed_or_clean_audit_with_no_actionable_findings():
+    """extract_audit_findings_list must return [] for clean or failed audit reports with no actionable findings."""
+    from orchestrator.pipeline.audit_fix_pipeline import (
+        extract_actionable_recommendations,
+        extract_audit_findings_list,
+    )
+
+    failed_report = """# Codebase Architecture & Security Audit Report
+
+**Generated**: 2026-09-24 08:02:51 UTC | **Auditor Status**: `AUDIT_FAILED` | **System Health Score**: `100/100`
+
+---
+
+## 1. Executive Summary & Code Metrics
+
+| Metric Dimension | Value | Reference Baseline / Status |
+|---|---|---|
+| **Total Files Scanned** | `146` | Full workspace tree coverage |
+| **Total Lines of Code (LOC)** | `22,756` | Polyglot / Python codebase |
+| **Deterministic Static Linter** | `CLEAN (0 errors)` | AST compilation & static analyzers |
+| **Actionable Findings Total** | `0` | Verified non-ghost defects |
+| **Critical / High Severity Defect Ratio** | `0 Critical / 0 High` | Immediate resolution required |
+
+---
+
+## 2. Structural Hotspots & Module Boundaries
+- **Modularity & Coupling**: Analysis of high-traffic modules and core orchestrator interfaces.
+- **Blast Radius Constraints**: Subsystems isolated with strict sandboxes and dynamic execution boundaries.
+
+---
+
+## 3. Verified Actionable Architectural & Code Findings
+
+> ⚠️ **Audit Execution Interrupted**: Auditor agent execution failed: Agent error encountered
+
+---
+
+## 4. Security, Secret Leaks & Subprocess Vulnerability Audit
+- **Credential Masking**: Automatic sanitization of environment keys and credential stripping in subprocesses.
+- **Path Escape Confinement**: Path resolution guarded with strict `.relative_to(workspace_root)` validation.
+- **Parameterized Execution**: Enforcing `shell=False` on Windows/Linux to prevent command injection.
+
+---
+
+## 5. Error Handling, Resilience & Failure Recovery Gaps
+- **Silent Exception Suppressions**: Eliminating blanket `except Exception: pass` without logging or telemetry tracking.
+- **Cloud Quota Circuit Breakers**: Proactive 429 rate limit detection and automated provider failover.
+
+---
+
+## 6. Actionable Prioritized Remediation Roadmap
+
+- No pending remediation work items required. Codebase is in healthy state.
+"""
+
+    findings = extract_audit_findings_list(failed_report)
+    assert findings == []
+    assert extract_actionable_recommendations(failed_report) == ""
+
+
+def test_audit_fix_pipeline_halts_on_failed_audit_contract_with_zero_findings(
+    tmp_path: Path,
+):
+    """When audit contract is AUDIT_FAILED with 0 findings, audit-fix must halt immediately with zero developer steps."""
+    from orchestrator.analysis.schemas import AuditResult, AuditState
+
+    (tmp_path / "main.py").write_text("print('clean')\n", encoding="utf-8")
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+
+    failed_result = AuditResult(
+        status=AuditState.AUDIT_FAILED,
+        summary="Auditor agent execution failed: Agent error encountered",
+        findings=[],
+        total_files_scanned=1,
+        total_loc=1,
+        clean_static=True,
+    )
+    failed_result.save_json(docs_dir / "audit_findings.json")
+    (docs_dir / "AUDIT_REPORT.md").write_text(
+        failed_result.to_markdown(), encoding="utf-8"
+    )
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+
+    with patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv:
+        res = pipeline.run("Autonomous auto-fix loop")
+        assert res["status"] == "AUDIT_FAILED"
+        assert res["converged"] is False
+        assert res["iterations"] == 0
+        mock_conv.assert_not_called()
+
+
+def test_finding_circuit_breaker_quarantines_and_prevents_infinite_backlog_loop(
+    tmp_path: Path,
+):
+    """When developer makes 0 modifications for 2 attempts, finding is quarantined and pipeline terminates cleanly."""
+    target_py = tmp_path / "service.py"
+    target_py.write_text("def process(): pass\n", encoding="utf-8")
+
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "AUDIT_REPORT.md").write_text(
+        "### 1. [HIGH] Ghost Issue in service.py\nTarget File: service.py\nProblem: Ghost defect\nEvidence: pass\nRecommended Fix: pass\n",
+        encoding="utf-8",
+    )
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+
+    with (
+        patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv_cls,
+        patch("orchestrator.pipeline.audit_fix_pipeline.get_llm_usage") as mock_usage,
+    ):
+        mock_conv = MagicMock()
+        mock_conv_cls.return_value = mock_conv
+        mock_usage.return_value = {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+            "estimated_cost_usd": 0.0,
+        }
+
+        # Developer makes 0 file modifications during conversation
+        res = pipeline.run("Fix audit finding")
+
+        # Must terminate in 2 iterations (not all 4) due to circuit breaker quarantine
+        assert res["iterations"] == 2
+        assert res["status"] in ("CONVERGED_CLEAN", "MAX_ITERATIONS_REACHED")
+        report_file = docs_dir / "AUDIT_FIX_REPORT.md"
+        assert report_file.exists()
+        content = report_file.read_text(encoding="utf-8")
+        assert "Ghost Issue" in content

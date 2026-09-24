@@ -1028,7 +1028,12 @@ def execute_terminal_action(
             "-Command",
             cmd_to_exec,
         ]
-    elif is_windows and base_name == "graft" and not shutil.which("graft", path=env.get("PATH")) and shutil.which("graft.ps1", path=env.get("PATH")):
+    elif (
+        is_windows
+        and base_name == "graft"
+        and not shutil.which("graft", path=env.get("PATH"))
+        and shutil.which("graft.ps1", path=env.get("PATH"))
+    ):
         exec_args = [
             "powershell.exe",
             "-NoProfile",

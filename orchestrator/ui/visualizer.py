@@ -300,8 +300,12 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
 
         # 3. Capture General Messages & Errors
         elif event_name in ("ConversationErrorEvent", "AgentErrorEvent"):
-            err_msg = getattr(event, "error", None) or getattr(
-                event, "message", "Unknown error"
+            err_msg = (
+                getattr(event, "detail", None)
+                or getattr(event, "error", None)
+                or getattr(event, "message", None)
+                or getattr(event, "code", None)
+                or "Unknown error"
             )
             self.store.add_step(
                 summary=f"Error: {err_msg}",

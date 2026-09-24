@@ -106,6 +106,20 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
         )
 
     if not findings:
+        report_lower = report_content.lower()
+        has_zero_findings = bool(
+            re.search(
+                r"\|\s*\*\*actionable findings total\*\*\s*\|\s*`0`\s*\|",
+                report_lower,
+            )
+            or re.search(
+                r"zero actionable (?:code )?defects? (?:detected|found)",
+                report_lower,
+            )
+            or "0 actionable findings" in report_lower
+            or "0 defects detected" in report_lower
+        )
+
         fallback_text = ""
         # Priority 1: Section 6
         m6 = re.search(
@@ -133,11 +147,12 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
                 if m_rec and m_rec.group(1).strip():
                     fallback_text = m_rec.group(1).strip()
 
-        if fallback_text:
+        if fallback_text and not has_zero_findings:
             clean_static = (
-                "[clean]" in report_content.lower()
-                or "0 defects detected" in report_content.lower()
-                or "zero actionable code defects found" in report_content.lower()
+                "[clean]" in report_lower
+                or "0 defects detected" in report_lower
+                or "zero actionable code defects found" in report_lower
+                or "clean (0 errors)" in report_lower
             )
             has_explicit_file = bool(
                 re.search(r"[\w\-./\\]+\.(?:py|js|ts|json)", fallback_text)
@@ -149,14 +164,24 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
                 "zero syntax or linter defects",
                 "clean architecture",
                 "zero actionable code defects",
+                "no pending remediation work items required",
+                "codebase is in healthy state",
+                "no remediation required",
+                "no action required",
+                "audit execution interrupted",
+                "zero actionable code defects detected",
             ]
             is_generic_advice = any(
                 gp in fallback_text.lower() for gp in generic_phrases
             )
             if (
-                clean_static
-                and (is_generic_advice or not has_explicit_file)
-                and "###" not in fallback_text
+                (
+                    clean_static
+                    and (is_generic_advice or not has_explicit_file)
+                    and "###" not in fallback_text
+                )
+                or is_generic_advice
+                or not has_explicit_file
             ):
                 pass
             else:
@@ -182,33 +207,6 @@ def extract_actionable_recommendations(report_content: str) -> str:
     findings = extract_audit_findings_list(report_content)
     if findings:
         return "\n\n".join(f["content"] for f in findings[:3])
-
-    # Fallback Priority 1: Section 6 "Actionable Prioritized Remediation Roadmap"
-    match_sec6 = re.search(
-        r"(##\s*6\.\s*Actionable Prioritized Remediation Roadmap[\s\S]*?)(?=\n##|\Z)",
-        report_content,
-        re.IGNORECASE,
-    )
-    if match_sec6 and match_sec6.group(1).strip():
-        return match_sec6.group(1).strip()
-
-    # Fallback Priority 2: Section 4 "Key Recommendations"
-    match_sec4 = re.search(
-        r"(##\s*(?:4\.\s*)?Key Recommendations[\s\S]*?)(?=\n##|\Z)",
-        report_content,
-        re.IGNORECASE,
-    )
-    if match_sec4 and match_sec4.group(1).strip():
-        return match_sec4.group(1).strip()
-
-    # Fallback Priority 3: Strictly match ## level recommendations, avoiding invariants
-    match_rec = re.search(
-        r"(^##\s+.*(?:Recommendation|Actionable Tasks).*[\s\S]*?)(?=\n##|\Z)",
-        report_content,
-        re.IGNORECASE | re.MULTILINE,
-    )
-    if match_rec and match_rec.group(1).strip():
-        return match_rec.group(1).strip()
 
     return ""
 
@@ -680,6 +678,7 @@ class AuditFixPipeline(BasePipeline):
         reset_append_counts()
         completed_fixes: List[str] = []
         resolved_findings: List[str] = []
+        quarantined_findings: List[Dict[str, Any]] = []
         current_finding: Optional[Dict[str, Any]] = None
         consecutive_zero_mods: Dict[str, int] = {}
         retry_directive: Optional[str] = None
@@ -1117,12 +1116,23 @@ class AuditFixPipeline(BasePipeline):
                     if fail_count >= 2:
                         ConsoleOutput.warning(
                             f"Finding Circuit Breaker: [{finding_title}] produced 0 modifications in 2 consecutive attempts. "
-                            "Rotating to backlog tail to prevent pipeline blockage."
+                            "Quarantining finding to prevent pipeline blockage."
                         )
                         if current_finding:
-                            audit_findings_queue.append(current_finding)
+                            quarantined_findings.append(current_finding)
                             current_finding = None
                         retry_directive = None
+
+                        if not audit_findings_queue:
+                            ConsoleOutput.info(
+                                "No active findings remaining in backlog after quarantine. Concluding loop."
+                            )
+                            final_status = (
+                                "CONVERGED_CLEAN"
+                                if (post_static_ok and post_tests_ok)
+                                else "MAX_ITERATIONS_REACHED"
+                            )
+                            break
                     else:
                         retry_directive = (
                             f"CRITICAL ACTION-FIRST DIRECTIVE (Attempt 2/2):\n"
@@ -1171,7 +1181,7 @@ class AuditFixPipeline(BasePipeline):
             last_issues=last_issues,
             completed_fixes=completed_fixes,
             resolved_findings=resolved_findings,
-            remaining_backlog=audit_findings_queue,
+            remaining_backlog=audit_findings_queue + quarantined_findings,
             total_tokens=total_tokens,
         )
         report_file.write_text(report_content, encoding="utf-8")

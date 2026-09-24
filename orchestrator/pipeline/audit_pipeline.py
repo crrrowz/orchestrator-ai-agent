@@ -156,7 +156,7 @@ class AuditPipeline(BasePipeline):
             f"Static Analysis Findings:\n{static_report}\n"
             f"{graft_part}\n\n"
             "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
-            "1. Inspect 3-5 critical hotspot files identified above to verify key architecture, boundaries, and duplication.\n"
+            "1. Perform targeted inspection in 3-5 concise steps to verify key architecture, boundaries, and duplication. Do NOT run repetitive or unbounded terminal exploration scripts.\n"
             "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`).\n"
             "   - Write verified structured findings to `docs/audit_findings.json` using workspace_file write operation.\n"
             '   - Format: {"status": "AUDIT_COMPLETED", "findings": [{"id": "AUD-001", "severity": "HIGH", "type": "BUG", "file": "path/to/file.py", "line": 42, "evidence": "code snippet", "problem": "exact issue", "recommended_fix": "exact fix", "actionable": true}]}\n'
@@ -182,8 +182,8 @@ class AuditPipeline(BasePipeline):
             hard_ceiling=auditor_budget_ceiling,
         )
         step_budget = max(
-            getattr(self.config, "max_agent_steps", 12),
-            getattr(auditor_governor, "suggested_max_steps", 8),
+            getattr(self.config, "max_agent_steps", 20),
+            getattr(auditor_governor, "suggested_max_steps", 16),
         )
         conv_result = self._run_conv(
             auditor_conv,
