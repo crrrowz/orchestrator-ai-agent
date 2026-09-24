@@ -601,9 +601,13 @@ class BasePipeline(ABC):
                 # Auto-heal launcher command if it used bare pytest, uv trampoline, or launcher issues
                 fallback_cmd = None
                 if "uv run pytest" in test_cmd:
-                    fallback_cmd = test_cmd.replace("uv run pytest", "uv run python -m pytest")
+                    fallback_cmd = test_cmd.replace(
+                        "uv run pytest", "uv run python -m pytest"
+                    )
                 elif "uv run python -m pytest" in test_cmd:
-                    fallback_cmd = test_cmd.replace("uv run python -m pytest", "python -m pytest")
+                    fallback_cmd = test_cmd.replace(
+                        "uv run python -m pytest", "python -m pytest"
+                    )
                 elif "pytest" in test_cmd and "python -m pytest" not in test_cmd:
                     fallback_cmd = test_cmd.replace("pytest", "python -m pytest")
 
@@ -617,9 +621,12 @@ class BasePipeline(ABC):
                         ),
                         base_dir=self.workspace_path,
                     )
-                    if retry_run.exit_code == 0 or not PytestOutputParser.is_runner_crash(
-                        retry_run.stdout, retry_run.stderr
-                    )[0]:
+                    if (
+                        retry_run.exit_code == 0
+                        or not PytestOutputParser.is_runner_crash(
+                            retry_run.stdout, retry_run.stderr
+                        )[0]
+                    ):
                         return retry_run
 
         return test_run

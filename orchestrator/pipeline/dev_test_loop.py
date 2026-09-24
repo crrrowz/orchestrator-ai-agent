@@ -370,7 +370,11 @@ class DevTestLoop(BasePipeline):
 
                 iteration += 1
 
-            if not status_override and not tests_passed and recorder.circuit_breaker_triggered:
+            if (
+                not status_override
+                and not tests_passed
+                and recorder.circuit_breaker_triggered
+            ):
                 status_override = "CIRCUIT_BREAKER_ABORT"
 
             return self._finalize_pipeline(

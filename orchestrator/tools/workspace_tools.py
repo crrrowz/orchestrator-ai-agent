@@ -990,7 +990,14 @@ def execute_terminal_action(
             base_name = "python"
         elif base_name == "uv" and len(cmd_tokens) >= 3 and cmd_tokens[1] == "run":
             if cmd_tokens[2] in ("pytest", "ruff", "mypy"):
-                cmd_tokens = ["uv", "run", "python", "-m", cmd_tokens[2], *cmd_tokens[3:]]
+                cmd_tokens = [
+                    "uv",
+                    "run",
+                    "python",
+                    "-m",
+                    cmd_tokens[2],
+                    *cmd_tokens[3:],
+                ]
 
     shell_builtins = {
         "dir",
@@ -1013,7 +1020,13 @@ def execute_terminal_action(
         "get-command",
     }
     if (sys.platform == "win32" or os.name == "nt") and base_name in powershell_cmdlets:
-        exec_args = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd_to_exec]
+        exec_args = [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            cmd_to_exec,
+        ]
     elif (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]
     else:

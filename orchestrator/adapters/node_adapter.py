@@ -283,7 +283,9 @@ class NodeAdapter(ProjectAdapter):
             r"cannot find module",
             r"ERR_MODULE_NOT_FOUND",
         ]
-        if any(re.search(pat, combined, re.IGNORECASE) for pat in crash_patterns) and not any(
+        if any(
+            re.search(pat, combined, re.IGNORECASE) for pat in crash_patterns
+        ) and not any(
             marker in combined for marker in ("FAIL ", "✕ ", "AssertionError")
         ):
             return TestExecutionResult(

@@ -108,7 +108,9 @@ def test_python_adapter_resolves_module_based_test_command(tmp_path: Path):
     tests_dir.mkdir()
 
     # With pyproject.toml and uv
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='app'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='app'\n", encoding="utf-8"
+    )
     with patch("shutil.which", return_value="C:\\bin\\uv.exe"):
         cmd = adapter.get_test_command(tmp_path)
         assert cmd == "uv run python -m pytest tests/ -v"
@@ -126,7 +128,9 @@ def test_workspace_terminal_execution_in_path_with_spaces(tmp_path: Path):
     sample_file = spaced_dir / "test_file.py"
     sample_file.write_text("print('hello from spaced path')", encoding="utf-8")
 
-    action = WorkspaceTerminalAction(command='python -c "import sys; print(sys.version_info.major)"')
+    action = WorkspaceTerminalAction(
+        command='python -c "import sys; print(sys.version_info.major)"'
+    )
     obs = execute_terminal_action(action, base_dir=spaced_dir)
     assert obs.is_error is False
     assert obs.exit_code == 0
@@ -135,9 +139,13 @@ def test_workspace_terminal_execution_in_path_with_spaces(tmp_path: Path):
 
 def test_audit_fix_pipeline_auto_heals_trampoline_launcher_failure(tmp_path: Path):
     """Verify audit fix pipeline auto-heals runner crash without failing the iteration."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='app'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='app'\n", encoding="utf-8"
+    )
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_dummy.py").write_text("def test_dummy(): pass\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_dummy.py").write_text(
+        "def test_dummy(): pass\n", encoding="utf-8"
+    )
 
     cfg = OrchestratorConfig(workspace_path=tmp_path)
     sm = SkillManager(ORCHESTRATOR_ROOT)

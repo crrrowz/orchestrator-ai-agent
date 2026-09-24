@@ -123,13 +123,19 @@ FAILED tests/test_calc.py::test_calc - assert 15 == 20
 
 def test_audit_fix_pipeline_halts_on_unrecoverable_infrastructure_error(tmp_path: Path):
     """Verify that when test launcher trampoline fails permanently, Developer Agent is NOT invoked."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_app.py").write_text("def test_app(): pass\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_app.py").write_text(
+        "def test_app(): pass\n", encoding="utf-8"
+    )
 
     cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
     sm = SkillManager(ORCHESTRATOR_ROOT)
-    pipeline = AuditFixPipeline(cfg, sm, workspace_path=tmp_path, auto_chain_audit=False)
+    pipeline = AuditFixPipeline(
+        cfg, sm, workspace_path=tmp_path, auto_chain_audit=False
+    )
 
     infra_error_obs = WorkspaceTerminalObservation(
         content=[],
@@ -144,7 +150,9 @@ def test_audit_fix_pipeline_halts_on_unrecoverable_infrastructure_error(tmp_path
             "orchestrator.pipeline.audit_fix_pipeline.execute_terminal_action",
             return_value=infra_error_obs,
         ),
-        patch("orchestrator.pipeline.audit_fix_pipeline.create_developer_agent") as mock_dev_agent,
+        patch(
+            "orchestrator.pipeline.audit_fix_pipeline.create_developer_agent"
+        ) as mock_dev_agent,
     ):
         res = pipeline.run("Audit and fix codebase")
 
@@ -155,15 +163,23 @@ def test_audit_fix_pipeline_halts_on_unrecoverable_infrastructure_error(tmp_path
         assert mock_dev_agent.call_count == 0
 
 
-def test_audit_fix_pipeline_halts_on_environment_error_without_token_burn(tmp_path: Path):
+def test_audit_fix_pipeline_halts_on_environment_error_without_token_burn(
+    tmp_path: Path,
+):
     """Verify missing pytest module halts pipeline without entering code-modification cycle."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_app.py").write_text("def test_app(): pass\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_app.py").write_text(
+        "def test_app(): pass\n", encoding="utf-8"
+    )
 
     cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
     sm = SkillManager(ORCHESTRATOR_ROOT)
-    pipeline = AuditFixPipeline(cfg, sm, workspace_path=tmp_path, auto_chain_audit=False)
+    pipeline = AuditFixPipeline(
+        cfg, sm, workspace_path=tmp_path, auto_chain_audit=False
+    )
 
     env_error_obs = WorkspaceTerminalObservation(
         content=[],
@@ -178,7 +194,9 @@ def test_audit_fix_pipeline_halts_on_environment_error_without_token_burn(tmp_pa
             "orchestrator.pipeline.audit_fix_pipeline.execute_terminal_action",
             return_value=env_error_obs,
         ),
-        patch("orchestrator.pipeline.audit_fix_pipeline.create_developer_agent") as mock_dev_agent,
+        patch(
+            "orchestrator.pipeline.audit_fix_pipeline.create_developer_agent"
+        ) as mock_dev_agent,
     ):
         res = pipeline.run("Audit and fix")
         assert res["status"] == "ENVIRONMENT_ERROR"
@@ -187,14 +205,20 @@ def test_audit_fix_pipeline_halts_on_environment_error_without_token_burn(tmp_pa
 
 def test_audit_fix_pipeline_remediates_genuine_test_failure(tmp_path: Path):
     """Verify genuine test failures trigger Developer remediation and converge when fixed."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     (tmp_path / "app.py").write_text("def add(a, b): return a - b\n", encoding="utf-8")
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_app.py").write_text("from app import add\ndef test_add(): assert add(2, 2) == 4\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_app.py").write_text(
+        "from app import add\ndef test_add(): assert add(2, 2) == 4\n", encoding="utf-8"
+    )
 
     cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
     sm = SkillManager(ORCHESTRATOR_ROOT)
-    pipeline = AuditFixPipeline(cfg, sm, workspace_path=tmp_path, auto_chain_audit=False)
+    pipeline = AuditFixPipeline(
+        cfg, sm, workspace_path=tmp_path, auto_chain_audit=False
+    )
 
     failing_obs = WorkspaceTerminalObservation(
         content=[],
@@ -226,7 +250,9 @@ FAILED tests/test_app.py::test_add - assert 0 == 4
 
     def fake_dev_fix(*args, **kwargs):
         # Simulate Developer editing app.py
-        (tmp_path / "app.py").write_text("def add(a, b): return a + b\n", encoding="utf-8")
+        (tmp_path / "app.py").write_text(
+            "def add(a, b): return a + b\n", encoding="utf-8"
+        )
 
     with (
         patch(
@@ -252,7 +278,9 @@ FAILED tests/test_app.py::test_add - assert 0 == 4
 
 def test_dev_test_loop_halts_on_infrastructure_error(tmp_path: Path):
     """Verify DevTestLoop aborts with INFRASTRUCTURE_ERROR if test runner crashes."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
     sm = SkillManager(ORCHESTRATOR_ROOT)
     pipeline = DevTestLoop(cfg, sm, workspace_path=tmp_path)
@@ -269,9 +297,18 @@ def test_dev_test_loop_halts_on_infrastructure_error(tmp_path: Path):
     )
 
     with (
-        patch("orchestrator.pipeline.dev_test_loop.execute_terminal_action", return_value=infra_obs),
-        patch("orchestrator.pipeline.dev_test_loop.create_developer_agent", return_value=mock_agent),
-        patch("orchestrator.pipeline.dev_test_loop.create_tester_agent", return_value=mock_agent),
+        patch(
+            "orchestrator.pipeline.dev_test_loop.execute_terminal_action",
+            return_value=infra_obs,
+        ),
+        patch(
+            "orchestrator.pipeline.dev_test_loop.create_developer_agent",
+            return_value=mock_agent,
+        ),
+        patch(
+            "orchestrator.pipeline.dev_test_loop.create_tester_agent",
+            return_value=mock_agent,
+        ),
         patch("orchestrator.pipeline.dev_test_loop.Conversation"),
         patch.object(pipeline, "_run_conv"),
     ):
@@ -281,7 +318,9 @@ def test_dev_test_loop_halts_on_infrastructure_error(tmp_path: Path):
 
 def test_full_pipeline_halts_on_infrastructure_error(tmp_path: Path):
     """Verify FullPipeline aborts with INFRASTRUCTURE_ERROR if test runner crashes."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
     sm = SkillManager(ORCHESTRATOR_ROOT)
     pipeline = FullPipeline(cfg, sm, workspace_path=tmp_path)
@@ -298,11 +337,26 @@ def test_full_pipeline_halts_on_infrastructure_error(tmp_path: Path):
     )
 
     with (
-        patch("orchestrator.pipeline.base_pipeline.execute_terminal_action", return_value=infra_obs),
-        patch("orchestrator.pipeline.full_pipeline.create_architect_agent", return_value=mock_agent),
-        patch("orchestrator.pipeline.full_pipeline.create_developer_agent", return_value=mock_agent),
-        patch("orchestrator.pipeline.full_pipeline.create_tester_agent", return_value=mock_agent),
-        patch("orchestrator.pipeline.full_pipeline.create_reviewer_agent", return_value=mock_agent),
+        patch(
+            "orchestrator.pipeline.base_pipeline.execute_terminal_action",
+            return_value=infra_obs,
+        ),
+        patch(
+            "orchestrator.pipeline.full_pipeline.create_architect_agent",
+            return_value=mock_agent,
+        ),
+        patch(
+            "orchestrator.pipeline.full_pipeline.create_developer_agent",
+            return_value=mock_agent,
+        ),
+        patch(
+            "orchestrator.pipeline.full_pipeline.create_tester_agent",
+            return_value=mock_agent,
+        ),
+        patch(
+            "orchestrator.pipeline.full_pipeline.create_reviewer_agent",
+            return_value=mock_agent,
+        ),
         patch("orchestrator.pipeline.full_pipeline.Conversation"),
         patch.object(pipeline, "_run_conv"),
     ):
@@ -317,12 +371,16 @@ def test_full_pipeline_halts_on_infrastructure_error(tmp_path: Path):
 
 def test_audit_fix_pipeline_circuit_breaker_on_repeated_failure(tmp_path: Path):
     """Verify circuit breaker trips and halts loop when identical failure repeats across iterations."""
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     (tmp_path / "app.py").write_text("def run(): pass\n", encoding="utf-8")
 
     cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=8)
     sm = SkillManager(ORCHESTRATOR_ROOT)
-    pipeline = AuditFixPipeline(cfg, sm, workspace_path=tmp_path, auto_chain_audit=False)
+    pipeline = AuditFixPipeline(
+        cfg, sm, workspace_path=tmp_path, auto_chain_audit=False
+    )
 
     identical_failure = WorkspaceTerminalObservation(
         content=[],

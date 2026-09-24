@@ -112,7 +112,10 @@ class PytestOutputParser:
             or "ModuleNotFoundError:" in combined
             or "ImportError:" in combined
         ):
-            return True, "Test runner failed during initialization before running test suite"
+            return (
+                True,
+                "Test runner failed during initialization before running test suite",
+            )
 
         # Pytest collection errors on all items
         if "Interrupted: " in combined and "errors during collection" in combined:
@@ -153,7 +156,11 @@ class PytestOutputParser:
             )
 
         # Pytest exit code 5: No tests were collected
-        if exit_code == 5 or "collected 0 items" in combined and "failed" not in combined.lower():
+        if (
+            exit_code == 5
+            or "collected 0 items" in combined
+            and "failed" not in combined.lower()
+        ):
             return TestExecutionResult(
                 status=TestExecutionStatus.NO_TESTS_FOUND,
                 exit_code=exit_code,
@@ -189,7 +196,9 @@ class PytestOutputParser:
                 status=status,
                 exit_code=exit_code,
                 summary=f"Test runner failed to execute ({crash_reason}).",
-                failure_details=PytestOutputParser.extract_compact_failures(stdout, stderr),
+                failure_details=PytestOutputParser.extract_compact_failures(
+                    stdout, stderr
+                ),
                 is_infra_or_env=True,
                 raw_stdout=stdout,
                 raw_stderr=stderr,

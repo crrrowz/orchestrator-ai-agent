@@ -318,6 +318,12 @@ def check_and_rotate_stale_reports(
 
             shutil.move(str(audit_file), str(archive_dir / f"{ts}_{audit_file.name}"))
             shutil.move(str(fix_file), str(archive_dir / f"{ts}_{fix_file.name}"))
+            findings_json = workspace_path / "docs" / "audit_findings.json"
+            if findings_json.exists():
+                shutil.move(
+                    str(findings_json),
+                    str(archive_dir / f"{ts}_{findings_json.name}"),
+                )
             ConsoleOutput.info(
                 f"Previous audit cycle was fully resolved (CONVERGED_CLEAN). "
                 f"Auto-archived reports to {archive_dir.relative_to(workspace_path)} to initiate fresh diagnostic pass."
@@ -420,9 +426,13 @@ class AuditFixPipeline(BasePipeline):
             # Auto-heal launcher command if it used bare pytest, uv trampoline, or launcher issues
             fallback_cmd = None
             if "uv run pytest" in test_cmd:
-                fallback_cmd = test_cmd.replace("uv run pytest", "uv run python -m pytest")
+                fallback_cmd = test_cmd.replace(
+                    "uv run pytest", "uv run python -m pytest"
+                )
             elif "uv run python -m pytest" in test_cmd:
-                fallback_cmd = test_cmd.replace("uv run python -m pytest", "python -m pytest")
+                fallback_cmd = test_cmd.replace(
+                    "uv run python -m pytest", "python -m pytest"
+                )
             elif "pytest" in test_cmd and "python -m pytest" not in test_cmd:
                 fallback_cmd = test_cmd.replace("pytest", "python -m pytest")
 
@@ -704,7 +714,11 @@ class AuditFixPipeline(BasePipeline):
             # 2. Run test suite
             tests_clean, test_feedback = self.run_test_suite()
 
-            if not tests_clean and self.last_test_result and self.last_test_result.is_infra_or_env:
+            if (
+                not tests_clean
+                and self.last_test_result
+                and self.last_test_result.is_infra_or_env
+            ):
                 ConsoleOutput.error(
                     f"Test Infrastructure Failure ({self.last_test_result.status.value}): {self.last_test_result.summary} "
                     "Halting auto-fix pipeline to prevent unproductive code modification loops."
@@ -1050,7 +1064,11 @@ class AuditFixPipeline(BasePipeline):
             if not post_tests_ok:
                 remaining_issues.append(post_test_feedback)
 
-            if not post_tests_ok and self.last_test_result and self.last_test_result.is_infra_or_env:
+            if (
+                not post_tests_ok
+                and self.last_test_result
+                and self.last_test_result.is_infra_or_env
+            ):
                 ConsoleOutput.error(
                     f"Test Infrastructure Failure post-remediation ({self.last_test_result.status.value}): "
                     f"{self.last_test_result.summary}. Halting loop to prevent wasteful token burn."
