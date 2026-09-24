@@ -957,8 +957,10 @@ def execute_terminal_action(
     if base_name.endswith(".exe"):
         base_name = base_name[:-4]
 
+    is_windows = sys.platform == "win32" or os.name == "nt"
+
     # Map unix shell aliases to windows builtins if on windows
-    if sys.platform == "win32" or os.name == "nt":
+    if is_windows:
         if base_name == "pwd":
             cmd_tokens = ["cd"]
             base_name = "cd"
@@ -1002,7 +1004,17 @@ def execute_terminal_action(
         "move",
         "cls",
     }
-    if (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
+    powershell_cmdlets = {
+        "select-string",
+        "get-content",
+        "get-childitem",
+        "new-item",
+        "remove-item",
+        "get-command",
+    }
+    if (sys.platform == "win32" or os.name == "nt") and base_name in powershell_cmdlets:
+        exec_args = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd_to_exec]
+    elif (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]
     else:
         resolved_bin = (

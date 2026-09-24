@@ -12,6 +12,7 @@ from orchestrator.agents import (
     create_reviewer_agent,
     create_tester_agent,
 )
+from orchestrator.analysis.pytest_parser import TestExecutionStatus
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import PipelineController
 from orchestrator.pipeline.base_pipeline import BasePipeline
@@ -424,6 +425,7 @@ class FullPipeline(BasePipeline):
 
             iteration = 1
             tests_passed = False
+            status_override: Optional[str] = None
             tester_conv = Conversation(
                 agent=tester_agent,
                 workspace=str(self.workspace_path),
@@ -494,10 +496,24 @@ class FullPipeline(BasePipeline):
 
                 # Verify test results
                 test_run = self._execute_pytest()
+                test_result = self.classify_test_run(test_run)
 
-                if test_run.exit_code == 0:
+                if test_result.status == TestExecutionStatus.PASSED:
                     tests_passed = True
                     ConsoleOutput.success(f"All tests passed in iteration {iteration}!")
+                    break
+
+                if test_result.is_infra_or_env:
+                    ConsoleOutput.error(
+                        f"Test Infrastructure / Environment Failure ({test_result.status.value}): {test_result.summary}. "
+                        "Halting loop to prevent wasteful code modifications."
+                    )
+                    recorder.record_incident(
+                        f"Iteration_{iteration}_Pytest_Infra",
+                        "test_infra_error",
+                        test_result.failure_details or test_result.summary,
+                    )
+                    status_override = test_result.status.value
                     break
 
                 # Tests failed - route to developer
@@ -509,8 +525,11 @@ class FullPipeline(BasePipeline):
                     is_error=True,
                     observation=test_run.stdout,
                 )
-                compact_failure = PytestOutputParser.extract_compact_failures(
-                    test_run.stdout, test_run.stderr
+                compact_failure = (
+                    test_result.failure_details
+                    or PytestOutputParser.extract_compact_failures(
+                        test_run.stdout, test_run.stderr
+                    )
                 )
                 curr_diff = self.git.get_diff() or self.git.get_status()
                 circuit_broken = recorder.check_circuit_breaker(
@@ -746,11 +765,12 @@ class FullPipeline(BasePipeline):
                         break
 
             final_success = tests_passed and review_approved
-            status_override = (
-                "SUCCESS"
-                if final_success
-                else ("REVIEW_REJECTED" if tests_passed else "TESTS_FAILED")
-            )
+            if not status_override:
+                status_override = (
+                    "SUCCESS"
+                    if final_success
+                    else ("REVIEW_REJECTED" if tests_passed else "TESTS_FAILED")
+                )
 
             return self._finalize_pipeline(
                 task_description=task_description,

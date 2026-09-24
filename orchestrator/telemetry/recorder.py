@@ -264,13 +264,15 @@ class TelemetryRecorder:
             and curr_error_hash == self._last_error_hash
         ):
             is_repeated = True
+        elif curr_error_hash == self._last_error_hash and curr_error_clean:
+            is_repeated = True
         elif (
             failing_tests
             and self._last_failing_tests
             and failing_tests == self._last_failing_tests
         ):
             is_repeated = True
-        elif self._last_error_text and len(curr_error_clean) > 50:
+        elif self._last_error_text and len(curr_error_clean) > 30:
             sim = difflib.SequenceMatcher(
                 None, curr_error_clean[:1000], self._last_error_text[:1000]
             ).ratio()

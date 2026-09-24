@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from orchestrator.adapters.base import ProjectAdapter
+from orchestrator.analysis.pytest_parser import (
+    TestExecutionResult,
+    TestExecutionStatus,
+)
 
 
 class NodeAdapter(ProjectAdapter):
@@ -241,6 +245,65 @@ class NodeAdapter(ProjectAdapter):
             filtered = [line.strip() for line in lines if line.strip()][-25:]
 
         return "\n".join(filtered[:30])
+
+    def classify_test_result(
+        self,
+        stdout: str,
+        stderr: str,
+        exit_code: int,
+        timed_out: bool = False,
+    ) -> TestExecutionResult:
+        """Classify JavaScript/TypeScript test runner outcomes."""
+        combined = f"{stdout}\n{stderr}".strip()
+        if timed_out or exit_code == -1 and "timed out" in combined.lower():
+            return TestExecutionResult(
+                status=TestExecutionStatus.TIMEOUT,
+                exit_code=exit_code,
+                summary="Node.js test execution timed out.",
+                failure_details=combined[:2000],
+                is_infra_or_env=True,
+                raw_stdout=stdout,
+                raw_stderr=stderr,
+            )
+        if exit_code == 0:
+            return TestExecutionResult(
+                status=TestExecutionStatus.PASSED,
+                exit_code=0,
+                summary="All Node.js / TypeScript unit tests passed successfully.",
+                failure_details="",
+                is_infra_or_env=False,
+                raw_stdout=stdout,
+                raw_stderr=stderr,
+            )
+        crash_patterns = [
+            r"npm ERR! code ENOENT",
+            r"command not found",
+            r"is not recognized as an internal or external command",
+            r"No such file or directory",
+            r"cannot find module",
+            r"ERR_MODULE_NOT_FOUND",
+        ]
+        if any(re.search(pat, combined, re.IGNORECASE) for pat in crash_patterns) and not any(
+            marker in combined for marker in ("FAIL ", "✕ ", "AssertionError")
+        ):
+            return TestExecutionResult(
+                status=TestExecutionStatus.ENVIRONMENT_ERROR,
+                exit_code=exit_code,
+                summary="Node.js test runner environment failed to execute.",
+                failure_details=combined[:1500],
+                is_infra_or_env=True,
+                raw_stdout=stdout,
+                raw_stderr=stderr,
+            )
+        return TestExecutionResult(
+            status=TestExecutionStatus.TEST_FAILURE,
+            exit_code=exit_code,
+            summary=f"Node.js test runner reported test failures (Exit Code {exit_code}).",
+            failure_details=self.parse_test_failures(stdout, stderr),
+            is_infra_or_env=False,
+            raw_stdout=stdout,
+            raw_stderr=stderr,
+        )
 
     def get_developer_prompt_guidance(self) -> str:
         """Return architectural and coding standards for Node.js / TypeScript codebases."""

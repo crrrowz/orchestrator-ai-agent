@@ -14,6 +14,7 @@ from orchestrator.pipeline.checkpoint import (
     PipelineCheckpoint,
     PipelineCheckpointManager,
 )
+from orchestrator.analysis.pytest_parser import TestExecutionStatus
 from orchestrator.telemetry import get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
 from orchestrator.utils import ConsoleOutput, PytestOutputParser
@@ -198,6 +199,7 @@ class DevTestLoop(BasePipeline):
 
             iteration = 1
             tests_passed = False
+            status_override = None
             tester_conv = Conversation(
                 agent=tester_agent,
                 workspace=str(self.workspace_path),
@@ -270,10 +272,24 @@ class DevTestLoop(BasePipeline):
 
                 # Verify test results
                 test_run = self._execute_pytest()
+                test_result = self.classify_test_run(test_run)
 
-                if test_run.exit_code == 0:
+                if test_result.status == TestExecutionStatus.PASSED:
                     tests_passed = True
                     ConsoleOutput.success(f"All tests passed in iteration {iteration}!")
+                    break
+
+                if test_result.is_infra_or_env:
+                    ConsoleOutput.error(
+                        f"Test Infrastructure / Environment Failure ({test_result.status.value}): {test_result.summary}. "
+                        "Halting loop to prevent wasteful code modifications."
+                    )
+                    recorder.record_incident(
+                        f"Iteration_{iteration}_Pytest_Infra",
+                        "test_infra_error",
+                        test_result.failure_details or test_result.summary,
+                    )
+                    status_override = test_result.status.value
                     break
 
                 # Tests failed - analyze & route to Developer
@@ -285,8 +301,11 @@ class DevTestLoop(BasePipeline):
                     is_error=True,
                     observation=test_run.stdout,
                 )
-                compact_failure = PytestOutputParser.extract_compact_failures(
-                    test_run.stdout, test_run.stderr
+                compact_failure = (
+                    test_result.failure_details
+                    or PytestOutputParser.extract_compact_failures(
+                        test_run.stdout, test_run.stderr
+                    )
                 )
                 curr_diff = self.git.get_diff() or self.git.get_status()
                 circuit_broken = recorder.check_circuit_breaker(
@@ -351,8 +370,7 @@ class DevTestLoop(BasePipeline):
 
                 iteration += 1
 
-            status_override = None
-            if not tests_passed and recorder.circuit_breaker_triggered:
+            if not status_override and not tests_passed and recorder.circuit_breaker_triggered:
                 status_override = "CIRCUIT_BREAKER_ABORT"
 
             return self._finalize_pipeline(

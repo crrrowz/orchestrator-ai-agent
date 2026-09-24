@@ -121,12 +121,22 @@ class PreFlightGuard:
         if not targets:
             return True, ""
 
+        # Determine Python interpreter to use (prefer workspace .venv python if present)
+        is_windows = sys.platform == "win32" or os.name == "nt"
+        venv_python = (
+            workspace
+            / ".venv"
+            / ("Scripts" if is_windows else "bin")
+            / ("python.exe" if is_windows else "python")
+        )
+        python_bin = str(venv_python) if venv_python.exists() else sys.executable
+
         errors = []
         for mod in sorted(set(targets)):
             try:
                 res = subprocess.run(
                     [
-                        sys.executable,
+                        python_bin,
                         "-c",
                         f"import sys; sys.path.insert(0, '.'); sys.path.insert(0, 'src'); import {mod}",
                     ],

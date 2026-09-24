@@ -1,5 +1,9 @@
 """Compact Pytest Failure Parser (re-exported from orchestrator.analysis)."""
 
-from orchestrator.analysis.pytest_parser import PytestOutputParser
+from orchestrator.analysis.pytest_parser import (
+    PytestOutputParser,
+    TestExecutionResult,
+    TestExecutionStatus,
+)
 
-__all__ = ["PytestOutputParser"]
+__all__ = ["PytestOutputParser", "TestExecutionStatus", "TestExecutionResult"]

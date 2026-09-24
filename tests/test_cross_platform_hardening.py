@@ -1,15 +1,13 @@
 """Unit and regression tests for Cross-Platform Subprocess Execution & Ghost-Defect Isolation."""
 
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from orchestrator.adapters.python_adapter import PythonAdapter
 from orchestrator.analysis.pytest_parser import PytestOutputParser
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.core.constants import ORCHESTRATOR_ROOT
 from orchestrator.pipeline.audit_fix_pipeline import AuditFixPipeline
-from orchestrator.pipeline.base_pipeline import BasePipeline
 from orchestrator.sentinel.command_interceptor import TerminalCommandTranslator
 from orchestrator.tools.workspace_tools import (
     WorkspaceTerminalAction,

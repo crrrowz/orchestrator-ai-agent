@@ -1,11 +1,16 @@
 """Autonomous Codebase Audit & Fix Pipeline: Scan -> Remediate -> Verify Loop without Git."""
 
 import re
+import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from openhands.sdk import Conversation
+from orchestrator.analysis.pytest_parser import (
+    TestExecutionResult,
+    TestExecutionStatus,
+)
 from orchestrator.analysis.schemas import (
     AuditResult,
     AuditState,
@@ -42,6 +47,21 @@ from orchestrator.utils import (
     OrchestratorLiveVisualizer,
     SessionLogStore,
 )
+
+
+def _git_diff_stat(workspace: Path) -> str:
+    """Return a compact git diff --stat snapshot of workspace, or '' if unavailable."""
+    try:
+        res = subprocess.run(
+            ["git", "diff", "--stat"],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return res.stdout + res.stderr
+    except Exception:
+        return ""
 
 
 def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
@@ -341,6 +361,7 @@ class AuditFixPipeline(BasePipeline):
             if auto_chain_audit is not None
             else getattr(config, "auto_chain_audit", True)
         )
+        self.last_test_result: Optional[TestExecutionResult] = None
 
     def collect_codebase_metrics(self) -> dict:
         """Scan workspace to calculate file counts and lines of code."""
@@ -351,15 +372,29 @@ class AuditFixPipeline(BasePipeline):
         return self.adapter.run_static_analysis(self.workspace_path)
 
     def run_test_suite(self, timeout_seconds: int = 60) -> Tuple[bool, str]:
-        """Execute test suite via detected language adapter with automated launcher crash auto-healing."""
+        """Execute test suite via detected language adapter with automated launcher crash auto-healing and failure classification."""
         if not self.adapter.has_test_suite(self.workspace_path):
+            self.last_test_result = TestExecutionResult(
+                status=TestExecutionStatus.NO_TESTS_FOUND,
+                exit_code=0,
+                summary=f"No test suite detected for {self.adapter.language_name} in workspace.",
+                failure_details="",
+                is_infra_or_env=False,
+            )
             return (
                 True,
-                f"No test suite detected for {self.adapter.language_name} in workspace.",
+                self.last_test_result.summary,
             )
 
         test_cmd = self.adapter.get_test_command(self.workspace_path)
         if not test_cmd:
+            self.last_test_result = TestExecutionResult(
+                status=TestExecutionStatus.NO_TESTS_FOUND,
+                exit_code=0,
+                summary="No test command configured.",
+                failure_details="",
+                is_infra_or_env=False,
+            )
             return (True, "No test command configured.")
 
         test_run = execute_terminal_action(
@@ -367,18 +402,21 @@ class AuditFixPipeline(BasePipeline):
             base_dir=self.workspace_path,
         )
 
-        if test_run.exit_code == 0:
+        test_result = self.adapter.classify_test_result(
+            stdout=test_run.stdout,
+            stderr=test_run.stderr,
+            exit_code=test_run.exit_code,
+            timed_out=getattr(test_run, "timed_out", False),
+        )
+
+        if test_result.status == TestExecutionStatus.PASSED:
+            self.last_test_result = test_result
             return (
                 True,
                 f"All {self.adapter.language_name} unit tests passed successfully (`{test_cmd}`).",
             )
 
-        from orchestrator.analysis.pytest_parser import PytestOutputParser
-
-        is_crash, reason = PytestOutputParser.is_runner_crash(
-            test_run.stdout, test_run.stderr
-        )
-        if is_crash:
+        if test_result.is_infra_or_env:
             # Auto-heal launcher command if it used bare pytest, uv trampoline, or launcher issues
             fallback_cmd = None
             if "uv run pytest" in test_cmd:
@@ -398,12 +436,27 @@ class AuditFixPipeline(BasePipeline):
                     ),
                     base_dir=self.workspace_path,
                 )
-                if retry_run.exit_code == 0:
+                retry_result = self.adapter.classify_test_result(
+                    stdout=retry_run.stdout,
+                    stderr=retry_run.stderr,
+                    exit_code=retry_run.exit_code,
+                    timed_out=getattr(retry_run, "timed_out", False),
+                )
+                if retry_result.status == TestExecutionStatus.PASSED:
+                    self.last_test_result = retry_result
                     return (
                         True,
                         f"All {self.adapter.language_name} unit tests passed successfully via `{fallback_cmd}`.",
                     )
                 test_run = retry_run
+                test_result = retry_result
+
+        self.last_test_result = test_result
+        if test_result.is_infra_or_env:
+            return (
+                False,
+                f"[{self.adapter.language_name.capitalize()} Test Infrastructure Error: {test_result.status.value}]\n{test_result.summary}\n{test_result.failure_details}",
+            )
 
         compact = self.adapter.parse_test_failures(test_run.stdout, test_run.stderr)
         return (
@@ -612,13 +665,7 @@ class AuditFixPipeline(BasePipeline):
             except (ValueError, TypeError):
                 effective_max_iterations = 4
 
-        developer_agent = create_developer_agent(
-            self.config,
-            self.skill_manager,
-            self.workspace_path,
-            allow_test_writes=True,
-            task_text=task_description,
-        )
+        developer_agent = None
 
         reset_append_counts()
         completed_fixes: List[str] = []
@@ -656,6 +703,15 @@ class AuditFixPipeline(BasePipeline):
 
             # 2. Run test suite
             tests_clean, test_feedback = self.run_test_suite()
+
+            if not tests_clean and self.last_test_result and self.last_test_result.is_infra_or_env:
+                ConsoleOutput.error(
+                    f"Test Infrastructure Failure ({self.last_test_result.status.value}): {self.last_test_result.summary} "
+                    "Halting auto-fix pipeline to prevent unproductive code modification loops."
+                )
+                final_status = self.last_test_result.status.value
+                last_issues = [test_feedback]
+                break
 
             all_issues: List[str] = []
             if not static_clean:
@@ -780,6 +836,15 @@ class AuditFixPipeline(BasePipeline):
                 break
 
             # 5. Remediation by Developer Agent
+            if developer_agent is None:
+                developer_agent = create_developer_agent(
+                    self.config,
+                    self.skill_manager,
+                    self.workspace_path,
+                    allow_test_writes=True,
+                    task_text=task_description,
+                )
+
             ConsoleOutput.warning(
                 f"Iteration {iteration}: {len(all_issues)} issue group(s) detected. Developer applying fixes..."
             )
@@ -985,6 +1050,15 @@ class AuditFixPipeline(BasePipeline):
             if not post_tests_ok:
                 remaining_issues.append(post_test_feedback)
 
+            if not post_tests_ok and self.last_test_result and self.last_test_result.is_infra_or_env:
+                ConsoleOutput.error(
+                    f"Test Infrastructure Failure post-remediation ({self.last_test_result.status.value}): "
+                    f"{self.last_test_result.summary}. Halting loop to prevent wasteful token burn."
+                )
+                final_status = self.last_test_result.status.value
+                last_issues = remaining_issues
+                break
+
             if post_static_ok and post_tests_ok and not remaining_issues:
                 if files_modified:
                     if current_finding:
@@ -1046,10 +1120,25 @@ class AuditFixPipeline(BasePipeline):
                 all_issues = remaining_issues
                 retry_directive = None
 
+                # Circuit Breaker check across consecutive failure iterations
+                curr_diff = _git_diff_stat(self.workspace_path)
+                remaining_issues_text = "\n\n".join(remaining_issues)
+                if telemetry.check_circuit_breaker(curr_diff, remaining_issues_text):
+                    ConsoleOutput.error(
+                        "Circuit Breaker Tripped! Detected repeated failures without progress. Aborting auto-fix loop."
+                    )
+                    final_status = "CIRCUIT_BREAKER_ABORT"
+                    last_issues = remaining_issues
+                    break
+
         if final_status == "IN_PROGRESS":
             final_status = "MAX_ITERATIONS_REACHED"
 
-        u_total = get_llm_usage(developer_agent.llm)
+        u_total = (
+            get_llm_usage(developer_agent.llm)
+            if developer_agent
+            else {"total_tokens": 0, "estimated_cost_usd": 0.0}
+        )
         total_tokens = u_total.get("total_tokens", 0)
 
         # Generate docs/AUDIT_FIX_REPORT.md

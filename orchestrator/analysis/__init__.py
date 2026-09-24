@@ -2,7 +2,11 @@
 
 from orchestrator.analysis.connectivity import ConnectivityChecker
 from orchestrator.analysis.graft_context import GraftContextProvider
-from orchestrator.analysis.pytest_parser import PytestOutputParser
+from orchestrator.analysis.pytest_parser import (
+    PytestOutputParser,
+    TestExecutionResult,
+    TestExecutionStatus,
+)
 from orchestrator.analysis.schemas import (
     AuditFinding,
     AuditResult,
@@ -13,6 +17,8 @@ from orchestrator.analysis.schemas import (
 __all__ = [
     "GraftContextProvider",
     "PytestOutputParser",
+    "TestExecutionStatus",
+    "TestExecutionResult",
     "ConnectivityChecker",
     "AuditState",
     "AuditFinding",

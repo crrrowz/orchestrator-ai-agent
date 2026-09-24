@@ -4,6 +4,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from orchestrator.analysis.pytest_parser import (
+    PytestOutputParser,
+    TestExecutionResult,
+)
+
 
 class ProjectAdapter(ABC):
     """Abstract interface defining language and framework operations for workspace analysis, auto-fixing, and testing."""
@@ -47,6 +52,21 @@ class ProjectAdapter(ABC):
     def parse_test_failures(self, stdout: str, stderr: str) -> str:
         """Extract a compact summary of test failures to minimize prompt token overhead."""
         pass
+
+    def classify_test_result(
+        self,
+        stdout: str,
+        stderr: str,
+        exit_code: int,
+        timed_out: bool = False,
+    ) -> TestExecutionResult:
+        """Classify test execution outcome into structured failure categories."""
+        return PytestOutputParser.classify_execution(
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=timed_out,
+        )
 
     @abstractmethod
     def get_developer_prompt_guidance(self) -> str:

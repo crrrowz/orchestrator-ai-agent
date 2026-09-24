@@ -13,6 +13,7 @@ from openhands.sdk import Conversation
 
 
 from orchestrator.adapters import ProjectAdapter, detect_adapter
+from orchestrator.analysis.pytest_parser import TestExecutionResult
 from orchestrator.config import (
     DEFAULT_DIAGNOSTICS_DIR,
     OrchestratorConfig,
@@ -628,6 +629,27 @@ class BasePipeline(ABC):
     ) -> WorkspaceTerminalObservation:
         """Execute pytest against the workspace directory (backward-compatible alias)."""
         return self._execute_tests(timeout_seconds=timeout_seconds)
+
+    def classify_test_run(
+        self, test_run: WorkspaceTerminalObservation
+    ) -> TestExecutionResult:
+        """Classify a completed test run observation using the active adapter."""
+        is_timed_out = getattr(test_run, "timed_out", False) is True
+        if self.adapter:
+            return self.adapter.classify_test_result(
+                stdout=test_run.stdout,
+                stderr=test_run.stderr,
+                exit_code=test_run.exit_code,
+                timed_out=is_timed_out,
+            )
+        from orchestrator.analysis.pytest_parser import PytestOutputParser
+
+        return PytestOutputParser.classify_execution(
+            exit_code=test_run.exit_code,
+            stdout=test_run.stdout,
+            stderr=test_run.stderr,
+            timed_out=is_timed_out,
+        )
 
     def _finalize_pipeline(
         self,

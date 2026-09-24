@@ -2,7 +2,11 @@
 
 from orchestrator.analysis.connectivity import ConnectivityChecker
 from orchestrator.analysis.graft_context import GraftContextProvider
-from orchestrator.analysis.pytest_parser import PytestOutputParser
+from orchestrator.analysis.pytest_parser import (
+    PytestOutputParser,
+    TestExecutionResult,
+    TestExecutionStatus,
+)
 from orchestrator.rendering.diff_renderer import DiffRenderer
 from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.rendering.report_generator import MarkdownReportGenerator
@@ -20,6 +24,8 @@ __all__ = [
     "SessionLogStore",
     "InteractiveLogExplorer",
     "PytestOutputParser",
+    "TestExecutionResult",
+    "TestExecutionStatus",
     "GraftContextProvider",
     "CompactSkillInjector",
     "DiffRenderer",
