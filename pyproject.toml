@@ -2,7 +2,7 @@
 name = "antigravity-agent-orchestrator"
 version = "0.1.0"
 description = "Multi-Agent Software Development Orchestrator powered by OpenHands SDK"
-readme = "README.md"
+readme = "docs/README.md"
 requires-python = ">=3.12"
 dependencies = [
     "openhands-sdk>=1.49.0",
