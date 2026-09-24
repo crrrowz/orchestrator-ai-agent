@@ -135,7 +135,10 @@ class DynamicTokenGovernor:
 
         # 4. Partition into Phase Allocations
         if "auditor" in role_lower:
-            # Auditor's primary role is investigation and generating AUDIT_REPORT.md
+            # Auditor's primary role is deep investigation and generating AUDIT_REPORT.md
+            base_budget = max(base_budget, 250_000)
+            total = min(max(base_budget, 200_000), hard_ceiling)
+            max_agent_steps = max(max_agent_steps, 20)
             investigation = int(total * 0.70)
             implementation = int(total * 0.20)
             testing = 0

@@ -377,18 +377,22 @@ class BasePipeline(ABC):
                         == "ConversationErrorEvent"
                     ):
                         run_result.completed = False
-                        for ev in reversed(events):
-                            ev_name = getattr(ev, "__class__", type(ev)).__name__
-                            if ev_name in ("ConversationErrorEvent", "AgentErrorEvent"):
-                                err = (
-                                    getattr(ev, "detail", None)
-                                    or getattr(ev, "error", None)
-                                    or getattr(ev, "message", None)
-                                    or getattr(ev, "code", None)
-                                    or "Agent error encountered"
-                                )
-                                run_result.error_message = str(err)
-                                break
+                        if not run_result.error_message:
+                            for ev in reversed(events):
+                                ev_name = getattr(ev, "__class__", type(ev)).__name__
+                                if ev_name in (
+                                    "ConversationErrorEvent",
+                                    "AgentErrorEvent",
+                                ):
+                                    err = (
+                                        getattr(ev, "detail", None)
+                                        or getattr(ev, "error", None)
+                                        or getattr(ev, "message", None)
+                                        or getattr(ev, "code", None)
+                                        or "Agent error encountered"
+                                    )
+                                    run_result.error_message = str(err)
+                                    break
 
                 # 2. Inspect session visualizer steps for unhandled error events
                 vis = getattr(conv, "visualizer", None) or getattr(

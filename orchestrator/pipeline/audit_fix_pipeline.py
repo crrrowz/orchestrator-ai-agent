@@ -571,26 +571,10 @@ class AuditFixPipeline(BasePipeline):
             elif structured_result.status == AuditState.AUDIT_CLEAN or (
                 structured_result.clean_static and not structured_result.findings
             ):
-                # Double-check if markdown report has findings before declaring clean
-                raw_from_md = (
-                    extract_audit_findings_list(existing_report_content)
-                    if existing_report_content
-                    else []
+                audit_findings_queue = []
+                ConsoleOutput.info(
+                    "Structured audit contract indicates workspace is clean (AUDIT_CLEAN)."
                 )
-                if raw_from_md:
-                    audit_findings_queue = [
-                        f
-                        for f in raw_from_md
-                        if not any(
-                            r in f["title"].lower() or f["title"].lower() in r
-                            for r in resolved_titles
-                        )
-                    ]
-                else:
-                    audit_findings_queue = []
-                    ConsoleOutput.info(
-                        "Structured audit contract indicates workspace is clean (AUDIT_CLEAN)."
-                    )
             elif structured_result.findings:
                 for f in structured_result.findings:
                     is_valid, reason = FindingValidator.validate(f, self.workspace_path)

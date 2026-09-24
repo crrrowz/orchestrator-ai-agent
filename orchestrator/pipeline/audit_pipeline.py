@@ -155,25 +155,26 @@ class AuditPipeline(BasePipeline):
             f"- Average File LOC: {metrics['avg_loc']}\n\n"
             f"Static Analysis Findings:\n{static_report}\n"
             f"{graft_part}\n\n"
-            "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
-            "1. Perform targeted inspection in 3-5 concise steps to verify key architecture, boundaries, and duplication. Do NOT run repetitive or unbounded terminal exploration scripts.\n"
-            "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`).\n"
-            "   - Write verified structured findings to `docs/audit_findings.json` using workspace_file write operation.\n"
-            '   - Format: {"status": "AUDIT_COMPLETED", "findings": [{"id": "AUD-001", "severity": "HIGH", "type": "BUG", "file": "path/to/file.py", "line": 42, "evidence": "code snippet", "problem": "exact issue", "recommended_fix": "exact fix", "actionable": true}]}\n'
-            "3. Your report MUST follow this rigorous structure:\n"
+            "STRICT CONSTRAINTS & INSTRUCTIONS (MANDATORY 2-PHASE WORKFLOW):\n"
+            "PHASE 1 (Inspection - Max 3-4 steps):\n"
+            "1. Perform targeted inspection of 2-3 key hotspot files and architecture boundaries. Do NOT run repetitive or unbounded terminal exploration scripts.\n"
+            "PHASE 2 (Report Generation - MUST EXECUTE AT STEP 4-5):\n"
+            "2. Produce the exhaustive architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`) and write verified structured findings to `docs/audit_findings.json` using `workspace_file` with operation='write'.\n"
+            '   - Format for `docs/audit_findings.json`: {"status": "AUDIT_COMPLETED", "findings": [{"id": "AUD-001", "severity": "HIGH", "type": "BUG", "file": "path/to/file.py", "line": 42, "evidence": "code snippet", "problem": "exact issue", "recommended_fix": "exact fix", "actionable": true}]}\n'
+            "   - If no actionable code defects are found, write findings as [] and status as 'AUDIT_CLEAN'.\n"
+            "3. Your report in `docs/AUDIT_REPORT.md` MUST follow this structure:\n"
             "   - # Codebase Architecture & Security Audit Report\n"
             "   - ## 1. Executive Summary & Architecture Health Score\n"
-            "   - ## 2. Structural Hotspots & Module Boundaries (Analyze files > 300 LOC, coupling, cohesion)\n"
-            "   - ## 3. DRY Violations & Duplicate Logic (Identify exact duplicate functions, e.g. `_run_conv` in pipelines)\n"
+            "   - ## 2. Structural Hotspots & Module Boundaries\n"
+            "   - ## 3. DRY Violations & Duplicate Logic\n"
             "   - ## 4. Security, Secret Leak & Subprocess Vulnerability Audit\n"
             "   - ## 5. Error Handling, Edge Cases & Failure Recovery Gaps\n"
-            "   - ## 6. Actionable Prioritized Remediation Roadmap (Specific code tasks for Developer agent)\n"
-            "4. For Section 6, define concrete target file paths and precise planned code changes.\n"
-            "5. Once `docs/AUDIT_REPORT.md` and `docs/audit_findings.json` are written, call FinishAction to conclude your turn."
+            "   - ## 6. Actionable Prioritized Remediation Roadmap\n"
+            "4. Once `docs/AUDIT_REPORT.md` and `docs/audit_findings.json` are written, conclude your turn immediately."
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))
-        auditor_budget_ceiling = getattr(self.config, "max_tokens_budget", 250_000)
+        auditor_budget_ceiling = getattr(self.config, "max_tokens_budget", 350_000)
         auditor_governor = DynamicTokenGovernor.compute_iteration_budget(
             role="auditor",
             severity="HIGH",
@@ -182,8 +183,9 @@ class AuditPipeline(BasePipeline):
             hard_ceiling=auditor_budget_ceiling,
         )
         step_budget = max(
-            getattr(self.config, "max_agent_steps", 20),
-            getattr(auditor_governor, "suggested_max_steps", 16),
+            getattr(self.config, "max_agent_steps", 12),
+            getattr(auditor_governor, "suggested_max_steps", 20),
+            20,
         )
         conv_result = self._run_conv(
             auditor_conv,
