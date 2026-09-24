@@ -7,4 +7,3 @@ from orchestrator.rendering.output import (
 )
 
 __all__ = ["ConsoleOutput", "console", "custom_theme"]
-

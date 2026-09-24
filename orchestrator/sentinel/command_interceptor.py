@@ -27,43 +27,43 @@ class TerminalCommandTranslator:
             r'Get-Content \1 | Select-String -Pattern "\2"',
         ),
         (
-            r'^\s*cat\s+([^\s|]+)\s*\|\s*head(?:\s+-n\s*(\d+)|\s+-(\d+))?\s*$',
+            r"^\s*cat\s+([^\s|]+)\s*\|\s*head(?:\s+-n\s*(\d+)|\s+-(\d+))?\s*$",
             r"Get-Content \1 | Select-Object -First \2\3",
         ),
         (
-            r'^\s*cat\s+([^\s|]+)\s*\|\s*tail(?:\s+-n\s*(\d+)|\s+-(\d+))?\s*$',
+            r"^\s*cat\s+([^\s|]+)\s*\|\s*tail(?:\s+-n\s*(\d+)|\s+-(\d+))?\s*$",
             r"Get-Content \1 | Select-Object -Last \2\3",
         ),
         (
-            r'^\s*cat\s+([^\s|]+)\s*$',
+            r"^\s*cat\s+([^\s|]+)\s*$",
             r"Get-Content \1",
         ),
         (
-            r'^\s*head(?:\s+-n\s*(\d+)|\s+-(\d+))\s+([^\s]+)\s*$',
+            r"^\s*head(?:\s+-n\s*(\d+)|\s+-(\d+))\s+([^\s]+)\s*$",
             r"Get-Content \3 | Select-Object -First \1\2",
         ),
         (
-            r'^\s*tail(?:\s+-n\s*(\d+)|\s+-(\d+))\s+([^\s]+)\s*$',
+            r"^\s*tail(?:\s+-n\s*(\d+)|\s+-(\d+))\s+([^\s]+)\s*$",
             r"Get-Content \3 | Select-Object -Last \1\2",
         ),
         (
-            r'^\s*ls\s+-(?:la|al|l|a)\s*$',
+            r"^\s*ls\s+-(?:la|al|l|a)\s*$",
             r"Get-ChildItem -Force",
         ),
         (
-            r'^\s*ls\s+-(?:la|al|l|a)\s+([^\s]+)\s*$',
+            r"^\s*ls\s+-(?:la|al|l|a)\s+([^\s]+)\s*$",
             r"Get-ChildItem -Force \1",
         ),
         (
-            r'^\s*touch\s+([^\s]+)\s*$',
+            r"^\s*touch\s+([^\s]+)\s*$",
             r"New-Item -ItemType File -Force -Path \1",
         ),
         (
-            r'^\s*rm\s+-(?:rf|fr|r)\s+([^\s]+)\s*$',
+            r"^\s*rm\s+-(?:rf|fr|r)\s+([^\s]+)\s*$",
             r"Remove-Item -Recurse -Force -LiteralPath \1",
         ),
         (
-            r'^\s*which\s+([^\s]+)\s*$',
+            r"^\s*which\s+([^\s]+)\s*$",
             r"Get-Command \1",
         ),
         (

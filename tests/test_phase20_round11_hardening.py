@@ -10,7 +10,6 @@ Verifies:
 from pathlib import Path
 import os
 from unittest.mock import patch
-import pytest
 
 from orchestrator.config import OrchestratorConfig
 from orchestrator.context.manager import ContextManager
@@ -40,7 +39,9 @@ class TestRound11Hardening:
         assert len(prompt) <= 9000
         assert "... [Task specification truncated to token ceiling]" in prompt
 
-    def test_session_log_store_slugification_sanitizes_special_characters(self, tmp_path: Path):
+    def test_session_log_store_slugification_sanitizes_special_characters(
+        self, tmp_path: Path
+    ):
         special_ws = tmp_path / "My Project (v2.0) [Prod] #1"
         special_ws.mkdir(parents=True, exist_ok=True)
 

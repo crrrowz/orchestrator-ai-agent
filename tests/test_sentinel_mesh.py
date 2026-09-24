@@ -116,21 +116,31 @@ class TestCloudResilienceMesh:
     """Tests for multi-tier LLM provider failover and quota circuit breakers."""
 
     def test_record_success(self):
-        mesh = CloudResilienceMesh(["google/gemini-3.7-flash", "openrouter/qwen/qwen-2.5-72b-instruct"])
+        mesh = CloudResilienceMesh(
+            ["google/gemini-3.7-flash", "openrouter/qwen/qwen-2.5-72b-instruct"]
+        )
         mesh.record_call_success("google/gemini-3.7-flash", latency_ms=120.5)
 
         summary = mesh.get_dashboard_summary()
-        assert summary["google/gemini-3.7-flash"]["status"] == ProviderHealthStatus.ONLINE.value
+        assert (
+            summary["google/gemini-3.7-flash"]["status"]
+            == ProviderHealthStatus.ONLINE.value
+        )
         assert summary["google/gemini-3.7-flash"]["latency_ms"] == 120.5
         assert summary["google/gemini-3.7-flash"]["calls"] == 1
 
     def test_failover_on_429_quota_exhausted(self):
-        chain = ["google/gemini-3.7-flash", "openrouter/qwen/qwen-2.5-72b-instruct", "groq/llama-3.3-70b-versatile"]
+        chain = [
+            "google/gemini-3.7-flash",
+            "openrouter/qwen/qwen-2.5-72b-instruct",
+            "groq/llama-3.3-70b-versatile",
+        ]
         mesh = CloudResilienceMesh(chain)
 
         # Trigger 429 quota exhaustion
         should_failover, next_model = mesh.record_call_failure(
-            "google/gemini-3.7-flash", "Error 429: RateLimitError - daily free quota exhausted"
+            "google/gemini-3.7-flash",
+            "Error 429: RateLimitError - daily free quota exhausted",
         )
         assert should_failover is True
         assert next_model == "openrouter/qwen/qwen-2.5-72b-instruct"
@@ -151,7 +161,9 @@ class TestCognitiveSentinelSupervisor:
             mode=SentinelMode.ENFORCING, workspace_path=tmp_path
         )
         valid_code = "def add(x: int, y: int) -> int:\n    return x + y\n"
-        allowed, msg, healed = supervisor.intercept_file_write(tmp_path / "valid.py", valid_code)
+        allowed, msg, healed = supervisor.intercept_file_write(
+            tmp_path / "valid.py", valid_code
+        )
         assert allowed is True
         assert "verified cleanly" in msg
         assert healed is None
@@ -161,7 +173,9 @@ class TestCognitiveSentinelSupervisor:
             mode=SentinelMode.ENFORCING, workspace_path=tmp_path
         )
         broken_code = "def multiply(a, b)\n    return a * b\n"
-        allowed, msg, healed = supervisor.intercept_file_write(tmp_path / "broken.py", broken_code)
+        allowed, msg, healed = supervisor.intercept_file_write(
+            tmp_path / "broken.py", broken_code
+        )
         assert allowed is True
         assert healed is not None
         assert "def multiply(a, b):" in healed

@@ -128,7 +128,9 @@ class ICognitiveSentinel(Protocol):
 class ISelfHealingEngine(Protocol):
     """Protocol for AST and code auto-patching engines."""
 
-    def heal_syntax(self, code: str, file_path: Optional[Path] = None) -> Tuple[bool, str]: ...
+    def heal_syntax(
+        self, code: str, file_path: Optional[Path] = None
+    ) -> Tuple[bool, str]: ...
 
     def heal_missing_imports(self, code: str) -> str: ...
 
@@ -140,5 +142,9 @@ class ICloudResilienceMesh(Protocol):
     def get_healthy_provider(self, requested_provider: str) -> str: ...
 
     def record_provider_result(
-        self, provider: str, success: bool, latency_ms: float, error_code: Optional[int] = None
+        self,
+        provider: str,
+        success: bool,
+        latency_ms: float,
+        error_code: Optional[int] = None,
     ) -> None: ...

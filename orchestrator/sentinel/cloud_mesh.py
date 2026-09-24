@@ -64,17 +64,25 @@ class CloudResilienceMesh(ICloudResilienceMesh):
 
         err_lower = error_text.lower()
         is_429 = "429" in error_text or "ratelimit" in err_lower or "quota" in err_lower
-        is_server_err = "500" in error_text or "502" in error_text or "503" in error_text or "504" in error_text
+        is_server_err = (
+            "500" in error_text
+            or "502" in error_text
+            or "503" in error_text
+            or "504" in error_text
+        )
 
         if is_429 or "insufficient_quota" in err_lower:
             health.status = ProviderHealthStatus.QUOTA_EXHAUSTED
             health.quota_exhausted = True
-        elif health.consecutive_failures >= self.circuit_breaker_threshold or is_server_err:
+        elif (
+            health.consecutive_failures >= self.circuit_breaker_threshold
+            or is_server_err
+        ):
             health.status = ProviderHealthStatus.DEGRADED
 
-        should_failover = (
-            health.quota_exhausted
-            or health.status in (ProviderHealthStatus.QUOTA_EXHAUSTED, ProviderHealthStatus.DEGRADED)
+        should_failover = health.quota_exhausted or health.status in (
+            ProviderHealthStatus.QUOTA_EXHAUSTED,
+            ProviderHealthStatus.DEGRADED,
         )
 
         if should_failover:
@@ -89,7 +97,11 @@ class CloudResilienceMesh(ICloudResilienceMesh):
         """Finds the healthiest model candidate in the fallback mesh."""
         if requested_model and requested_model in self.providers:
             p = self.providers[requested_model]
-            if not p.quota_exhausted and p.status == ProviderHealthStatus.ONLINE and requested_model != exclude_model:
+            if (
+                not p.quota_exhausted
+                and p.status == ProviderHealthStatus.ONLINE
+                and requested_model != exclude_model
+            ):
                 return requested_model
 
         for candidate in self.fallback_chain:
@@ -122,10 +134,13 @@ class CloudResilienceMesh(ICloudResilienceMesh):
         )
 
     @staticmethod
-    def calculate_backoff_delay(attempt: int, base_delay: float = 1.0, max_delay: float = 30.0) -> float:
+    def calculate_backoff_delay(
+        attempt: int, base_delay: float = 1.0, max_delay: float = 30.0
+    ) -> float:
         """Calculate exponential backoff with full jitter to avoid thundering herd."""
         import random
-        backoff = min(max_delay, base_delay * (2 ** attempt))
+
+        backoff = min(max_delay, base_delay * (2**attempt))
         jitter = random.uniform(0.0, 0.5) * backoff
         return backoff + jitter
 
@@ -133,7 +148,12 @@ class CloudResilienceMesh(ICloudResilienceMesh):
     def extract_retry_after(error_text: str) -> Optional[float]:
         """Extract retry-after duration in seconds if present in error message."""
         import re
-        m = re.search(r"(?:retry[-_ ]after|resets in|wait)[:\s]+(\d+(?:\.\d+)?)\s*(?:s|sec|seconds)?", error_text, re.IGNORECASE)
+
+        m = re.search(
+            r"(?:retry[-_ ]after|resets in|wait)[:\s]+(\d+(?:\.\d+)?)\s*(?:s|sec|seconds)?",
+            error_text,
+            re.IGNORECASE,
+        )
         if m:
             try:
                 return float(m.group(1))

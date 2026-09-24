@@ -57,7 +57,9 @@ class DiffRenderer:
 
         content = "\n".join(diff_lines)
         border_color = "magenta" if is_self_healed else "cyan"
-        healed_tag = " 🛡️ [bold magenta][SELF-HEALED][/bold magenta]" if is_self_healed else ""
+        healed_tag = (
+            " 🛡️ [bold magenta][SELF-HEALED][/bold magenta]" if is_self_healed else ""
+        )
         return Panel(
             content,
             title=title or f"📝 [bold cyan]{filepath}[/bold cyan]{healed_tag}",

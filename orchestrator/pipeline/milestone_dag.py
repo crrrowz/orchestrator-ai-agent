@@ -19,13 +19,17 @@ class MilestoneParser:
     """Parses PLAN.md into discrete executable milestones and resolves dependency graphs."""
 
     @classmethod
-    def resolve_execution_order(cls, milestones: List[SubtaskMilestone]) -> List[SubtaskMilestone]:
+    def resolve_execution_order(
+        cls, milestones: List[SubtaskMilestone]
+    ) -> List[SubtaskMilestone]:
         """Topologically sort milestones based on declared dependencies with cycle fallback."""
         if len(milestones) <= 1:
             return milestones
 
         index_map = {m.index: m for m in milestones}
-        adj = {m.index: [d for d in m.dependencies if d in index_map] for m in milestones}
+        adj = {
+            m.index: [d for d in m.dependencies if d in index_map] for m in milestones
+        }
         in_degree = {m.index: 0 for m in milestones}
         for u in adj:
             for v in adj[u]:
@@ -88,7 +92,11 @@ class MilestoneParser:
             combined_content = f"{header}\n\n{body}".strip()
 
             deps = []
-            dep_match = re.search(r"(?:Depends on|Prerequisites|Requires)[:\s]+([^\n]+)", combined_content, re.IGNORECASE)
+            dep_match = re.search(
+                r"(?:Depends on|Prerequisites|Requires)[:\s]+([^\n]+)",
+                combined_content,
+                re.IGNORECASE,
+            )
             if dep_match:
                 found_nums = re.findall(r"\b(\d+)\b", dep_match.group(1))
                 deps = [int(n) for n in found_nums if int(n) != idx]

@@ -351,7 +351,7 @@ class AuditFixPipeline(BasePipeline):
         return self.adapter.run_static_analysis(self.workspace_path)
 
     def run_test_suite(self, timeout_seconds: int = 60) -> Tuple[bool, str]:
-        """Execute test suite via detected language adapter."""
+        """Execute test suite via detected language adapter (e.g. uv run pytest tests/ -v)."""
         if not self.adapter.has_test_suite(self.workspace_path):
             return (
                 True,
@@ -370,13 +370,13 @@ class AuditFixPipeline(BasePipeline):
         if test_run.exit_code == 0:
             return (
                 True,
-                f"All {self.adapter.language_name} unit tests passed successfully.",
+                f"All {self.adapter.language_name} unit tests passed successfully (`{test_cmd}`).",
             )
 
         compact = self.adapter.parse_test_failures(test_run.stdout, test_run.stderr)
         return (
             False,
-            f"[{self.adapter.language_name.capitalize()} Test Failures (Exit Code {test_run.exit_code})]\n{compact}",
+            f"[{self.adapter.language_name.capitalize()} Test Failures via `{test_cmd}` (Exit Code {test_run.exit_code})]\n{compact}",
         )
 
     def run_zero_token_autofix(self) -> Tuple[bool, str]:
@@ -1071,7 +1071,11 @@ class AuditFixPipeline(BasePipeline):
         resolved_count = len(resolved_findings) if resolved_findings else 0
         per_score = TelemetryRecorder.calculate_per(resolved_count, total_tokens)
         clean_task = (task_description or "Comprehensive Audit & Fix").strip()
-        header_task = clean_task.splitlines()[0].strip() if clean_task else "Comprehensive Audit & Fix"
+        header_task = (
+            clean_task.splitlines()[0].strip()
+            if clean_task
+            else "Comprehensive Audit & Fix"
+        )
         if len(header_task) > 120:
             header_task = header_task[:117] + "..."
 

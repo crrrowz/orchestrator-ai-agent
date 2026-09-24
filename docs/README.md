@@ -1,20 +1,18 @@
-# Antigravity Multi-Agent Orchestrator
+# Antigravity Multi-Agent Orchestrator & Sentinel SRE Mesh
 
-A skill-driven Multi-Agent Software Development Orchestration System powered by the **OpenHands Software Agent SDK** (`openhands-sdk v1.49.4`).
-
-Coordinates specialized AI agents (Architect, Developer, Tester, Reviewer, Auditor) across structured pipelines with role-based skill enforcement, automated test loops, pre-execution cost estimation, zero-token preflight gatekeepers, Git safety isolation, and interactive TUI telemetry.
+Autonomous, multi-agent software engineering framework powered by the **OpenHands Software Agent SDK** (`openhands-sdk v1.49.4`), `.agents/skills/` specification, and zero-token codebase intelligence (via Graft).
 
 ---
 
-## Architecture Overview
+## 🌟 System Overview & Reality
 
 ```
-                                 USER TASK / SPEC FILE
-                                           │
-                                           ▼
+                                  USER TASK / SPEC FILE
+                                            │
+                                            ▼
  ┌──────────────────────────────────────────────────────────────────────────────────┐
- │                           ORCHESTRATOR ENGINE                                    │
- │    Lifecycle, FSM State Machine, Git Isolation, BudgetGuard, Skill Injection     │
+ │                        ORCHESTRATOR CONTROL PLANE (Python 3.12+)                 │
+ │  FSM State Machine (12 Phases) │ ContextManager │ DynamicTokenGovernor           │
  └──────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────────┘
         │              │              │              │              │
         ▼              ▼              ▼              ▼              ▼
@@ -25,19 +23,63 @@ Coordinates specialized AI agents (Architect, Developer, Tester, Reviewer, Audit
         │              │              │              │              │
         ▼              ▼              ▼              ▼              ▼
  ┌─────────────┐┌─────────────┐┌─────────────┐┌─────────────┐┌─────────────┐
- │ SKILL:      ││ SKILLS:     ││ SKILL:      ││ SKILL:      ││ SKILL:      │
- │architectural││clean-python-││pytest-      ││code-review- ││code-audit-  │
- │decomposition││architecture││rigorous-    ││standards    ││heuristics   │
- │graft-arch-  ││systematic-  ││testing      ││             ││             │
- │intelligence ││debugging    ││             ││             ││             │
+ │ SKILLS:     ││ SKILLS:     ││ SKILL:      ││ SKILLS:     ││ SKILLS:     │
+ │architectural││clean-python-││pytest-      ││code-review- ││code-review- │
+ │decomposition││architecture││rigorous-    ││standards    ││standards    │
+ │api-design   ││systematic-  ││testing      ││security-    ││security-    │
+ │contract     ││debugging    ││             ││audit        ││hardening    │
+ │graft-arch   ││docker-devops││             ││             ││graft-arch   │
  └─────────────┘└─────────────┘└─────────────┘└─────────────┘└─────────────┘
+                                      │
+                                      ▼
+ ┌──────────────────────────────────────────────────────────────────────────────────┐
+ │                      COGNITIVE SENTINEL & SRE MESH                               │
+ │ ASTGuard (<15ms), SelfHealingEngine, CloudResilienceMesh, SQLite WAL Diagnostics │
+ └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Quick Start
+## 📁 Repository Structure
 
-### 1. Environment Setup
+```text
+.
+├── orchestrator-ai-agent/       # Core Multi-Agent Orchestration Package (Python 3.12+)
+│   ├── orchestrator/
+│   │   ├── adapters/            # Polyglot Project Adapters (Python, Node, Generic)
+│   │   ├── agents/              # Role Agent Factories (Architect, Developer, Tester, Reviewer, Auditor, Documentation)
+│   │   ├── analysis/            # Pytest parsing, Graft context, Finding validators
+│   │   ├── cli/                 # CLI handlers, argparse routing, interactive wizard
+│   │   ├── config/              # Pydantic schemas, cascading JSON/.env loaders
+│   │   ├── context/             # ContextManager, prompt builder, modular injectors
+│   │   ├── control/             # TokenGovernor, BudgetGuard, HumanInterventionChannel
+│   │   ├── core/                # Config, constants, exceptions, typing protocols
+│   │   ├── guards/              # Zero-token preflight syntax & importability guards
+│   │   ├── llm/                 # LLMManager, factory, pricing, model normalization
+│   │   ├── memory/              # Cross-run persistent conversation memory
+│   │   ├── pipeline/            # 5 Pipelines (DevTestLoop, FullPipeline, AuditPipeline, AuditFixPipeline, DocumentationPipeline)
+│   │   ├── rendering/           # Rich diff renderer, terminal styling, report generators
+│   │   ├── sentinel/            # Cognitive Sentinel: ASTGuard, SelfHealing, CloudMesh, DiagnosticsDB
+│   │   ├── skills/              # Skill manager, compressor, resolver, registry
+│   │   ├── tools/               # RBAC workspace file and parameterized terminal tools
+│   │   ├── ui/                  # SessionLogStore, OrchestratorLiveVisualizer, InteractiveLogExplorer
+│   │   └── vcs/                 # GitOps isolation, branching, diffs, checkpointing
+│   ├── tests/                   # 34 Test Modules (224 Passing Tests)
+│   ├── docs/                    # Package-level operational documentation
+│   └── pyproject.toml           # Hatchling build backend & project dependencies
+└── .agents/skills/              # 9 Standard YAML+Markdown engineering skills
+```
+
+---
+
+## 🚀 Quick Start
+
+### 1. Requirements
+- Python `3.12+`
+- `uv` (recommended) or `pip`
+- Git
+
+### 2. Installation & Configuration
 
 ```bash
 cd orchestrator-ai-agent
@@ -45,167 +87,60 @@ cd orchestrator-ai-agent
 # Install dependencies with uv
 uv sync
 
-# Configure environment variables
+# Configure environment
 cp .env.example .env
 ```
 
-Edit `.env` and provide your OpenRouter API key:
+Provide your API key in `.env`:
 ```env
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-### 2. Verify Setup (0-Token)
+### 3. Verification & Execution
 
 ```bash
-# Check discovered skills
-uv run python -m orchestrator.main --list-skills
-
-# Run preflight configuration audit
+# Verify setup offline (0 API tokens consumed)
 uv run python -m orchestrator.main --check-config
 
-# Run test suite (64 unit & integration tests)
+# Run test suite (224 unit & integration tests)
 uv run pytest -q
+
+# Execute a software engineering task
+uv run python -m orchestrator.main "Build a rate limiter" --mode dev-test
 ```
 
 ---
 
-## Execution Modes (`--mode`)
+## ⚡ Execution Modes (`--mode`)
 
-The orchestrator supports three primary pipeline modes:
-
-| Mode | Flag | Agents Involved | Best For |
-|---|---|---|---|
-| **Dev-Test** *(Default)* | `--mode dev-test` | Developer + Tester | Fast TDD development, single features, bug fixes, script generation. |
-| **Full Architecture** | `--mode full` | Architect + Developer + Tester + Reviewer | End-to-end applications, multi-file modules, structured milestone plans. |
-| **Codebase Audit** | `--mode audit` | AST Static Analysis + Auditor Agent | Deep security review, dead code detection, architectural critique. |
+1. **`--mode dev-test` (Default)**: Developer + Tester iterative TDD loop.
+2. **`--mode full`**: 4-Agent Pipeline coordinating Architect (creates `PLAN.md`), Developer (Milestone DAG), Tester (Pytest), and Reviewer (Independent Verdict).
+3. **`--mode audit`**: Zero-token AST/linter inspection + Auditor agent producing structured `docs/audit_findings.json` and `docs/AUDIT_REPORT.md`.
+4. **`--mode audit-fix`**: Continuous scan-remediate-verify self-healing loop directly on workspace working tree without Git operations.
+5. **`--mode docs`**: Documentation agent authoring and updating repository documentation.
 
 ---
 
-## CLI Reference & Flags
+## 🛡️ Cognitive Sentinel & SRE Mesh
 
-### Syntax
+- **`--sentinel-status`**: Displays live Sentinel diagnostics, auto-healed incident counts, and cloud circuit breaker statuses.
+- **`--sentinel-heal [PATH]`**: Offline zero-token AST syntax audit and automated import repair.
+- **`--sentinel-test-mesh`**: Probes cloud fallback chain readiness across OpenRouter, Gemini, Groq, Anthropic, and OpenAI.
+
+---
+
+## 🧪 Testing & Verification
+
+The test suite contains **224 automated tests** across **34 test modules** covering:
+- OpenHands SDK tool protocol compliance (`WorkspaceFileTool`, `WorkspaceTerminalTool`).
+- Circuit breaker state machines and semantic failure deduplication.
+- Dynamic token governance and phase allocation (`TokenPhase`).
+- Cognitive Sentinel supervision, AST guarding, and self-healing.
+- Project log rotation and multi-workspace partitioning.
 
 ```bash
-uv run python -m orchestrator.main [TASK] [OPTIONS]
+cd orchestrator-ai-agent
+uv run pytest -v
 ```
 
-### Arguments & Options
-
-#### 1. Task Specification
-- **Inline Text Prompt**:
-  ```bash
-  uv run python -m orchestrator.main "Build an in-memory sliding window rate limiter"
-  ```
-- **Task from Specification File**:
-  You can pass a `.md` or `.txt` file directly as the task argument:
-  ```bash
-  uv run python -m orchestrator.main ./specs/feature_auth.md --mode full
-  ```
-
-#### 2. Pipeline Control
-- `--mode {dev-test,full,audit}`: Choose pipeline execution engine.
-- `--workspace PATH`: Target directory for code generation. Defaults to `workspace/` inside orchestrator.
-- `--resume`: Resume execution from the last checkpoint (`.orchestrator_state.json`), skipping completed phases.
-
-#### 3. Budget & Cost Safety
-- `--estimate`: **Zero-token pre-flight cost projection**. Analyzes the task, computes expected token burns per agent role, and displays a formatted cost table without invoking any LLMs:
-  ```bash
-  uv run python -m orchestrator.main "Build OAuth2 service" --mode full --estimate
-  ```
-- `--no-memory`: Disables cross-run historical memory retrieval to minimize prompt token burn.
-
-#### 4. Human-in-the-Loop (HITL)
-- `--interactive`, `-i`: Activates interactive CLI checkpoints allowing you to guide the agents, request plan edits, or abort.
-- `--approval-gates GATES`: Comma-separated list of checkpoints requiring manual approval before proceeding:
-  - `after_architect`: Review `PLAN.md` before developer implementation begins.
-  - `after_developer`: Review code before test runs.
-  - `before_commit`: Inspect git diff before auto-committing to branch.
-  ```bash
-  uv run python -m orchestrator.main "Refactor DB" --mode full --approval-gates after_architect,before_commit
-  ```
-
-#### 5. Diagnostics & Visualization
-- `--logs`: Launches the interactive TUI log explorer to inspect step-by-step agent thoughts, tool actions, and terminal outputs:
-  ```bash
-  # View latest global session
-  uv run python -m orchestrator.main --logs
-
-  # View latest session for a specific project workspace
-  uv run python -m orchestrator.main --logs --workspace ./workspace/my-service
-  ```
-- `--self-audit`: Runs an offline heuristic analysis on past diagnostic runs (`diagnostics/reports/`) to discover recurring failure patterns.
-- `--verbose`, `-v`: Detailed streaming of agent thoughts, prompts, and tool parameters.
-- `--quiet`, `-q`: Minimalist console output showing only phase transitions and final status.
-
----
-
-## Workspace Management & Isolation
-
-By default, all generated code, files, and Git branches are isolated inside:
-```
-orchestrator-ai-agent/workspace/
-```
-
-To run the orchestrator against an existing project outside this directory:
-```bash
-uv run python -m orchestrator.main "Add input validation" --workspace /path/to/my-repo
-```
-
-- **Git Isolation**: The orchestrator automatically creates an isolated Git branch (`agent/<task-slug>-<timestamp>`) so your working branch is never modified directly.
-- **Path Confinement**: Agent tool execution is strictly confined to the target workspace to prevent accidental edits to parent directories.
-
----
-
-## Telemetry, Logs & Auto-Pruning
-
-Diagnostics and run telemetry are automatically managed under `diagnostics/`:
-
-```
-diagnostics/
-├── reports/                 # JSON execution reports (auto-pruned to last 20)
-│   └── run_<timestamp>.json
-├── logs/
-│   ├── latest_session.json  # Global pointer to most recent session
-│   └── <project_slug>/      # Project-isolated session history (keeps last 10)
-│       ├── latest_session.json
-│       └── session_<timestamp>.json
-└── memory/                  # Cross-run conversational knowledge
-```
-
-- **FIFO Report Pruning**: The system automatically retains only the latest `MAX_RETAINED_REPORTS` (default: 20) in `diagnostics/reports/`, deleting obsolete reports on finalize.
-- **Project Partitioning**: Each target workspace gets its own isolated log directory preventing multi-project collisions.
-
----
-
-## Environment Variables Reference (`.env`)
-
-| Variable | Default | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | *(Required)* | OpenRouter API Key for agent LLM inference. |
-| `DEFAULT_MODEL` | `openrouter/anthropic/claude-3.5-sonnet` | Default model across all agent roles. |
-| `ARCHITECT_MODEL` | `openrouter/anthropic/claude-3.5-sonnet` | Specialized model for architectural decomposition. |
-| `DEVELOPER_MODEL` | `openrouter/anthropic/claude-3.5-sonnet` | Model for code generation and refactoring. |
-| `TESTER_MODEL` | `openrouter/anthropic/claude-3.5-sonnet` | Model for pytest test suite creation. |
-| `REVIEWER_MODEL` | `openrouter/anthropic/claude-3.5-sonnet` | Model for independent security/code review. |
-| `AUDITOR_MODEL` | `openrouter/anthropic/claude-3.5-sonnet` | Model for codebase auditing (`--mode audit`). |
-| `WORKSPACE_PATH` | `./workspace` | Default path for code generation. |
-| `MAX_ITERATIONS` | `4` | Maximum TDD test/fix loops before stopping. |
-| `MAX_BUDGET_USD` | `0.50` | Hard spending limit per pipeline run. |
-| `MAX_TOKENS_PER_CALL` | `4096` | Max output tokens per LLM invocation. |
-| `CIRCUIT_BREAKER_THRESHOLD` | `2` | Consecutive identical test failures before abort. |
-| `MAX_RETAINED_REPORTS` | `20` | Max JSON telemetry reports retained in `diagnostics/reports/`. |
-| `AUTO_COMMIT` | `true` | Auto-commit changes to task branch upon test pass. |
-| `ENABLE_MEMORY` | `true` | Enable cross-run knowledge persistence. |
-| `VERBOSITY` | `normal` | Output detail (`quiet`, `normal`, `verbose`). |
-
----
-
-## Testing & Quality Assurance
-
-Run the comprehensive test suite verifying SDK tools, circuit breaker, FSM states, reviewer parser, and log rotation:
-
-```bash
-uv run pytest tests/ -v
-```
-
-All 64 tests run offline using mocks without consuming API credits.
+All 224 tests pass deterministically.

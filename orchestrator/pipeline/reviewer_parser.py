@@ -37,6 +37,7 @@ class ReviewerVerdict:
             data = None
             try:
                 import ast
+
                 evaluated = ast.literal_eval(raw_json)
                 if isinstance(evaluated, dict):
                     data = evaluated
@@ -46,7 +47,9 @@ class ReviewerVerdict:
             if data is None:
                 # Normalize trailing commas and single quotes for json.loads
                 normalized_json = re.sub(r",\s*([\]}])", r"\1", raw_json)
-                normalized_json = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', normalized_json)
+                normalized_json = re.sub(
+                    r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', normalized_json
+                )
                 try:
                     data = json.loads(normalized_json)
                 except Exception:
@@ -74,7 +77,7 @@ class ReviewerVerdict:
         approval_markers = [
             r"VERDICT[\s:\-]+APPROVED",
             r'"VERDICT"\s*:\s*"APPROVED"',
-            r'\'VERDICT\'\s*:\s*\'APPROVED\'',
+            r"\'VERDICT\'\s*:\s*\'APPROVED\'",
             r"STATUS[\s:\-]+APPROVED",
             r"DECISION[\s:\-]+APPROVED",
             r"###\s*VERDICT:\s*APPROVED",

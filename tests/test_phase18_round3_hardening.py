@@ -8,7 +8,6 @@ Verifies:
 """
 
 from pathlib import Path
-import pytest
 
 from orchestrator.pipeline.milestone_dag import MilestoneParser, SubtaskMilestone
 from orchestrator.pipeline.reviewer_parser import ReviewerVerdict
@@ -41,8 +40,9 @@ class TestRound3ReviewerParserHardening:
         assert len(verdict.reasoning) == 2
 
     def test_parse_relaxed_verdict_keywords(self):
-        text_lgtm = "**Decision**: LGTM\nCode is clean and verified."
-        verdict = ReviewerVerdict.parse(text_lgtm)
+        text_passed = '{"verdict": "PASSED"}'
+        verdict = ReviewerVerdict.parse(text_passed)
+        assert verdict.approved is True
         # Fallback keyword or structured
         verdict_structured = ReviewerVerdict.parse('{"verdict": "LGTM"}')
         assert verdict_structured.approved is True

@@ -3,4 +3,3 @@
 from orchestrator.skills.compressor import CompactSkillInjector
 
 __all__ = ["CompactSkillInjector"]
-

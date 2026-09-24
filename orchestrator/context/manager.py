@@ -63,7 +63,10 @@ class ContextManager:
         task_str = resolved_task.strip()
         max_chars = max_tokens * 4
         if len(task_str) > max_chars - 500 and max_chars > 1000:
-            task_str = task_str[: max_chars - 600] + "\n... [Task specification truncated to token ceiling]"
+            task_str = (
+                task_str[: max_chars - 600]
+                + "\n... [Task specification truncated to token ceiling]"
+            )
 
         blocks.append(f"Task Specification:\n{task_str}")
 

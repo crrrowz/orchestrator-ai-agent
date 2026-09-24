@@ -410,10 +410,14 @@ def execute_file_action(
                 from orchestrator.sentinel.ast_guard import ASTGuard
 
                 guard = ASTGuard()
-                is_safe, err_msg, healed = guard.intercept_ast(target_path, content_to_write)
+                is_safe, err_msg, healed = guard.intercept_ast(
+                    target_path, content_to_write
+                )
                 if not is_safe:
                     return WorkspaceFileObservation(
-                        content=[TextContent(text=f"AST Integrity Violation: {err_msg}")],
+                        content=[
+                            TextContent(text=f"AST Integrity Violation: {err_msg}")
+                        ],
                         is_error=True,
                         success=False,
                         message=f"AST Integrity Violation: {err_msg}",
@@ -499,13 +503,19 @@ def execute_file_action(
             elif target.replace("\r\n", "\n") in existing.replace("\r\n", "\n"):
                 normalized_existing = existing.replace("\r\n", "\n")
                 normalized_target = target.replace("\r\n", "\n")
-                new_content = normalized_existing.replace(normalized_target, replacement, 1)
+                new_content = normalized_existing.replace(
+                    normalized_target, replacement, 1
+                )
             else:
                 existing_lines = existing.splitlines(keepends=True)
                 target_lines = [tl.strip() for tl in target.splitlines() if tl.strip()]
                 match_start = -1
                 for i in range(len(existing_lines)):
-                    window = [el.strip() for el in existing_lines[i : i + len(target_lines)] if el.strip()]
+                    window = [
+                        el.strip()
+                        for el in existing_lines[i : i + len(target_lines)]
+                        if el.strip()
+                    ]
                     if window == target_lines:
                         match_start = i
                         break
@@ -526,7 +536,7 @@ def execute_file_action(
                         adjusted_repl[-1] = adjusted_repl[-1] + "\n"
 
                     pre = "".join(existing_lines[:match_start])
-                    post = "".join(existing_lines[match_start + len(target_lines):])
+                    post = "".join(existing_lines[match_start + len(target_lines) :])
                     new_content = pre + "".join(adjusted_repl) + post
 
             if new_content is None:
@@ -557,7 +567,9 @@ def execute_file_action(
                 is_safe, err_msg, healed = guard.intercept_ast(target_path, new_content)
                 if not is_safe:
                     return WorkspaceFileObservation(
-                        content=[TextContent(text=f"AST Integrity Violation: {err_msg}")],
+                        content=[
+                            TextContent(text=f"AST Integrity Violation: {err_msg}")
+                        ],
                         is_error=True,
                         success=False,
                         message=f"AST Integrity Violation: {err_msg}",
@@ -871,9 +883,7 @@ def execute_terminal_action(
         pass
 
     channel = getattr(conversation, "human_channel", None) or get_active_channel()
-    is_pre_authorized = (
-        channel.is_command_approved(cmd_to_exec) if channel else False
-    )
+    is_pre_authorized = channel.is_command_approved(cmd_to_exec) if channel else False
 
     valid, cmd_tokens, reason = split_and_validate_command(cmd_to_exec)
     if not valid and not is_pre_authorized:
@@ -975,7 +985,16 @@ def execute_terminal_action(
             base_name = "cls"
 
     shell_builtins = {
-        "dir", "type", "cd", "echo", "where", "findstr", "del", "copy", "move", "cls"
+        "dir",
+        "type",
+        "cd",
+        "echo",
+        "where",
+        "findstr",
+        "del",
+        "copy",
+        "move",
+        "cls",
     }
     if (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]

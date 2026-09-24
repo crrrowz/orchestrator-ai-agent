@@ -102,13 +102,14 @@ class CloudMeshGovernor:
 
         # Failure handling
         stats["failures"] += 1
-        if status_code == 429 or "rate limit" in error_message.lower() or "quota" in error_message.lower():
+        if (
+            status_code == 429
+            or "rate limit" in error_message.lower()
+            or "quota" in error_message.lower()
+        ):
             stats["consecutive_429"] += 1
 
-        if (
-            stats["failures"] >= self.circuit_threshold
-            or stats["consecutive_429"] >= 2
-        ):
+        if stats["failures"] >= self.circuit_threshold or stats["consecutive_429"] >= 2:
             stats["is_tripped"] = True
             stats["tripped_at"] = time.time()
             return self._get_next_fallback(model)

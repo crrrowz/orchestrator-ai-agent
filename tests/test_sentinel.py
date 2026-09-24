@@ -368,4 +368,3 @@ def test_handle_sentinel_heal_directory():
         # Check healed file got auto-healed
         healed_content = (sub_dir / "needs_heal.py").read_text(encoding="utf-8")
         assert "import json" in healed_content
-

@@ -331,3 +331,21 @@ def test_check_and_rotate_stale_reports_backlog_resumption(tmp_path: Path):
     assert any("first bug" in r for r in resolved)
     assert not any("second bug" in r for r in resolved)
     assert audit_file.exists()
+
+
+def test_audit_fix_pipeline_executes_pytest_command_resolution(tmp_path: Path):
+    """AuditFixPipeline executes project pytest test command via adapter."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "uv.lock").write_text("", encoding="utf-8")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_sample.py").write_text("def test_ok(): assert True\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+
+    test_cmd = pipeline.adapter.get_test_command(tmp_path)
+    assert "pytest" in test_cmd
+    assert "-v" in test_cmd
+

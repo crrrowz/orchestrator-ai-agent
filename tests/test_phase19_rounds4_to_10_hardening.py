@@ -11,10 +11,8 @@ Verifies:
 
 from pathlib import Path
 import threading
-import time
-import pytest
 
-from orchestrator.pipeline.milestone_dag import MilestoneParser, SubtaskMilestone
+from orchestrator.pipeline.milestone_dag import MilestoneParser
 from orchestrator.pipeline.reviewer_parser import ReviewerVerdict
 from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
 from orchestrator.sentinel.ast_guard import ASTGuard
@@ -64,6 +62,7 @@ class TestRounds4To10Hardening:
         assert "audit(req)" in content
         # Verify valid Python AST
         import ast
+
         tree = ast.parse(content)
         assert tree is not None
 

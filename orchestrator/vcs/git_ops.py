@@ -195,7 +195,9 @@ class GitOps:
         proc = self._run_git("restore", ".")
         return proc.returncode == 0
 
-    def create_checkpoint(self, label: str = "sentinel_auto_checkpoint") -> Optional[str]:
+    def create_checkpoint(
+        self, label: str = "sentinel_auto_checkpoint"
+    ) -> Optional[str]:
         """Create a safety commit or stash checkpoint before risky operations."""
         if not self.has_uncommitted_changes():
             head = self._run_git("rev-parse", "HEAD")

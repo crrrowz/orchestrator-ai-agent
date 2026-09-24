@@ -67,7 +67,11 @@ class AuditResult(BaseModel):
         med_count = sum(1 for f in self.findings if f.severity == "MEDIUM")
         low_count = sum(1 for f in self.findings if f.severity == "LOW")
 
-        health_score = max(0, health_score - (critical_count * 25 + high_count * 10 + med_count * 5 + low_count * 2))
+        health_score = max(
+            0,
+            health_score
+            - (critical_count * 25 + high_count * 10 + med_count * 5 + low_count * 2),
+        )
 
         lines = [
             "# Codebase Architecture & Security Audit Report",
@@ -164,7 +168,9 @@ class AuditResult(BaseModel):
             for idx, f in enumerate(self.findings, start=1):
                 lines.append(f"{idx}. `[{f.severity}]` Fix **{f.file}**: {f.problem}")
         else:
-            lines.append("- No pending remediation work items required. Codebase is in healthy state.")
+            lines.append(
+                "- No pending remediation work items required. Codebase is in healthy state."
+            )
 
         lines.append("")
         return "\n".join(lines)

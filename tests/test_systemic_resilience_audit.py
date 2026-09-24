@@ -13,7 +13,6 @@ from orchestrator.memory.conversation_store import (
     SessionMemoryStore,
 )
 from orchestrator.pipeline.audit_report_io import locate_and_normalize_report
-from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
 from orchestrator.sentinel.diagnostics_db import SentinelDiagnosticsDB
 from orchestrator.telemetry.recorder import TelemetryRecorder
 from orchestrator.tools.workspace_tools import (
@@ -39,9 +38,13 @@ def test_circuit_breaker_dual_signature_compatibility(tmp_path: Path):
 
     rec.reset()
     # 2. Dual argument call (diff_text, error_text)
-    t_dual_1 = rec.check_circuit_breaker("diff --git a/app.py", "SyntaxError: invalid syntax")
+    t_dual_1 = rec.check_circuit_breaker(
+        "diff --git a/app.py", "SyntaxError: invalid syntax"
+    )
     assert t_dual_1 is False
-    t_dual_2 = rec.check_circuit_breaker("diff --git a/app.py", "SyntaxError: invalid syntax")
+    t_dual_2 = rec.check_circuit_breaker(
+        "diff --git a/app.py", "SyntaxError: invalid syntax"
+    )
     assert t_dual_2 is True
 
 
@@ -130,12 +133,16 @@ def test_symbol_extraction_character_budget_clamping(tmp_path: Path):
     """Verify operation='symbol' clamps oversized symbol outputs to prevent LLM context exhaustion."""
     large_func_lines = ["def massive_function():\n"]
     for i in range(500):
-        large_func_lines.append(f"    var_{i} = 'some long repetitive value to balloon output size {i}'\n")
+        large_func_lines.append(
+            f"    var_{i} = 'some long repetitive value to balloon output size {i}'\n"
+        )
 
     py_file = tmp_path / "large_module.py"
     py_file.write_text("".join(large_func_lines), encoding="utf-8")
 
-    act = WorkspaceFileAction(operation="symbol", path="large_module.py", symbol="massive_function")
+    act = WorkspaceFileAction(
+        operation="symbol", path="large_module.py", symbol="massive_function"
+    )
     obs = execute_file_action(act, base_dir=tmp_path)
 
     assert obs.success is True
@@ -145,18 +152,41 @@ def test_symbol_extraction_character_budget_clamping(tmp_path: Path):
 
 def test_token_governor_action_classification():
     """Verify DynamicTokenGovernor classifies modern action names into appropriate token phases."""
-    assert DynamicTokenGovernor.classify_action("WorkspaceFileTool", {"operation": "edit"}) == TokenPhase.IMPLEMENTATION
-    assert DynamicTokenGovernor.classify_action("WorkspaceFileTool", {"operation": "read"}) == TokenPhase.INVESTIGATION
-    assert DynamicTokenGovernor.classify_action("WorkspaceTerminalTool", {"command": "pytest -v"}) == TokenPhase.TESTING
-    assert DynamicTokenGovernor.classify_action("WorkspaceTerminalTool", {"command": "git status"}) == TokenPhase.TESTING
-    assert DynamicTokenGovernor.classify_action("WorkspaceTerminalTool", {"command": "python script.py"}) == TokenPhase.INVESTIGATION
+    assert (
+        DynamicTokenGovernor.classify_action("WorkspaceFileTool", {"operation": "edit"})
+        == TokenPhase.IMPLEMENTATION
+    )
+    assert (
+        DynamicTokenGovernor.classify_action("WorkspaceFileTool", {"operation": "read"})
+        == TokenPhase.INVESTIGATION
+    )
+    assert (
+        DynamicTokenGovernor.classify_action(
+            "WorkspaceTerminalTool", {"command": "pytest -v"}
+        )
+        == TokenPhase.TESTING
+    )
+    assert (
+        DynamicTokenGovernor.classify_action(
+            "WorkspaceTerminalTool", {"command": "git status"}
+        )
+        == TokenPhase.TESTING
+    )
+    assert (
+        DynamicTokenGovernor.classify_action(
+            "WorkspaceTerminalTool", {"command": "python script.py"}
+        )
+        == TokenPhase.INVESTIGATION
+    )
 
 
 def test_graft_condensed_map_alias_compatibility(tmp_path: Path):
     """Verify GraftContextProvider exposes get_condensed_map alias for get_compact_map."""
     assert hasattr(GraftContextProvider, "get_condensed_map")
     assert hasattr(GraftContextProvider, "get_compact_map")
-    assert GraftContextProvider.get_condensed_map == GraftContextProvider.get_compact_map
+    assert (
+        GraftContextProvider.get_condensed_map == GraftContextProvider.get_compact_map
+    )
 
 
 def test_audit_report_io_case_insensitivity(tmp_path: Path):

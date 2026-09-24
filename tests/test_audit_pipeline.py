@@ -371,4 +371,3 @@ def test_audit_pipeline_ignores_tool_exit_code_errors_for_agent_status(tmp_path:
         res = pipeline.run("Deep audit")
         # Since static analysis is clean and agent completed without crash, workspace is AUDIT_CLEAN
         assert res["audit_state"] == AuditState.AUDIT_CLEAN.value
-

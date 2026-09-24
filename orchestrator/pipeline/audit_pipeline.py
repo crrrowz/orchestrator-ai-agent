@@ -153,7 +153,7 @@ class AuditPipeline(BasePipeline):
             "1. Inspect 3-5 critical hotspot files identified above to verify key architecture, boundaries, and duplication.\n"
             "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`).\n"
             "   - Write verified structured findings to `docs/audit_findings.json` using workspace_file write operation.\n"
-            "   - Format: {\"status\": \"AUDIT_COMPLETED\", \"findings\": [{\"id\": \"AUD-001\", \"severity\": \"HIGH\", \"type\": \"BUG\", \"file\": \"path/to/file.py\", \"line\": 42, \"evidence\": \"code snippet\", \"problem\": \"exact issue\", \"recommended_fix\": \"exact fix\", \"actionable\": true}]}\n"
+            '   - Format: {"status": "AUDIT_COMPLETED", "findings": [{"id": "AUD-001", "severity": "HIGH", "type": "BUG", "file": "path/to/file.py", "line": 42, "evidence": "code snippet", "problem": "exact issue", "recommended_fix": "exact fix", "actionable": true}]}\n'
             "3. Your report MUST follow this rigorous structure:\n"
             "   - # Codebase Architecture & Security Audit Report\n"
             "   - ## 1. Executive Summary & Architecture Health Score\n"
@@ -220,7 +220,9 @@ class AuditPipeline(BasePipeline):
         if not validated_findings and report_file and report_file.exists():
             try:
                 report_text = report_file.read_text(encoding="utf-8")
-                from orchestrator.pipeline.audit_fix_pipeline import extract_audit_findings_list
+                from orchestrator.pipeline.audit_fix_pipeline import (
+                    extract_audit_findings_list,
+                )
 
                 extracted_items = extract_audit_findings_list(report_text)
                 for idx, item in enumerate(extracted_items, start=1):
@@ -247,11 +249,15 @@ class AuditPipeline(BasePipeline):
                         actionable=True,
                         source="auditor_report",
                     )
-                    is_valid, reason = FindingValidator.validate(finding, self.workspace_path)
+                    is_valid, reason = FindingValidator.validate(
+                        finding, self.workspace_path
+                    )
                     if is_valid:
                         validated_findings.append(finding)
             except Exception as e:
-                ConsoleOutput.warning(f"Failed to parse markdown audit report fallback: {e}")
+                ConsoleOutput.warning(
+                    f"Failed to parse markdown audit report fallback: {e}"
+                )
 
         # Incorporate deterministic static defects if present
         if not is_clean_static and static_issues:
@@ -327,14 +333,22 @@ class AuditPipeline(BasePipeline):
             "codebase_audit",
             iteration=1,
             duration_seconds=dur,
-            success=(audit_state not in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE)),
+            success=(
+                audit_state
+                not in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE)
+            ),
             prompt_tokens=u_audit.get("prompt_tokens", 0),
             completion_tokens=u_audit.get("completion_tokens", 0),
             total_tokens=u_audit.get("total_tokens", 0),
             estimated_cost_usd=u_audit.get("accumulated_cost", 0.0)
             or u_audit.get("estimated_cost_usd", 0.0),
         )
-        telemetry.finalize(completed_successfully=(audit_state not in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE)))
+        telemetry.finalize(
+            completed_successfully=(
+                audit_state
+                not in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE)
+            )
+        )
         log_store.save_to_file()
 
         if audit_state in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE):

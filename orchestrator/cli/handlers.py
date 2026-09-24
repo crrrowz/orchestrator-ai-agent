@@ -233,7 +233,9 @@ def handle_sentinel_heal(target_path: Path) -> None:
             ConsoleOutput.error(f"AST Audit failed on '{target_path.name}': {msg}")
         elif healed and healed != content:
             target_path.write_text(healed, encoding="utf-8")
-            ConsoleOutput.success(f"Successfully auto-healed '{target_path.name}': {msg}")
+            ConsoleOutput.success(
+                f"Successfully auto-healed '{target_path.name}': {msg}"
+            )
         else:
             ConsoleOutput.success(
                 f"'{target_path.name}' verified clean. 0 defects detected."

@@ -1,0 +1,47 @@
+# OpenHands Autonomous Development Directives
+
+You are working as an autonomous software engineer on this repository.
+
+## Repository Architecture
+- **`orchestrator-ai-agent/`**: The active multi-agent software development orchestrator powered by the **OpenHands Software Agent SDK** (`openhands-sdk`). All multi-agent implementation, tests, and skills live here.
+- **`docs/`**: Future project documentation and architecture specifications. **DO NOT MODIFY OR DELETE `docs/`**.
+
+---
+
+## Architectural Principles & Skills
+
+The orchestrator relies on specialized architectural skills in `orchestrator-ai-agent/.agents/skills/`:
+
+1. **`clean-python-architecture`**:
+   - Python 3.12+ modern syntax and idioms.
+   - Strict typing across all signatures.
+   - Zero stubs or placeholders (`# TODO`, `pass`, empty functions are strictly forbidden).
+2. **`pytest-rigorous-testing`**:
+   - AAA pattern (Arrange, Act, Assert).
+   - Strict edge case and boundary condition coverage.
+   - Deterministic fixtures, no shared mutable state.
+3. **`code-review-standards`**:
+   - Independent security and correctness audit.
+   - Zero tolerance for vulnerabilities or regression risks.
+4. **`architectural-decomposition`**:
+   - Decomposing complex tasks into formal specifications and contracts.
+5. **`systematic-debugging`**:
+   - Methodical root-cause triage protocol when resolving test failures.
+
+---
+
+## Working Directory & Verification Commands
+Always run your commands from within `orchestrator-ai-agent/`:
+
+```bash
+cd orchestrator-ai-agent
+
+# Run full unit test suite
+uv run pytest -v
+
+# Verify skills discovery
+uv run python -m orchestrator.main --list-skills
+
+# Verify model matrix & configuration
+uv run python -m orchestrator.main --check-config
+```

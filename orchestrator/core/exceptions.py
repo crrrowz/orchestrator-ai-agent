@@ -52,4 +52,3 @@ class CloudMeshExhaustionError(OrchestratorException):
 
 class SecurityBoundaryViolationError(OrchestratorException):
     """Raised when an action violates workspace or sandbox isolation security boundaries."""
-

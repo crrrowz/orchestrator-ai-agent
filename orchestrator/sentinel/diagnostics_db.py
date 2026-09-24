@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from orchestrator.core.constants import SENTINEL_DIAGNOSTICS_DB_PATH
-from orchestrator.core.protocols import CognitiveIncident, IncidentSeverity, InterventionAction
+from orchestrator.core.protocols import (
+    CognitiveIncident,
+    IncidentSeverity,
+    InterventionAction,
+)
 
 
 class SentinelDiagnosticsDB:
@@ -182,9 +186,9 @@ class SentinelDiagnosticsDB:
     def get_stats(self) -> Dict[str, Any]:
         """Aggregate total incidents and healing success rate."""
         with self._get_connection() as conn:
-            total_incidents = conn.execute(
-                "SELECT COUNT(*) FROM incidents"
-            ).fetchone()[0]
+            total_incidents = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[
+                0
+            ]
             auto_healed_count = conn.execute(
                 "SELECT COUNT(*) FROM incidents WHERE auto_healed = 1"
             ).fetchone()[0]

@@ -88,7 +88,9 @@ class BasePipeline(ABC):
         if getattr(config, "enable_cognitive_sentinel", True):
             from orchestrator.sentinel import CognitiveSentinelSupervisor
 
-            self.sentinel = CognitiveSentinelSupervisor(self.config, self.workspace_path)
+            self.sentinel = CognitiveSentinelSupervisor(
+                self.config, self.workspace_path
+            )
         else:
             self.sentinel = None
 
@@ -355,18 +357,28 @@ class BasePipeline(ABC):
                 if state:
                     exec_status = getattr(state, "execution_status", None)
                     if exec_status:
-                        status_str = str(getattr(exec_status, "value", exec_status)).lower()
+                        status_str = str(
+                            getattr(exec_status, "value", exec_status)
+                        ).lower()
                         if status_str in ("error", "stuck"):
                             run_result.completed = False
                             if not run_result.error_message:
-                                run_result.error_message = f"Agent execution ended with status '{status_str}'."
+                                run_result.error_message = (
+                                    f"Agent execution ended with status '{status_str}'."
+                                )
 
                     events = getattr(state, "events", []) or []
                     for ev in reversed(events):
                         ev_name = getattr(ev, "__class__", type(ev)).__name__
-                        if ev_name in ("ConversationErrorEvent", "AgentErrorEvent") or (hasattr(ev, "error") and ev.error):
+                        if ev_name in ("ConversationErrorEvent", "AgentErrorEvent") or (
+                            hasattr(ev, "error") and ev.error
+                        ):
                             run_result.completed = False
-                            err = getattr(ev, "error", None) or getattr(ev, "message", None) or "Agent error encountered"
+                            err = (
+                                getattr(ev, "error", None)
+                                or getattr(ev, "message", None)
+                                or "Agent error encountered"
+                            )
                             run_result.error_message = str(err)
                             break
 
@@ -393,12 +405,20 @@ class BasePipeline(ABC):
                         vis.close(success=run_result.completed)
                     except Exception:
                         pass
-                if run_result.tokens_consumed == 0 and llm_baseline and hasattr(llm_baseline, "metrics"):
-                    tu_end = getattr(llm_baseline.metrics, "accumulated_token_usage", None)
+                if (
+                    run_result.tokens_consumed == 0
+                    and llm_baseline
+                    and hasattr(llm_baseline, "metrics")
+                ):
+                    tu_end = getattr(
+                        llm_baseline.metrics, "accumulated_token_usage", None
+                    )
                     if tu_end:
                         pt_e = getattr(tu_end, "prompt_tokens", 0) or 0
                         ct_e = getattr(tu_end, "completion_tokens", 0) or 0
-                        run_result.tokens_consumed = max(0, int(pt_e + ct_e) - initial_tok)
+                        run_result.tokens_consumed = max(
+                            0, int(pt_e + ct_e) - initial_tok
+                        )
                 setattr(conv, "_run_result", run_result)
                 return run_result
             except Exception as e:
@@ -475,7 +495,9 @@ class BasePipeline(ABC):
                 is_bad_request = "400" in err_text or "BadRequestError" in err_text
 
                 if is_not_found or is_auth_error or is_bad_request:
-                    run_result.error_message = err_text.splitlines()[0] if err_text else str(e)
+                    run_result.error_message = (
+                        err_text.splitlines()[0] if err_text else str(e)
+                    )
                     setattr(conv, "_run_result", run_result)
                     # Permanent upstream error - retrying will fail repeatedly and clutter terminal output
                     raise

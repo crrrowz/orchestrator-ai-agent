@@ -9,21 +9,16 @@ Verifies:
 """
 
 from pathlib import Path
-import threading
 import time
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 from orchestrator.config import OrchestratorConfig, SkillManager, ORCHESTRATOR_ROOT
 from orchestrator.control.token_governance import DynamicTokenGovernor, TokenPhase
-from orchestrator.memory.conversation_store import ConversationStore, MemoryEntry
+from orchestrator.memory.conversation_store import ConversationStore
 from orchestrator.pipeline.audit_fix_pipeline import extract_audit_findings_list
 from orchestrator.pipeline.audit_pipeline import AuditPipeline
 from orchestrator.sentinel import (
-    CognitiveSentinelSupervisor,
-    SentinelMode,
     SelfHealingEngine,
-    CloudResilienceMesh,
     TerminalCommandTranslator,
 )
 
@@ -92,7 +87,9 @@ class TestRound2DynamicTokenGovernorHardening:
         class MockFileAction:
             operation = "edit"
 
-        phase = DynamicTokenGovernor.classify_action("WorkspaceFileAction", MockFileAction())
+        phase = DynamicTokenGovernor.classify_action(
+            "WorkspaceFileAction", MockFileAction()
+        )
         assert phase == TokenPhase.IMPLEMENTATION
 
     def test_classify_action_with_dict_arguments(self):
@@ -110,7 +107,9 @@ class TestRound2DynamicTokenGovernorHardening:
             hard_ceiling=200_000,
         )
         assert gov.allocation.total_budget >= 140_000
-        assert gov.allocation.implementation_budget > gov.allocation.investigation_budget
+        assert (
+            gov.allocation.implementation_budget > gov.allocation.investigation_budget
+        )
 
 
 class TestRound2AuditAndFindingExtractionHardening:

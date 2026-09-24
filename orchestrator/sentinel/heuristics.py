@@ -33,7 +33,11 @@ class HeuristicsDriftDetector:
             else self.max_steps_without_edit
         )
 
-        if steps >= step_threshold and edits_done == 0 and tokens_burned >= self.token_burn_threshold:
+        if (
+            steps >= step_threshold
+            and edits_done == 0
+            and tokens_burned >= self.token_burn_threshold
+        ):
             directive = (
                 f"SENTINEL INTERVENTION: Agent '{role}' has executed {steps} turns consuming "
                 f"{tokens_burned:,} tokens without applying concrete file modifications. "

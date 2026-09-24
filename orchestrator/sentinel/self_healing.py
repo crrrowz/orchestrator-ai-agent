@@ -66,7 +66,11 @@ class SelfHealingEngine(ISelfHealingEngine):
             fixed_code = "".join(lines)
             try:
                 ast.parse(fixed_code, filename=str(file_path))
-                return True, fixed_code, f"Auto-injected missing colon at line {err_lineno}."
+                return (
+                    True,
+                    fixed_code,
+                    f"Auto-injected missing colon at line {err_lineno}.",
+                )
             except SyntaxError:
                 pass
 
@@ -76,7 +80,10 @@ class SelfHealingEngine(ISelfHealingEngine):
             start_search = line_idx - 1 if line_idx > 0 else line_idx
             for candidate_idx in range(start_search, -1, -1):
                 cand_line = lines[candidate_idx].strip()
-                if cand_line.endswith(":") or re.match(r"^\s*(?:def|class|if|elif|else|for|while|try|except|with|finally)\b", cand_line):
+                if cand_line.endswith(":") or re.match(
+                    r"^\s*(?:def|class|if|elif|else|for|while|try|except|with|finally)\b",
+                    cand_line,
+                ):
                     header_line = lines[candidate_idx]
                     base_indent = len(header_line) - len(header_line.lstrip())
                     child_indent = " " * (base_indent + 4)
@@ -94,7 +101,10 @@ class SelfHealingEngine(ISelfHealingEngine):
                         continue
 
         # Case 3: Tabs to spaces
-        if "inconsistent use of tabs and spaces" in str(syntax_err).lower() or "\t" in raw_code:
+        if (
+            "inconsistent use of tabs and spaces" in str(syntax_err).lower()
+            or "\t" in raw_code
+        ):
             tab_fixed_lines = [line_item.replace("\t", "    ") for line_item in lines]
             fixed_code = "".join(tab_fixed_lines)
             try:
@@ -107,7 +117,11 @@ class SelfHealingEngine(ISelfHealingEngine):
             except SyntaxError:
                 pass
 
-        return False, raw_code, f"Unresolved syntax anomaly at line {err_lineno}: {syntax_err.msg}"
+        return (
+            False,
+            raw_code,
+            f"Unresolved syntax anomaly at line {err_lineno}: {syntax_err.msg}",
+        )
 
     def inject_missing_import(
         self, file_path: Path, raw_code: str, missing_symbol: str
@@ -116,10 +130,18 @@ class SelfHealingEngine(ISelfHealingEngine):
         symbol = missing_symbol.strip()
         import_stmt = self.COMMON_TYPE_SYMBOLS.get(symbol)
         if not import_stmt:
-            return False, raw_code, f"Symbol '{symbol}' not found in standard resolution map."
+            return (
+                False,
+                raw_code,
+                f"Symbol '{symbol}' not found in standard resolution map.",
+            )
 
         if import_stmt in raw_code:
-            return True, raw_code, f"Import statement '{import_stmt}' is already present."
+            return (
+                True,
+                raw_code,
+                f"Import statement '{import_stmt}' is already present.",
+            )
 
         lines = raw_code.splitlines(keepends=True)
         insert_idx = 0
@@ -148,7 +170,11 @@ class SelfHealingEngine(ISelfHealingEngine):
 
         lines.insert(insert_idx, f"{import_stmt}\n")
         updated_code = "".join(lines)
-        return True, updated_code, f"Injected missing import '{import_stmt}' at line {insert_idx + 1}."
+        return (
+            True,
+            updated_code,
+            f"Injected missing import '{import_stmt}' at line {insert_idx + 1}.",
+        )
 
     def fix_fuzzy_edit(
         self, original_text: str, target_text: str, replacement_text: str
@@ -190,11 +216,17 @@ class SelfHealingEngine(ISelfHealingEngine):
                 if adjusted_repl and not adjusted_repl[-1].endswith("\n"):
                     adjusted_repl[-1] = adjusted_repl[-1] + "\n"
 
-                updated_lines = orig_lines[:i] + adjusted_repl + orig_lines[i + target_len :]
+                updated_lines = (
+                    orig_lines[:i] + adjusted_repl + orig_lines[i + target_len :]
+                )
                 return (
                     True,
                     "".join(updated_lines),
                     f"Applied fuzzy whitespace match across lines {i + 1}-{i + target_len}.",
                 )
 
-        return False, original_text, "Target snippet not found even with fuzzy whitespace matching."
+        return (
+            False,
+            original_text,
+            "Target snippet not found even with fuzzy whitespace matching.",
+        )

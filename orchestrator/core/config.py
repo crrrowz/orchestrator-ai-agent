@@ -127,7 +127,6 @@ class OrchestratorConfig(BaseModel):
         default=int(os.environ.get("MAX_AUTO_PATCHES_PER_FILE", "3"))
     )
 
-
     # Provider keys
     anthropic_api_key: Optional[str] = Field(
         default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY")

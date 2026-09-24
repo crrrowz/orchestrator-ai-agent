@@ -51,23 +51,32 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
             self.config = OrchestratorConfig()
             self.workspace = workspace or workspace_path or self.config.workspace_path
 
-        self.mode = mode or getattr(self.config, "self_healing_level", SentinelMode.ENFORCING)
+        self.mode = mode or getattr(
+            self.config, "self_healing_level", SentinelMode.ENFORCING
+        )
         if isinstance(self.mode, str):
-            self.mode = SentinelMode.AUTONOMOUS_SRE if self.mode == "full_autonomous" else SentinelMode.ENFORCING
+            self.mode = (
+                SentinelMode.AUTONOMOUS_SRE
+                if self.mode == "full_autonomous"
+                else SentinelMode.ENFORCING
+            )
 
         # Sub-modules
         self.diagnostics_db = SentinelDiagnosticsDB()
         self.self_healing_engine = SelfHealingEngine()
         self.command_translator = TerminalCommandTranslator()
         self.ast_guard = ASTGuard(
-            disallow_stubs=getattr(self.config, "self_healing_level", "full_autonomous") == "strict"
+            disallow_stubs=getattr(self.config, "self_healing_level", "full_autonomous")
+            == "strict"
         )
         self.cloud_governor = CloudMeshGovernor(
-            fallback_chain=fallback_chain or getattr(self.config, "cloud_fallback_chain", None),
+            fallback_chain=fallback_chain
+            or getattr(self.config, "cloud_fallback_chain", None),
             max_prompt_ceiling=getattr(self.config, "max_tokens_budget", 350_000) // 2,
         )
         self.cloud_mesh = CloudResilienceMesh(
-            fallback_chain=fallback_chain or getattr(self.config, "cloud_fallback_chain", None)
+            fallback_chain=fallback_chain
+            or getattr(self.config, "cloud_fallback_chain", None)
         )
         self.drift_detector = HeuristicsDriftDetector(
             max_steps_without_edit=4,
@@ -145,10 +154,14 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
         """Generates comprehensive snapshot for Live Terminal UI rendering."""
         db_stats = self.diagnostics_db.get_stats()
         return SentinelDashboardState(
-            sentinel_mode=self.mode if isinstance(self.mode, SentinelMode) else SentinelMode.ENFORCING,
+            sentinel_mode=self.mode
+            if isinstance(self.mode, SentinelMode)
+            else SentinelMode.ENFORCING,
             is_healthy=True,
-            total_interceptions=self.total_interceptions + db_stats.get("total_incidents", 0),
-            total_auto_heals=self.total_auto_heals + db_stats.get("auto_healed_count", 0),
+            total_interceptions=self.total_interceptions
+            + db_stats.get("total_incidents", 0),
+            total_auto_heals=self.total_auto_heals
+            + db_stats.get("auto_healed_count", 0),
             provider_health=self.cloud_mesh.providers,
             ast_guard_clean=True,
             circuit_breakers_tripped=sum(
@@ -206,11 +219,17 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
         if not can_proceed:
             incident = CognitiveIncident(
                 incident_id=f"INC-CLOUD-{uuid.uuid4().hex[:8]}",
-                severity=IncidentSeverity.CRITICAL if fallback else IncidentSeverity.FATAL,
+                severity=IncidentSeverity.CRITICAL
+                if fallback
+                else IncidentSeverity.FATAL,
                 origin_module="cloud_governor",
                 target_role="llm_client",
                 error_signature=reason,
-                raw_payload={"provider": provider, "model": model, "prompt_tokens": prompt_tokens},
+                raw_payload={
+                    "provider": provider,
+                    "model": model,
+                    "prompt_tokens": prompt_tokens,
+                },
                 suggested_action=InterventionAction.SWITCH_CLOUD_PROVIDER
                 if fallback
                 else InterventionAction.THROTTLE_TOKENS,
@@ -233,7 +252,12 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
         exc_lower = exc_msg.lower()
 
         # Categorize action and severity
-        if isinstance(exc, (ProviderQuotaExceededError,)) or "429" in exc_msg or "ratelimit" in exc_lower or "insufficient_quota" in exc_lower:
+        if (
+            isinstance(exc, (ProviderQuotaExceededError,))
+            or "429" in exc_msg
+            or "ratelimit" in exc_lower
+            or "insufficient_quota" in exc_lower
+        ):
             action = InterventionAction.SWITCH_CLOUD_PROVIDER
             severity = IncidentSeverity.CRITICAL
             remedy = "Trip circuit breaker for provider and switch to fallback model."
@@ -265,7 +289,11 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
             error_signature=f"{exc_name}: {exc_msg}",
             raw_payload=context,
             suggested_action=action,
-            auto_healed=action in (InterventionAction.SWITCH_CLOUD_PROVIDER, InterventionAction.AUTO_PATCH_CODE),
+            auto_healed=action
+            in (
+                InterventionAction.SWITCH_CLOUD_PROVIDER,
+                InterventionAction.AUTO_PATCH_CODE,
+            ),
             remedy_description=remedy,
             timestamp_epoch=time.time(),
         )
@@ -290,7 +318,11 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
                 origin_module="drift_detector",
                 target_role=role,
                 error_signature="unproductive_exploration_loop",
-                raw_payload={"steps": steps, "tokens": tokens_burned, "edits": edits_done},
+                raw_payload={
+                    "steps": steps,
+                    "tokens": tokens_burned,
+                    "edits": edits_done,
+                },
                 suggested_action=InterventionAction.MUTATE_PROMPT,
                 auto_healed=True,
                 remedy_description=directive,

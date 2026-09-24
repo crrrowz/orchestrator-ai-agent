@@ -52,7 +52,11 @@ class ASTGuard:
         try:
             tree = ast.parse(code_content, filename=str(file_path))
         except SyntaxError as e:
-            return False, f"SyntaxError in {file_path.name}: {e.msg} (line {e.lineno})", None
+            return (
+                False,
+                f"SyntaxError in {file_path.name}: {e.msg} (line {e.lineno})",
+                None,
+            )
 
         # Check for disallowed stubs if configured
         if self.disallow_stubs:
@@ -63,7 +67,11 @@ class ASTGuard:
         # Check and heal missing imports
         healed_code, healed_symbols = self._heal_missing_imports(tree, code_content)
         if healed_symbols:
-            return True, f"Auto-healed missing imports: {', '.join(healed_symbols)}", healed_code
+            return (
+                True,
+                f"Auto-healed missing imports: {', '.join(healed_symbols)}",
+                healed_code,
+            )
 
         return True, "", code_content
 
@@ -75,7 +83,11 @@ class ASTGuard:
                     stmt = node.body[0]
                     if isinstance(stmt, ast.Pass):
                         return f"Prohibited empty stub in {file_path.name}: function '{node.name}' has body 'pass'"
-                    if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis:
+                    if (
+                        isinstance(stmt, ast.Expr)
+                        and isinstance(stmt.value, ast.Constant)
+                        and stmt.value.value is Ellipsis
+                    ):
                         return f"Prohibited empty stub in {file_path.name}: function '{node.name}' has body '...'"
         return None
 

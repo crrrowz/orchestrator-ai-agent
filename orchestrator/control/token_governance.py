@@ -9,7 +9,7 @@ Implements multi-layer token governance separating:
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 class TokenPhase(str, Enum):
@@ -165,7 +165,9 @@ class DynamicTokenGovernor:
         if not action_type:
             return TokenPhase.INVESTIGATION
 
-        act_name = action_type if isinstance(action_type, str) else type(action_type).__name__
+        act_name = (
+            action_type if isinstance(action_type, str) else type(action_type).__name__
+        )
         act_lower = act_name.lower()
 
         # Handle file operations
@@ -176,12 +178,21 @@ class DynamicTokenGovernor:
             elif arguments is not None:
                 op = str(getattr(arguments, "operation", "")).lower()
 
-            if op in ("edit", "write", "append") or "edit" in act_lower or "write" in act_lower:
+            if (
+                op in ("edit", "write", "append")
+                or "edit" in act_lower
+                or "write" in act_lower
+            ):
                 return TokenPhase.IMPLEMENTATION
             return TokenPhase.INVESTIGATION
 
         # Handle terminal / bash operations
-        if "terminal" in act_lower or "bash" in act_lower or "cmd" in act_lower or "exec" in act_lower:
+        if (
+            "terminal" in act_lower
+            or "bash" in act_lower
+            or "cmd" in act_lower
+            or "exec" in act_lower
+        ):
             cmd = ""
             if isinstance(arguments, dict):
                 cmd = str(arguments.get("command", "")).lower()

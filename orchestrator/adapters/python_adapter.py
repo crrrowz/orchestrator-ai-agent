@@ -158,11 +158,15 @@ class PythonAdapter(ProjectAdapter):
 
     def get_test_command(self, workspace: Path) -> str:
         """Return the shell command to execute the pytest suite."""
-        if (workspace / "pyproject.toml").exists():
-            return "pytest -q"
-        elif (workspace / "tests").exists():
-            return "pytest tests/ -q"
-        return "pytest -q"
+        has_tests_dir = (workspace / "tests").exists()
+        has_uv = bool(shutil.which("uv"))
+        has_uv_lock = (workspace / "uv.lock").exists() or (workspace / "pyproject.toml").exists()
+
+        if has_uv and has_uv_lock:
+            return "uv run pytest tests/ -v" if has_tests_dir else "uv run pytest -v"
+        elif has_tests_dir:
+            return "pytest tests/ -v"
+        return "pytest -v"
 
     def parse_test_failures(self, stdout: str, stderr: str) -> str:
         """Parse Pytest failure outputs into a minimal compact prompt snippet."""

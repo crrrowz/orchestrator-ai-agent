@@ -90,16 +90,19 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         sentinel_grid.add_column(style="bold yellow", width=16)
         sentinel_grid.add_column(style="white")
         sentinel_grid.add_row(
-            "Sentinel Status:", "[bold green]● ENFORCING[/bold green] [dim](Autonomous)[/dim]"
+            "Sentinel Status:",
+            "[bold green]● ENFORCING[/bold green] [dim](Autonomous)[/dim]",
         )
         sentinel_grid.add_row(
             "AST Syntax Guard:", "[bold green][✓] CLEAN[/bold green] [dim](<15ms)[/dim]"
         )
         sentinel_grid.add_row(
-            "Auto-Healed Evs:", f"[cyan]{healed_count} fixes[/cyan] [dim]({incidents_count} tracked)[/dim]"
+            "Auto-Healed Evs:",
+            f"[cyan]{healed_count} fixes[/cyan] [dim]({incidents_count} tracked)[/dim]",
         )
         sentinel_grid.add_row(
-            "Circuit Breaker:", "[bold green][●●○] 0 Tripped[/bold green] [dim](Stable)[/dim]"
+            "Circuit Breaker:",
+            "[bold green][●●○] 0 Tripped[/bold green] [dim](Stable)[/dim]",
         )
 
         p_agent = Panel(

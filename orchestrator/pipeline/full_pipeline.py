@@ -494,7 +494,9 @@ class FullPipeline(BasePipeline):
                     test_run.stdout, test_run.stderr
                 )
                 curr_diff = self.git.get_diff() or self.git.get_status()
-                circuit_broken = recorder.check_circuit_breaker(curr_diff, compact_failure)
+                circuit_broken = recorder.check_circuit_breaker(
+                    curr_diff, compact_failure
+                )
                 recorder.record_incident(
                     f"Iteration_{iteration}_Pytest", "test_failure", compact_failure
                 )
