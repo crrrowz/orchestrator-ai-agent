@@ -371,9 +371,7 @@ class BasePipeline(ABC):
                     events = getattr(state, "events", []) or []
                     for ev in reversed(events):
                         ev_name = getattr(ev, "__class__", type(ev)).__name__
-                        if ev_name in ("ConversationErrorEvent", "AgentErrorEvent") or (
-                            hasattr(ev, "error") and ev.error
-                        ):
+                        if ev_name in ("ConversationErrorEvent", "AgentErrorEvent"):
                             run_result.completed = False
                             err = (
                                 getattr(ev, "error", None)
@@ -389,9 +387,9 @@ class BasePipeline(ABC):
                 )
                 if vis and hasattr(vis, "store") and getattr(vis.store, "steps", None):
                     last_step = vis.store.steps[-1]
-                    if getattr(last_step, "is_error", False) and (
-                        getattr(last_step, "action_type", None) is None
-                        or "error" in str(getattr(last_step, "summary", "")).lower()
+                    if (
+                        getattr(last_step, "is_error", False)
+                        and getattr(last_step, "action_type", None) is None
                     ):
                         run_result.completed = False
                         if not run_result.error_message:

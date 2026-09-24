@@ -1019,7 +1019,8 @@ def execute_terminal_action(
         "remove-item",
         "get-command",
     }
-    if (sys.platform == "win32" or os.name == "nt") and base_name in powershell_cmdlets:
+    is_windows = sys.platform == "win32" or os.name == "nt"
+    if is_windows and base_name in powershell_cmdlets:
         exec_args = [
             "powershell.exe",
             "-NoProfile",
@@ -1027,7 +1028,15 @@ def execute_terminal_action(
             "-Command",
             cmd_to_exec,
         ]
-    elif (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
+    elif is_windows and base_name == "graft" and not shutil.which("graft", path=env.get("PATH")) and shutil.which("graft.ps1", path=env.get("PATH")):
+        exec_args = [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            cmd_to_exec,
+        ]
+    elif is_windows and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]
     else:
         resolved_bin = (

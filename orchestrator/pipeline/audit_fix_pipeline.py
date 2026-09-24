@@ -768,12 +768,7 @@ class AuditFixPipeline(BasePipeline):
                 # Enforce state machine and evidence integrity on backlog
                 if iteration == 1 and not audit_findings_queue:
                     if structured_result:
-                        if structured_result.status == AuditState.AUDIT_CLEAN or (
-                            structured_result.clean_static
-                            and not structured_result.findings
-                        ):
-                            audit_findings_queue = []
-                        elif structured_result.status in (
+                        if structured_result.status in (
                             AuditState.AUDIT_INCOMPLETE,
                             AuditState.AUDIT_FAILED,
                         ):
@@ -783,6 +778,11 @@ class AuditFixPipeline(BasePipeline):
                             )
                             final_status = structured_result.status.value
                             break
+                        elif structured_result.status == AuditState.AUDIT_CLEAN or (
+                            structured_result.clean_static
+                            and not structured_result.findings
+                        ):
+                            audit_findings_queue = []
                         elif structured_result.findings:
                             for f in structured_result.findings:
                                 is_valid, reason = FindingValidator.validate(
