@@ -491,17 +491,44 @@ def execute_file_action(
                 new_content = normalized_existing.replace(normalized_target, replacement, 1)
             else:
                 existing_lines = existing.splitlines(keepends=True)
-                target_lines = [tl.rstrip() for tl in target.splitlines() if tl.strip()]
+                target_lines = [tl.strip() for tl in target.splitlines() if tl.strip()]
                 match_start = -1
                 for i in range(len(existing_lines)):
-                    window = [el.rstrip() for el in existing_lines[i : i + len(target_lines)] if el.strip()]
+                    window = [el.strip() for el in existing_lines[i : i + len(target_lines)] if el.strip()]
                     if window == target_lines:
                         match_start = i
                         break
                 if match_start != -1:
+                    first_line = existing_lines[match_start]
+                    base_indent = len(first_line) - len(first_line.lstrip())
+                    indent_str = " " * base_indent
+
+                    repl_lines = replacement.splitlines(keepends=True)
+                    adjusted_repl = []
+                    for rline in repl_lines:
+                        if rline.strip() and not rline.startswith(" "):
+                            adjusted_repl.append(f"{indent_str}{rline}")
+                        else:
+                            adjusted_repl.append(rline)
+
+                    if adjusted_repl and not adjusted_repl[-1].endswith("\n"):
+                        adjusted_repl[-1] = adjusted_repl[-1] + "\n"
+
                     pre = "".join(existing_lines[:match_start])
                     post = "".join(existing_lines[match_start + len(target_lines):])
-                    new_content = pre + replacement + ("\n" if not replacement.endswith("\n") else "") + post
+                    new_content = pre + "".join(adjusted_repl) + post
+
+            if new_content is None:
+                try:
+                    from orchestrator.sentinel import SelfHealingEngine
+
+                    applied, fuzzy_content, note = SelfHealingEngine().fix_fuzzy_edit(
+                        existing, target, replacement
+                    )
+                    if applied:
+                        new_content = fuzzy_content
+                except Exception:
+                    pass
 
             if new_content is None:
                 err_msg = f"Target text was not found in '{action.path}'."

@@ -121,6 +121,26 @@ class CloudResilienceMesh(ICloudResilienceMesh):
             last_checked_epoch=time.time(),
         )
 
+    @staticmethod
+    def calculate_backoff_delay(attempt: int, base_delay: float = 1.0, max_delay: float = 30.0) -> float:
+        """Calculate exponential backoff with full jitter to avoid thundering herd."""
+        import random
+        backoff = min(max_delay, base_delay * (2 ** attempt))
+        jitter = random.uniform(0.0, 0.5) * backoff
+        return backoff + jitter
+
+    @staticmethod
+    def extract_retry_after(error_text: str) -> Optional[float]:
+        """Extract retry-after duration in seconds if present in error message."""
+        import re
+        m = re.search(r"(?:retry[-_ ]after|resets in|wait)[:\s]+(\d+(?:\.\d+)?)\s*(?:s|sec|seconds)?", error_text, re.IGNORECASE)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+        return None
+
     def get_dashboard_summary(self) -> Dict[str, Dict]:
         """Returns snapshot for TUI rendering."""
         return {

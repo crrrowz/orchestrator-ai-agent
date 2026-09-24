@@ -182,10 +182,13 @@ class SelfHealingEngine(ISelfHealingEngine):
                 repl_lines = replacement_text.splitlines(keepends=True)
                 adjusted_repl = []
                 for idx, rline in enumerate(repl_lines):
-                    if idx > 0 and rline.strip() and not rline.startswith(" "):
+                    if rline.strip() and not rline.startswith(" "):
                         adjusted_repl.append(f"{indent_str}{rline}")
                     else:
                         adjusted_repl.append(rline)
+
+                if adjusted_repl and not adjusted_repl[-1].endswith("\n"):
+                    adjusted_repl[-1] = adjusted_repl[-1] + "\n"
 
                 updated_lines = orig_lines[:i] + adjusted_repl + orig_lines[i + target_len :]
                 return (

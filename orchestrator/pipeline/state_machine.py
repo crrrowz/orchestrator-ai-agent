@@ -29,6 +29,8 @@ class PipelineStateMachine:
         PipelinePhase.INIT: {
             PipelinePhase.ARCHITECT,
             PipelinePhase.DEVELOP,
+            PipelinePhase.PREFLIGHT,
+            PipelinePhase.TEST,
             PipelinePhase.ABORTED,
             PipelinePhase.FAILED,
         },

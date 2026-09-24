@@ -60,11 +60,15 @@ class ContextManager:
         if extra_instructions.strip():
             blocks.append(extra_instructions.strip())
 
-        blocks.append(f"Task Specification:\n{resolved_task.strip()}")
+        task_str = resolved_task.strip()
+        max_chars = max_tokens * 4
+        if len(task_str) > max_chars - 500 and max_chars > 1000:
+            task_str = task_str[: max_chars - 600] + "\n... [Task specification truncated to token ceiling]"
+
+        blocks.append(f"Task Specification:\n{task_str}")
 
         # Approximate token count (1 token ~= 4 chars)
         current_chars = sum(len(b) for b in blocks)
-        max_chars = max_tokens * 4
 
         for _priority, injector in self._injectors:
             if not injector.should_inject(role=role, task=resolved_task):

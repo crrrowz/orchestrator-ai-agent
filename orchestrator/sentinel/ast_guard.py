@@ -107,8 +107,16 @@ class ASTGuard:
                     defined_names.add(node.args.vararg.arg)
                 if node.args.kwarg:
                     defined_names.add(node.args.kwarg.arg)
+                if hasattr(node, "type_params"):
+                    for tp in getattr(node, "type_params", []):
+                        if hasattr(tp, "name"):
+                            defined_names.add(tp.name)
             elif isinstance(node, ast.ClassDef):
                 defined_names.add(node.name)
+                if hasattr(node, "type_params"):
+                    for tp in getattr(node, "type_params", []):
+                        if hasattr(tp, "name"):
+                            defined_names.add(tp.name)
             elif isinstance(node, ast.Name):
                 if isinstance(node.ctx, (ast.Store, ast.Param)):
                     defined_names.add(node.id)

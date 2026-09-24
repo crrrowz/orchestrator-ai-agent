@@ -3,6 +3,7 @@
 import difflib
 import hashlib
 import re
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -85,6 +86,7 @@ class TelemetryRecorder:
         self.metrics: list[StepMetric] = []
         self.incidents: list[StepIncident] = []
         self.recommendations: list[str] = []
+        self._lock = threading.Lock()
 
         # State tracking for circuit breaker
         self._last_diff_hash: Optional[str] = None
@@ -149,7 +151,8 @@ class TelemetryRecorder:
             total_tokens=total_tokens,
             estimated_cost_usd=round(estimated_cost_usd, 6),
         )
-        self.metrics.append(metric)
+        with self._lock:
+            self.metrics.append(metric)
 
     @contextmanager
     def timed_step(
@@ -207,7 +210,8 @@ class TelemetryRecorder:
             incident_type=incident_type,
             details=details,
         )
-        self.incidents.append(incident)
+        with self._lock:
+            self.incidents.append(incident)
 
     @property
     def remaining_budget(self) -> float:
