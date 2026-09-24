@@ -15,7 +15,7 @@ from orchestrator.ui.session_store import SessionLogStore
 
 
 class OrchestratorLiveVisualizer(ConversationVisualizerBase):
-    """Quiet, informative live visualizer maintaining a live frozen status card in-place."""
+    """Quiet, informative live visualizer maintaining a responsive status card in-place."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         self.verbosity = (verbosity or "normal").lower()
         self._last_thought: Optional[str] = None
         self._live: Optional[Live] = None
-        self._current_action: str = "Starting agent execution..."
+        self._current_action: str = "Initializing agent session..."
         self._target_file: str = ""
         self._last_status: str = ""
         self._tokens_str: str = ""
@@ -43,35 +43,19 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         role = self.store.current_role or "Agent"
         model = self.store.current_model or "LLM"
 
-        grid = Table.grid(padding=(0, 1))
-        grid.add_column(style="bold cyan", width=14)
-        grid.add_column(style="white")
-
-        grid.add_row(
-            "Agent / Role:",
-            f"[bold magenta]{role}[/bold magenta] [blue]({model})[/blue]",
-        )
-        grid.add_row(
-            "Runtime:",
-            f"[yellow]⏱ {elapsed}s[/yellow] [dim]({t_now})[/dim]  {self._tokens_str}",
-        )
-        if self._target_file:
-            grid.add_row(
-                "Target File:", f"[bold green]{self._target_file}[/bold green]"
-            )
-        grid.add_row("Action:", f"[bold white]{self._current_action}[/bold white]")
-        if self._last_status:
-            grid.add_row("Result:", f"{self._last_status}")
-        if self._last_thought and self.verbosity != "quiet":
-            tp = self._last_thought.replace("\n", " ").strip()
-            if len(tp) > 95:
-                tp = tp[:92] + "..."
-            grid.add_row("Plan / Thought:", f"[dim italic]{tp}[/dim italic]")
-
+        role_lower = role.lower()
         border_color = (
             "magenta"
-            if role == "Developer"
-            else ("green" if role == "Tester" else "cyan")
+            if role_lower in ("developer", "dev")
+            else (
+                "green"
+                if role_lower in ("tester", "test")
+                else (
+                    "cyan"
+                    if role_lower in ("architect", "arch")
+                    else ("yellow" if role_lower in ("reviewer", "review") else "blue")
+                )
+            )
         )
 
         # Query sentinel diagnostics stats
@@ -86,49 +70,44 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         except Exception:
             pass
 
-        sentinel_grid = Table.grid(padding=(0, 1))
-        sentinel_grid.add_column(style="bold yellow", width=16)
-        sentinel_grid.add_column(style="white")
-        sentinel_grid.add_row(
-            "Sentinel Status:",
-            "[bold green]● ENFORCING[/bold green] [dim](Autonomous)[/dim]",
-        )
-        sentinel_grid.add_row(
-            "AST Syntax Guard:", "[bold green][✓] CLEAN[/bold green] [dim](<15ms)[/dim]"
-        )
-        sentinel_grid.add_row(
-            "Auto-Healed Evs:",
-            f"[cyan]{healed_count} fixes[/cyan] [dim]({incidents_count} tracked)[/dim]",
-        )
-        sentinel_grid.add_row(
-            "Circuit Breaker:",
-            "[bold green][●●○] 0 Tripped[/bold green] [dim](Stable)[/dim]",
-        )
+        grid = Table.grid(padding=(0, 1), expand=True)
+        grid.add_column(style="bold cyan", width=14)
+        grid.add_column(style="white")
 
-        p_agent = Panel(
+        grid.add_row(
+            "Agent / Model:",
+            f"[bold {border_color}]{role}[/bold {border_color}] [blue]({model})[/blue]",
+        )
+        runtime_text = f"[yellow]⏱ {elapsed}s[/yellow] [dim]({t_now})[/dim]"
+        if self._tokens_str:
+            runtime_text += f"  {self._tokens_str}"
+        grid.add_row("Runtime / Tok:", runtime_text)
+
+        if self._target_file:
+            grid.add_row(
+                "Target File:", f"[bold green]{self._target_file}[/bold green]"
+            )
+        grid.add_row(
+            "Active Action:", f"[bold white]{self._current_action}[/bold white]"
+        )
+        if self._last_status:
+            grid.add_row("Last Result:", f"{self._last_status}")
+
+        if self._last_thought and self.verbosity != "quiet":
+            tp = self._last_thought.replace("\n", " ").strip()
+            if len(tp) > 95:
+                tp = tp[:92] + "..."
+            grid.add_row("Plan / Thought:", f"[dim italic]{tp}[/dim italic]")
+
+        sentinel_info = f"[bold green]● ENFORCING[/bold green] [dim](AST Guard: Clean | {healed_count} Healed | {incidents_count} Events)[/dim]"
+        grid.add_row("Sentinel Mesh:", sentinel_info)
+
+        card_title = f"[bold cyan]⚡ {role.upper()} AGENT IN PROGRESS[/bold cyan]"
+        return Panel(
             grid,
-            title=f"[bold cyan]🤖 ACTIVE AGENT ({role})[/bold cyan]",
+            title=card_title,
             border_style=border_color,
             padding=(0, 1),
-        )
-
-        p_sentinel = Panel(
-            sentinel_grid,
-            title="[bold yellow]🛡️ COGNITIVE SENTINEL RADAR[/bold yellow]",
-            border_style="yellow",
-            padding=(0, 1),
-        )
-
-        multi_grid = Table.grid(expand=True, padding=(0, 1))
-        multi_grid.add_column(ratio=6)
-        multi_grid.add_column(ratio=4)
-        multi_grid.add_row(p_agent, p_sentinel)
-
-        return Panel(
-            multi_grid,
-            title="[bold blue]⚡ ANTIGRAVITY COGNITIVE ORCHESTRATOR & SENTINEL SRE MESH ⚡[/bold blue]",
-            border_style="blue",
-            padding=(0, 0),
         )
 
     def _update_live(self) -> None:
@@ -160,11 +139,11 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         elapsed = round(time.time() - self.store.phase_start_time, 1)
         if success:
             self._safe_print(
-                f"[dim]✓ Finished {role} phase in {elapsed}s {self._tokens_str}[/dim]"
+                f" [bold green][✓][/bold green] Finished [bold]{role}[/bold] phase in [yellow]{elapsed}s[/yellow]{self._tokens_str}"
             )
         else:
             self._safe_print(
-                f"[dim yellow]✗ Interrupted {role} phase after {elapsed}s[/dim yellow]"
+                f" [bold yellow][!][/bold yellow] Interrupted [bold]{role}[/bold] phase after [yellow]{elapsed}s[/yellow]"
             )
 
     def _safe_print(self, *args, **kwargs) -> None:
@@ -235,8 +214,8 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             # Live terminal stream with Role, Model, Time, and Tokens
             t_now = time.strftime("%H:%M:%S")
             elapsed = round(time.time() - self.store.phase_start_time, 1)
-            role = self.store.current_role
-            model = self.store.current_model
+            role = self.store.current_role or "Agent"
+            model = self.store.current_model or "LLM"
 
             # Extract live token metrics from active LLM
             tokens_str = ""
@@ -251,7 +230,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     cost = getattr(
                         self.store.current_llm.metrics, "accumulated_cost", 0.0
                     )
-                    tokens_str = f" [cyan]🪙 {total_tok:,} tok (In:{in_tok:,} Out:{out_tok:,})[/cyan]"
+                    tokens_str = f" [cyan]🪙 {total_tok:,} tok[/cyan]"
                     if cost > 0:
                         tokens_str += f" [dim](${cost:.4f})[/dim]"
 

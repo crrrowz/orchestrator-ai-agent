@@ -612,9 +612,11 @@ class AuditFixPipeline(BasePipeline):
             # Run zero-token auto-fix before each inspection pass
             self.run_zero_token_autofix()
 
-            ConsoleOutput.agent_step(
-                "AUDIT",
-                f"Iteration {iteration}/{effective_max_iterations}: Scanning workspace...",
+            ConsoleOutput.pipeline_stage(
+                f"AUDIT & AUTO-FIX (Iteration {iteration}/{effective_max_iterations})",
+                iteration,
+                effective_max_iterations,
+                f"Queue: {len(audit_findings_queue)} active backlog items",
             )
 
             # 1. Run static checks

@@ -86,22 +86,28 @@ class AuditPipeline(BasePipeline):
         )
 
         # Step 0: Static Metrics & AST Validation
-        ConsoleOutput.agent_step(
-            "AUDIT", "Phase 0: Running zero-token static analysis & metrics..."
+        ConsoleOutput.pipeline_stage(
+            "STATIC METRICS & AST VALIDATION",
+            1,
+            2,
+            "Zero-token static analysis & metrics",
         )
         metrics = self.collect_codebase_metrics()
         static_report = self.run_static_checks()
 
         # Step 1: Graft Codebase Context
-        ConsoleOutput.agent_step(
-            "AUDIT", "Phase 1: Querying codebase architecture graph..."
-        )
         graft_map = GraftContextProvider.get_compact_map(self.workspace_path)
         graft_part = (
             f"\n\n[Architecture Map (Graft)]:\n{graft_map}" if graft_map else ""
         )
 
         # Step 2: LLM Auditor Agent
+        ConsoleOutput.pipeline_stage(
+            "ARCHITECTURAL AUDITOR AGENT",
+            2,
+            2,
+            "LLM deep pattern, security & bug audit",
+        )
         log_store = SessionLogStore(workspace_path=self.workspace_path)
         visualizer = OrchestratorLiveVisualizer(
             log_store, verbosity=self.config.verbosity

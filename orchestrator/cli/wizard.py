@@ -3,10 +3,11 @@
 import sys
 from pathlib import Path
 from typing import Optional, Tuple
+from rich.table import Table
 
 from orchestrator.cli.handlers import resolve_task_input, resolve_workspace_dir
 from orchestrator.core.config import OrchestratorConfig
-from orchestrator.rendering.output import ConsoleOutput
+from orchestrator.rendering.output import ConsoleOutput, console
 from orchestrator.skills.manager import SkillManager
 
 
@@ -18,7 +19,7 @@ def interactive_wizard(
     """Interactive prompt wizard for users running without command-line arguments."""
     ConsoleOutput.banner(
         "Antigravity Multi-Agent Orchestrator",
-        f"Active Skills: {len(skill_manager.available_skills)} loaded",
+        f"Active Skills: {len(skill_manager.available_skills)} loaded | Workspace: {config.workspace_path}",
     )
 
     try:
@@ -44,9 +45,11 @@ def interactive_wizard(
             )
             mode = "docs"
         else:
-            print("\nEnter the software task you want the multi-agent team to build.")
-            print(
-                "Example: 'Create a JWT authentication service with token revocation and pytest tests'"
+            console.print(
+                "\n[bold cyan]What would you like the multi-agent team to build or solve?[/bold cyan]"
+            )
+            console.print(
+                "[dim]Example: 'Create a JWT authentication service with token revocation and pytest tests'[/dim]"
             )
             task = input("\n📝 Task Description: ").strip()
             while not task:
@@ -55,20 +58,45 @@ def interactive_wizard(
             if default_mode in ("dev-test", "full"):
                 mode = default_mode
             else:
-                print("\nChoose Pipeline Execution Mode:")
-                print(
-                    "  [1] Dev-Test Loop (Developer writes code, Tester runs pytest in loop) [Fast]"
+                table = Table(
+                    title="Select Pipeline Execution Mode",
+                    border_style="cyan",
+                    header_style="bold cyan",
+                    padding=(0, 1),
                 )
-                print(
-                    "  [2] Full 4-Agent Pipeline (Architect -> Dev -> Test -> Independent Reviewer) [Complete]"
+                table.add_column("Key", style="bold yellow", justify="center", width=5)
+                table.add_column("Pipeline Mode", style="bold white", width=22)
+                table.add_column("Agent Workflow", style="cyan", width=34)
+                table.add_column("Best For", style="dim")
+
+                table.add_row(
+                    "1",
+                    "Dev-Test Loop",
+                    "Developer ➔ Tester (Loop)",
+                    "Fast iterative feature dev / bug fixes",
                 )
-                print(
-                    "  [3] Deep Code Analysis & Audit (Static AST + LLM Auditor -> AUDIT_REPORT.md) [Audit]"
+                table.add_row(
+                    "2",
+                    "Full 4-Agent Pipeline",
+                    "Architect ➔ Dev ➔ Test ➔ Review",
+                    "Complete end-to-end architectures",
                 )
-                print(
-                    "  [4] Autonomous Audit & Auto-Fix Loop (Inspect & Auto-Remediate without Git) [Fix]"
+                table.add_row(
+                    "3",
+                    "Codebase Deep Audit",
+                    "Static AST + Auditor Agent",
+                    "Security, bug & architectural audit",
                 )
-                mode_choice = input("Select mode [1/2/3/4, default 1]: ").strip()
+                table.add_row(
+                    "4",
+                    "Autonomous Audit & Fix",
+                    "Scan ➔ Remediate ➔ Re-Verify",
+                    "Self-healing zero-git remediation loop",
+                )
+
+                console.print()
+                console.print(table)
+                mode_choice = input("\nSelect mode [1/2/3/4, default 1]: ").strip()
                 if mode_choice == "4":
                     mode = "audit-fix"
                 elif mode_choice == "3":
@@ -79,7 +107,7 @@ def interactive_wizard(
                     mode = "dev-test"
 
         ws_input = input(
-            f"Target workspace directory [Default: {config.workspace_path}]: "
+            f"\nTarget workspace directory [Default: {config.workspace_path}]: "
         ).strip()
         workspace = resolve_workspace_dir(
             Path(ws_input) if ws_input else None, config.workspace_path
@@ -87,5 +115,5 @@ def interactive_wizard(
 
         return resolve_task_input(task), mode, workspace
     except (KeyboardInterrupt, EOFError):
-        print("\nOperation cancelled by user.")
+        console.print("\n[yellow]Operation cancelled by user.[/yellow]")
         sys.exit(0)

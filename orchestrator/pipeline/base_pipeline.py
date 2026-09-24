@@ -647,6 +647,8 @@ class BasePipeline(ABC):
             commit_hash=commit_hash,
             total_tokens=diag_report.total_tokens,
             total_cost_usd=diag_report.total_cost_usd,
+            duration_seconds=diag_report.total_duration_seconds,
+            report_path=f"diagnostics/reports/{diag_report.report_id}.md",
         )
 
         try:

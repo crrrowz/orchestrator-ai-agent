@@ -88,6 +88,12 @@ class FullPipeline(BasePipeline):
                 return {"status": "STOPPED", "report_id": diag_report.report_id}
 
             self.state_machine.transition_to(PipelinePhase.ARCHITECT)
+            ConsoleOutput.pipeline_stage(
+                "SYSTEM ARCHITECTURE BLUEPRINT",
+                1,
+                4,
+                "Designing system design & PLAN.md",
+            )
 
             if self.checkpoint and "architect" in self.checkpoint.completed_phases:
                 ConsoleOutput.success(
@@ -265,6 +271,12 @@ class FullPipeline(BasePipeline):
                 return {"status": "STOPPED", "report_id": diag_report.report_id}
 
             self.state_machine.transition_to(PipelinePhase.DEVELOP)
+            ConsoleOutput.pipeline_stage(
+                "DEVELOPER IMPLEMENTATION",
+                2,
+                4,
+                "Executing milestone DAG implementation",
+            )
             dev_conv = Conversation(
                 agent=developer_agent,
                 workspace=str(self.workspace_path),
@@ -425,6 +437,13 @@ class FullPipeline(BasePipeline):
                     )
                     break
 
+                ConsoleOutput.pipeline_stage(
+                    f"TEST SUITE VERIFICATION (Iteration {iteration}/{effective_max_iterations})",
+                    3,
+                    4,
+                    "Automated pytest verification & edge cases",
+                )
+
                 log_store.set_agent_context(
                     "Tester",
                     f"Test Iteration {iteration}",
@@ -508,8 +527,13 @@ class FullPipeline(BasePipeline):
                     break
 
                 if iteration < effective_max_iterations:
+                    test_cmd = (
+                        self.adapter.get_test_command(self.workspace_path)
+                        or "pytest -v"
+                    )
+                    ConsoleOutput.test_failure_callout(test_cmd, compact_failure)
                     ConsoleOutput.warning(
-                        f"Tests failed (Iteration {iteration}/{effective_max_iterations}). Developer fixing..."
+                        f"Tests failed in iteration {iteration}. Developer applying targeted fixes..."
                     )
                     log_store.set_agent_context(
                         "Developer",
@@ -558,6 +582,12 @@ class FullPipeline(BasePipeline):
             if tests_passed:
                 if self.state_machine.can_transition(PipelinePhase.REVIEW):
                     self.state_machine.transition_to(PipelinePhase.REVIEW)
+                ConsoleOutput.pipeline_stage(
+                    "INDEPENDENT REVIEW & AUDIT",
+                    4,
+                    4,
+                    "Security, performance & code quality verification",
+                )
 
                 t_rev = time.perf_counter()
                 log_store.set_agent_context(

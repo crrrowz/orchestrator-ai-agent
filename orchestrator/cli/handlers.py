@@ -92,42 +92,73 @@ def resolve_workspace_dir(target: Optional[Path], default: Path) -> Path:
 
 
 def handle_list_skills(skill_manager: SkillManager) -> None:
-    """Display discovered skills in the project."""
-    ConsoleOutput.banner("Discovered Architectural & Testing Skills")
+    """Display discovered skills in the project using a structured Rich table."""
     skills = skill_manager.available_skills
     if not skills:
         ConsoleOutput.warning("No skills found in .agents/skills/")
         return
 
+    skills_data = []
     for name in sorted(skills):
         skill = skill_manager.get_skill(name)
         desc = skill.description if skill else "No description"
-        ConsoleOutput.agent_step("SKILL", f"[bold]{name}[/bold]", desc)
+        # Extract a clean domain/category
+        category = "Core Protocol"
+        if "test" in name or "pytest" in name:
+            category = "Testing"
+        elif "arch" in name or "design" in name:
+            category = "Architecture"
+        elif "security" in name or "audit" in name:
+            category = "Security"
+        elif "python" in name or "docker" in name or "frontend" in name:
+            category = "Language/Stack"
+        elif "obsidian" in name or "graft" in name:
+            category = "Knowledge Graph"
+        skills_data.append((name, category, desc))
+
+    ConsoleOutput.skills_table(skills_data)
 
 
 def handle_check_config(config: OrchestratorConfig) -> None:
-    """Verify provider connectivity and output environment safety configuration."""
+    """Verify provider connectivity and output environment safety configuration using Rich."""
     ConnectivityChecker.run_zero_token_audit(config)
-    print("\n" + "=" * 50)
-    print("Environment & Cost Safety Controls:")
+
     loaded_from = getattr(config, "_loaded_from_path", None)
-    if loaded_from:
-        print(f"  Configuration File:    {loaded_from}")
-    else:
-        print("  Configuration File:    Environment / Defaults (.env)")
-    print(f"  Active Domain:         {config.active_domain}")
-    print(f"  Workspace:             {config.workspace_path}")
-    print(f"  Max Iterations Cap:    {config.max_iterations}")
-    print(f"  Max Output Tokens:     {config.max_tokens_per_call}")
-    print(f"  Max Budget (USD):      ${config.max_budget_usd:.2f}")
-    print(
-        f"  Circuit Breaker:       Trigger on {config.circuit_breaker_threshold} identical consecutive failures"
-    )
-    print(f"  Auto Git Commit:       {config.auto_commit}")
-    print(f"  Interactive (HITL):    {config.interactive}")
-    print(f"  Approval Gates:        {config.approval_gates or 'None'}")
-    print(f"  Verbosity Level:       {config.verbosity}")
-    print("=" * 50)
+    config_source = str(loaded_from) if loaded_from else "Environment / Defaults (.env)"
+
+    sections = {
+        "Environment & Cost Safety Controls:": {
+            "Configuration File:": config_source,
+            "Active Domain:": config.active_domain,
+            "Workspace Root:": str(config.workspace_path),
+            "Max Iterations:": str(config.max_iterations),
+            "Verbosity Mode:": config.verbosity,
+        },
+        "Agent Models:": {
+            "Developer Model:": getattr(
+                getattr(config, "developer", None), "model", "default"
+            ),
+            "Tester Model:": getattr(
+                getattr(config, "tester", None), "model", "default"
+            ),
+            "Architect Model:": getattr(
+                getattr(config, "architect", None), "model", "default"
+            ),
+            "Reviewer Model:": getattr(
+                getattr(config, "reviewer", None), "model", "default"
+            ),
+        },
+        "Safety & Cost Ceilings:": {
+            "Max Output Tokens / Call:": str(config.max_tokens_per_call),
+            "Max Hard Budget (USD):": f"${config.max_budget_usd:.2f}",
+            "Circuit Breaker Threshold:": f"{config.circuit_breaker_threshold} identical failures",
+            "Auto Git Commit:": str(config.auto_commit),
+            "Interactive (HITL):": str(config.interactive),
+            "Approval Gates:": str(config.approval_gates or "None"),
+        },
+    }
+
+    ConsoleOutput.config_table(sections)
 
 
 def handle_self_audit() -> None:

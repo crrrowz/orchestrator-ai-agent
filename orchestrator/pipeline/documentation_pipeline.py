@@ -52,6 +52,10 @@ class DocumentationPipeline(BasePipeline):
             llm=doc_agent.llm,
         )
 
+        ConsoleOutput.pipeline_stage(
+            "DOCUMENTATION GENERATION", 1, 1, "Architectural & API reference authoring"
+        )
+
         ConsoleOutput.agent_step(
             "Documentation",
             "Inspecting codebase and authoring documentation...",

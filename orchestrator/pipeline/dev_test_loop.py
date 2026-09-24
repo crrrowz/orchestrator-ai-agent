@@ -80,6 +80,9 @@ class DevTestLoop(BasePipeline):
                 return {"status": "STOPPED", "report_id": diag_report.report_id}
 
             self.state_machine.transition_to(PipelinePhase.DEVELOP)
+            ConsoleOutput.pipeline_stage(
+                "DEVELOPER IMPLEMENTATION", 1, 2, "Writing code & modules"
+            )
 
             # Step 1: Initial Implementation by Developer
             dev_conv = Conversation(
@@ -208,6 +211,13 @@ class DevTestLoop(BasePipeline):
                     )
                     break
 
+                ConsoleOutput.pipeline_stage(
+                    f"TESTING & VERIFICATION (Pass {iteration}/{effective_max_iterations})",
+                    2,
+                    2,
+                    "Automated pytest suite execution",
+                )
+
                 log_store.set_agent_context(
                     "Tester",
                     f"Test Iteration {iteration}",
@@ -293,8 +303,13 @@ class DevTestLoop(BasePipeline):
                     break
 
                 if iteration < effective_max_iterations:
+                    test_cmd = (
+                        self.adapter.get_test_command(self.workspace_path)
+                        or "pytest -v"
+                    )
+                    ConsoleOutput.test_failure_callout(test_cmd, compact_failure)
                     ConsoleOutput.warning(
-                        f"Tests failed (Iteration {iteration}/{effective_max_iterations}). Developer fixing..."
+                        f"Tests failed in iteration {iteration}. Developer applying targeted fixes..."
                     )
                     log_store.set_agent_context(
                         "Developer",
