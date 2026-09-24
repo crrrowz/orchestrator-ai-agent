@@ -1,9 +1,23 @@
 {
-  "status": "AUDIT_CLEAN",
-  "summary": "Workspace verified clean. Zero actionable defects detected.",
-  "findings": [],
-  "total_files_scanned": 131,
-  "total_loc": 18850,
-  "clean_static": true,
-  "timestamp": "2026-09-24 02:51:00 UTC"
+  "status": "AUDIT_COMPLETED",
+  "summary": "Audit completed: 1 actionable finding(s) verified.",
+  "findings": [
+    {
+      "id": "STATIC-001",
+      "severity": "HIGH",
+      "type": "BUG",
+      "file": "orchestrator/sentinel/cloud_mesh.py",
+      "line": null,
+      "evidence": "[Ruff Lint Issues (15)]\norchestrator\\sentinel\\cloud_mesh.py:3:8: F401 [*] `os` imported but unused\norchestrator\\sentinel\\protocols.py:5:31: F401 [*] `typing.List` imported but unused\norchestrator\\sentinel\\protocols.py:7:62: F401 [*] `orchestrator.sentinel.schemas.InterventionAction` imported but unused\norchestrator\\sentinel\\schemas.py:5:21: F401 [*] `pathlib.Path` imported but unused\norchestrator\\sentinel\\schemas.py:6:37: F401 [*] `typing.Optional` imported but unused\norchestrator\\sentinel\\self_healing.py:6:26: F401 [*] `typing.List` imported but unused\norchestrator\\sentinel\\self_healing.py:6:32: F401 [*] `typing.Optional` imported but unused\norchestrator\\sentinel\\self_healing.py:6:42: F401 [*] `typing.Set` imported but unused\norchestrator\\sentinel\\self_healing.py:98:60: E741 Ambiguous variable name: `l`\norchestrator\\sentinel\\self_healing.py:171:42: E741 Ambiguous variable name: `l`\norchestrator\\sentinel\\self_healing.py:175:46: E741 Ambiguous variable name: `l`\ntests\\test_sentinel_mesh.py:3:8: F401 [*] `os` imported but unused\ntests\\test_sentinel_mesh.py:5:8: F401 [*] `pytest` imported but unused\nFound 13 errors.\n[*] 10 fixable with the `--fix` option.",
+      "problem": "Deterministic static analysis defect or syntax error",
+      "recommended_fix": "Correct the syntax or linter error specified in evidence",
+      "actionable": true,
+      "confidence": 1.0,
+      "source": "deterministic_linter"
+    }
+  ],
+  "total_files_scanned": 139,
+  "total_loc": 21032,
+  "clean_static": false,
+  "timestamp": "2026-09-24 03:25:56 UTC"
 }

@@ -159,29 +159,35 @@ class DynamicTokenGovernor:
 
     @staticmethod
     def classify_action(
-        action_type: Optional[str], arguments: Optional[Dict[str, Any]] = None
+        action_type: Optional[str], arguments: Optional[Any] = None
     ) -> TokenPhase:
         """Classify tool action into an operational phase."""
         if not action_type:
             return TokenPhase.INVESTIGATION
 
-        args = arguments or {}
+        act_name = action_type if isinstance(action_type, str) else type(action_type).__name__
 
-        if action_type == "WorkspaceFileAction":
-            op = str(args.get("operation", "")).lower()
+        if "File" in act_name:
+            if isinstance(arguments, dict):
+                op = str(arguments.get("operation", "")).lower()
+            else:
+                op = str(getattr(arguments, "operation", "")).lower()
             if op in ("edit", "write", "append"):
                 return TokenPhase.IMPLEMENTATION
             return TokenPhase.INVESTIGATION
 
-        if action_type == "WorkspaceTerminalAction":
-            cmd = str(args.get("command", "")).lower()
+        if "Terminal" in act_name:
+            if isinstance(arguments, dict):
+                cmd = str(arguments.get("command", "")).lower()
+            else:
+                cmd = str(getattr(arguments, "command", "")).lower()
             if "pytest" in cmd or "test" in cmd:
                 return TokenPhase.TESTING
             if any(k in cmd for k in ("git diff", "git status", "git log")):
                 return TokenPhase.TESTING
             return TokenPhase.INVESTIGATION
 
-        if action_type == "ThinkAction":
+        if "Think" in act_name:
             return TokenPhase.INVESTIGATION
 
         return TokenPhase.INVESTIGATION

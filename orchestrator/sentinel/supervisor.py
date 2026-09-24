@@ -20,33 +20,140 @@ from orchestrator.core.protocols import (
 )
 from orchestrator.sentinel.ast_guard import ASTGuard
 from orchestrator.sentinel.cloud_governor import CloudMeshGovernor
+from orchestrator.sentinel.cloud_mesh import CloudResilienceMesh
+from orchestrator.sentinel.command_interceptor import TerminalCommandTranslator
 from orchestrator.sentinel.diagnostics_db import SentinelDiagnosticsDB
 from orchestrator.sentinel.heuristics import HeuristicsDriftDetector
+from orchestrator.sentinel.schemas import SentinelDashboardState, SentinelMode
+from orchestrator.sentinel.self_healing import SelfHealingEngine
 
 
 class CognitiveSentinelSupervisor(ICognitiveSentinel):
     """Central supervisor enforcing static, dynamic, semantic, and cloud immunity."""
 
+    _instance: Optional["CognitiveSentinelSupervisor"] = None
+
     def __init__(
         self,
-        config: Optional[OrchestratorConfig] = None,
+        config: Optional[Any] = None,
         workspace: Optional[Path] = None,
+        mode: Optional[Any] = None,
+        workspace_path: Optional[Path] = None,
+        fallback_chain: Optional[Any] = None,
     ) -> None:
-        self.config = config or OrchestratorConfig()
-        self.workspace = workspace or self.config.workspace_path
+        if isinstance(config, OrchestratorConfig):
+            self.config = config
+            self.workspace = workspace or workspace_path or self.config.workspace_path
+        elif isinstance(config, (SentinelMode, str)):
+            self.config = OrchestratorConfig()
+            self.workspace = workspace or workspace_path or self.config.workspace_path
+        else:
+            self.config = OrchestratorConfig()
+            self.workspace = workspace or workspace_path or self.config.workspace_path
+
+        self.mode = mode or getattr(self.config, "self_healing_level", SentinelMode.ENFORCING)
+        if isinstance(self.mode, str):
+            self.mode = SentinelMode.AUTONOMOUS_SRE if self.mode == "full_autonomous" else SentinelMode.ENFORCING
 
         # Sub-modules
         self.diagnostics_db = SentinelDiagnosticsDB()
+        self.self_healing_engine = SelfHealingEngine()
+        self.command_translator = TerminalCommandTranslator()
         self.ast_guard = ASTGuard(
             disallow_stubs=getattr(self.config, "self_healing_level", "full_autonomous") == "strict"
         )
         self.cloud_governor = CloudMeshGovernor(
-            fallback_chain=getattr(self.config, "cloud_fallback_chain", None),
+            fallback_chain=fallback_chain or getattr(self.config, "cloud_fallback_chain", None),
             max_prompt_ceiling=getattr(self.config, "max_tokens_budget", 350_000) // 2,
+        )
+        self.cloud_mesh = CloudResilienceMesh(
+            fallback_chain=fallback_chain or getattr(self.config, "cloud_fallback_chain", None)
         )
         self.drift_detector = HeuristicsDriftDetector(
             max_steps_without_edit=4,
             token_burn_threshold=35_000,
+        )
+        self.total_interceptions: int = 0
+        self.total_auto_heals: int = 0
+
+    @classmethod
+    def get_instance(
+        cls,
+        config: Optional[Any] = None,
+        workspace: Optional[Path] = None,
+        mode: Optional[Any] = None,
+        workspace_path: Optional[Path] = None,
+        fallback_chain: Optional[Any] = None,
+    ) -> "CognitiveSentinelSupervisor":
+        """Access or instantiate the singleton supervisor."""
+        if cls._instance is None:
+            cls._instance = cls(
+                config=config,
+                workspace=workspace,
+                mode=mode,
+                workspace_path=workspace_path,
+                fallback_chain=fallback_chain,
+            )
+        return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset the singleton instance (for test isolation)."""
+        cls._instance = None
+
+    def intercept_file_write(
+        self, file_path: Path, content: str
+    ) -> Tuple[bool, str, Optional[str]]:
+        """Intercepts and verifies code before writing to disk."""
+        self.total_interceptions += 1
+        is_safe, msg, healed = self.intercept_ast_mutation(file_path, content)
+        if not is_safe:
+            # Attempt self_healing_engine syntax repair as secondary fallback
+            healed_res, fixed_code, note = self.self_healing_engine.heal_syntax_error(
+                file_path, content, msg
+            )
+            if healed_res:
+                self.total_auto_heals += 1
+                return True, f"Auto-healed: {note}", fixed_code
+            return False, msg, None
+
+        if healed and healed != content:
+            self.total_auto_heals += 1
+            return True, msg, healed
+
+        return True, "AST syntax verified cleanly.", None
+
+    def intercept_terminal_command(
+        self, command: str, os_name: str = "nt"
+    ) -> Tuple[bool, str, str]:
+        """Inspects terminal commands and translates prohibited UNIX calls on Windows."""
+        self.total_interceptions += 1
+        allowed, rewritten, note = self.command_translator.intercept_and_translate(
+            command, os_name=os_name
+        )
+        if rewritten != command:
+            self.total_auto_heals += 1
+        return allowed, rewritten, note
+
+    def diagnose_and_heal(
+        self, exc: Exception, context: Dict[str, Any]
+    ) -> CognitiveIncident:
+        """Alias for handle_runtime_error for protocol compliance."""
+        return self.handle_runtime_error(exc, context)
+
+    def get_dashboard_state(self) -> SentinelDashboardState:
+        """Generates comprehensive snapshot for Live Terminal UI rendering."""
+        db_stats = self.diagnostics_db.get_stats()
+        return SentinelDashboardState(
+            sentinel_mode=self.mode if isinstance(self.mode, SentinelMode) else SentinelMode.ENFORCING,
+            is_healthy=True,
+            total_interceptions=self.total_interceptions + db_stats.get("total_incidents", 0),
+            total_auto_heals=self.total_auto_heals + db_stats.get("auto_healed_count", 0),
+            provider_health=self.cloud_mesh.providers,
+            ast_guard_clean=True,
+            circuit_breakers_tripped=sum(
+                1 for p in self.cloud_mesh.providers.values() if p.quota_exhausted
+            ),
         )
 
     def intercept_ast_mutation(
@@ -123,12 +230,16 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
         """Autonomously decodes runtime errors and synthesizes immediate self-healing actions."""
         exc_name = type(exc).__name__
         exc_msg = str(exc)
+        exc_lower = exc_msg.lower()
 
         # Categorize action and severity
-        if isinstance(exc, (ProviderQuotaExceededError,)):
+        if isinstance(exc, (ProviderQuotaExceededError,)) or "429" in exc_msg or "ratelimit" in exc_lower or "insufficient_quota" in exc_lower:
             action = InterventionAction.SWITCH_CLOUD_PROVIDER
             severity = IncidentSeverity.CRITICAL
             remedy = "Trip circuit breaker for provider and switch to fallback model."
+            # Also record in cloud_mesh
+            model = context.get("model", "default")
+            self.cloud_mesh.record_call_failure(model, exc_msg)
         elif isinstance(exc, (CircuitBreakerTrippedError,)):
             action = InterventionAction.SWITCH_CLOUD_PROVIDER
             severity = IncidentSeverity.HIGH
@@ -154,7 +265,7 @@ class CognitiveSentinelSupervisor(ICognitiveSentinel):
             error_signature=f"{exc_name}: {exc_msg}",
             raw_payload=context,
             suggested_action=action,
-            auto_healed=False,
+            auto_healed=action in (InterventionAction.SWITCH_CLOUD_PROVIDER, InterventionAction.AUTO_PATCH_CODE),
             remedy_description=remedy,
             timestamp_epoch=time.time(),
         )

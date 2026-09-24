@@ -747,6 +747,12 @@ DEFAULT_ALLOWED_COMMANDS = {
     "cp",
     "mv",
     "clear",
+    "select-string",
+    "get-content",
+    "get-childitem",
+    "new-item",
+    "remove-item",
+    "get-command",
 }
 
 
@@ -813,12 +819,25 @@ def execute_terminal_action(
     )
     workspace_root.mkdir(parents=True, exist_ok=True)
 
+    cmd_to_exec = action.command
+    # Sentinel translation hook for UNIX commands on Windows
+    try:
+        from orchestrator.sentinel import TerminalCommandTranslator
+
+        _, translated, _ = TerminalCommandTranslator.intercept_and_translate(
+            cmd_to_exec
+        )
+        if translated:
+            cmd_to_exec = translated
+    except Exception:
+        pass
+
     channel = getattr(conversation, "human_channel", None) or get_active_channel()
     is_pre_authorized = (
-        channel.is_command_approved(action.command) if channel else False
+        channel.is_command_approved(cmd_to_exec) if channel else False
     )
 
-    valid, cmd_tokens, reason = split_and_validate_command(action.command)
+    valid, cmd_tokens, reason = split_and_validate_command(cmd_to_exec)
     if not valid and not is_pre_authorized:
         granted = False
         feedback = ""

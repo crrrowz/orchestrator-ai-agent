@@ -349,12 +349,48 @@ class BasePipeline(ABC):
 
             try:
                 conv.run()
+
+                # 1. Post-execution state inspection for silent SDK agent errors
+                state = getattr(conv, "state", None)
+                if state:
+                    exec_status = getattr(state, "execution_status", None)
+                    if exec_status:
+                        status_str = str(getattr(exec_status, "value", exec_status)).lower()
+                        if status_str in ("error", "stuck"):
+                            run_result.completed = False
+                            if not run_result.error_message:
+                                run_result.error_message = f"Agent execution ended with status '{status_str}'."
+
+                    events = getattr(state, "events", []) or []
+                    for ev in reversed(events):
+                        ev_name = getattr(ev, "__class__", type(ev)).__name__
+                        if ev_name in ("ConversationErrorEvent", "AgentErrorEvent") or (hasattr(ev, "error") and ev.error):
+                            run_result.completed = False
+                            err = getattr(ev, "error", None) or getattr(ev, "message", None) or "Agent error encountered"
+                            run_result.error_message = str(err)
+                            break
+
+                # 2. Inspect session visualizer steps for unhandled error events
                 vis = getattr(conv, "visualizer", None) or getattr(
                     self, "visualizer", None
                 )
+                if vis and hasattr(vis, "store") and getattr(vis.store, "steps", None):
+                    last_step = vis.store.steps[-1]
+                    if getattr(last_step, "is_error", False) and (
+                        getattr(last_step, "action_type", None) is None
+                        or "error" in str(getattr(last_step, "summary", "")).lower()
+                    ):
+                        run_result.completed = False
+                        if not run_result.error_message:
+                            run_result.error_message = (
+                                getattr(last_step, "observation", None)
+                                or getattr(last_step, "summary", None)
+                                or "Agent reported error step"
+                            )
+
                 if vis and hasattr(vis, "close"):
                     try:
-                        vis.close(success=True)
+                        vis.close(success=run_result.completed)
                     except Exception:
                         pass
                 if run_result.tokens_consumed == 0 and llm_baseline and hasattr(llm_baseline, "metrics"):
@@ -465,6 +501,8 @@ class BasePipeline(ABC):
                     raise
             finally:
                 stop_monitor.set()
+                if monitor_thread.is_alive():
+                    monitor_thread.join(timeout=2.0)
 
     def _run_preflight(
         self,

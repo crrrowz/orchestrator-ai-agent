@@ -319,11 +319,7 @@ class AuditPipeline(BasePipeline):
         final_audit_result.save_json(findings_json_file)
 
         # Synchronize presentation markdown with verified audit result
-        if not report_file.exists() or audit_state in (
-            AuditState.AUDIT_CLEAN,
-            AuditState.AUDIT_INCOMPLETE,
-            AuditState.AUDIT_FAILED,
-        ):
+        if not report_file.exists() or report_file.stat().st_size < 100:
             report_file.write_text(final_audit_result.to_markdown(), encoding="utf-8")
 
         telemetry.record_step(

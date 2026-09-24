@@ -52,11 +52,20 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
     severity_weights = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
     findings: List[Dict[str, Any]] = []
 
-    # Pattern: ### X.Y [SEVERITY] Title ... up to next ### or ##
-    pattern = r"###\s*(\d+\.\d+)\s*\[(CRITICAL|HIGH|MEDIUM|LOW)\]\s*([^\n]+)([\s\S]*?)(?=\n###|\n##|\Z)"
+    # Generalized pattern matching:
+    # Pattern 1: ### X.Y [SEVERITY] Title
+    # Pattern 2: ### [SEVERITY] ID - Title / File
+    # Pattern 3: ### ID [SEVERITY] Title
+    # Pattern 4: ### [SEVERITY] Title
+    pattern = (
+        r"###\s*(?:(?:(\d+(?:\.\d+)?|[A-Z]+-\d+|Issue\s*\d+)(?:\.|\:)?\s*)?\[(CRITICAL|HIGH|MEDIUM|LOW)\]|"
+        r"\[(CRITICAL|HIGH|MEDIUM|LOW)\]\s*(?:(\d+(?:\.\d+)?|[A-Z]+-\d+|Issue\s*\d+)(?:\.|\:)?\s*)?)\s*"
+        r"([^\n]+)([\s\S]*?)(?=\n###|\n##|\Z)"
+    )
     for m in re.finditer(pattern, report_content, re.IGNORECASE):
-        num, sev, title, body = m.groups()
-        sev_upper = sev.upper()
+        num1, sev1, sev2, num2, title, body = m.groups()
+        sev = (sev1 or sev2 or "HIGH").upper()
+        num = num1 or num2 or f"AUD-{len(findings) + 1:03d}"
         clean_title = title.strip()
         # Ignore sections indicating invariants or things NOT to break
         if any(
@@ -65,12 +74,12 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
         ):
             continue
 
-        finding_text = f"### {num} [{sev_upper}] {clean_title}\n{body.strip()}"
+        finding_text = f"### {num} [{sev}] {clean_title}\n{body.strip()}"
         findings.append(
             {
-                "id": num,
-                "severity": sev_upper,
-                "weight": severity_weights.get(sev_upper, 99),
+                "id": str(num),
+                "severity": sev,
+                "weight": severity_weights.get(sev, 99),
                 "title": clean_title,
                 "content": finding_text,
             }
@@ -437,24 +446,58 @@ class AuditFixPipeline(BasePipeline):
                 AuditState.AUDIT_INCOMPLETE,
                 AuditState.AUDIT_FAILED,
             ):
-                ConsoleOutput.warning(
-                    f"Audit contract state is {structured_result.status.value}. "
-                    "Halting audit-fix pipeline immediately to prevent ghost defect remediation."
+                raw_findings = (
+                    extract_audit_findings_list(existing_report_content)
+                    if existing_report_content
+                    else []
                 )
-                return {
-                    "status": structured_result.status.value,
-                    "iterations": 0,
-                    "converged": False,
-                    "reason": f"Audit phase ended with status {structured_result.status.value}",
-                    "fixes_applied": [],
-                }
+                if not raw_findings:
+                    ConsoleOutput.warning(
+                        f"Audit contract state is {structured_result.status.value} with zero extracted report findings. "
+                        "Halting audit-fix pipeline immediately."
+                    )
+                    return {
+                        "status": structured_result.status.value,
+                        "iterations": 0,
+                        "converged": False,
+                        "reason": f"Audit phase ended with status {structured_result.status.value}",
+                        "fixes_applied": [],
+                    }
+                else:
+                    ConsoleOutput.info(
+                        f"Audit status is {structured_result.status.value}, but found {len(raw_findings)} actionable finding(s) in report. Proceeding with remediation."
+                    )
+                    audit_findings_queue = [
+                        f
+                        for f in raw_findings
+                        if not any(
+                            r in f["title"].lower() or f["title"].lower() in r
+                            for r in resolved_titles
+                        )
+                    ]
             elif structured_result.status == AuditState.AUDIT_CLEAN or (
                 structured_result.clean_static and not structured_result.findings
             ):
-                audit_findings_queue = []
-                ConsoleOutput.info(
-                    "Structured audit contract indicates workspace is clean (AUDIT_CLEAN)."
+                # Double-check if markdown report has findings before declaring clean
+                raw_from_md = (
+                    extract_audit_findings_list(existing_report_content)
+                    if existing_report_content
+                    else []
                 )
+                if raw_from_md:
+                    audit_findings_queue = [
+                        f
+                        for f in raw_from_md
+                        if not any(
+                            r in f["title"].lower() or f["title"].lower() in r
+                            for r in resolved_titles
+                        )
+                    ]
+                else:
+                    audit_findings_queue = []
+                    ConsoleOutput.info(
+                        "Structured audit contract indicates workspace is clean (AUDIT_CLEAN)."
+                    )
             elif structured_result.findings:
                 for f in structured_result.findings:
                     is_valid, reason = FindingValidator.validate(f, self.workspace_path)
@@ -485,6 +528,17 @@ class AuditFixPipeline(BasePipeline):
                         ConsoleOutput.warning(
                             f"[EVIDENCE INTEGRITY] Dropped invalid finding '{f.id}': {reason}"
                         )
+                # If all structured findings were dropped or empty, fallback to markdown findings
+                if not audit_findings_queue and existing_report_content:
+                    raw_fallback = extract_audit_findings_list(existing_report_content)
+                    audit_findings_queue = [
+                        f
+                        for f in raw_fallback
+                        if not any(
+                            r in f["title"].lower() or f["title"].lower() in r
+                            for r in resolved_titles
+                        )
+                    ]
         elif existing_report_content:
             raw_findings = extract_audit_findings_list(existing_report_content)
             # Filter out findings that were already resolved in prior iterations

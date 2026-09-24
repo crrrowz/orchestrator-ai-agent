@@ -85,7 +85,7 @@ class ConversationStore:
         tests_passed: bool = True,
         lessons: Optional[str] = None,
     ) -> Path:
-        """Persist a task execution memory entry to disk."""
+        """Persist a task execution memory entry to disk with atomic write."""
         entry = MemoryEntry(
             task=task,
             summary=summary,
@@ -97,7 +97,9 @@ class ConversationStore:
             self.memory_dir
             / f"{entry.id}_{int(datetime.now(timezone.utc).timestamp())}.json"
         )
-        file_path.write_text(entry.model_dump_json(indent=2), encoding="utf-8")
+        tmp_path = file_path.with_suffix(".tmp")
+        tmp_path.write_text(entry.model_dump_json(indent=2), encoding="utf-8")
+        tmp_path.replace(file_path)
         return file_path
 
     def load_all_memories(self) -> list[MemoryEntry]:
