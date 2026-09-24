@@ -87,6 +87,44 @@ class ConnectivityChecker:
         except Exception as e:
             return {"provider": "OpenAI", "connected": False, "error": str(e)}
 
+    @staticmethod
+    def check_omniroute(
+        base_url: str,
+        api_key: Optional[str] = None,
+        required_models: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Check OmniRoute local gateway connectivity and model catalog."""
+        result: Dict[str, Any] = {
+            "provider": "OmniRoute",
+            "connected": False,
+            "error": None,
+            "models_status": {},
+        }
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                url = f"{base_url.rstrip('/')}/models"
+                resp = client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    result["connected"] = True
+                    data = resp.json().get("data", [])
+                    available_ids = {m.get("id") for m in data if isinstance(m, dict)}
+                    if required_models:
+                        for m in required_models:
+                            clean_id = m.replace("omniroute/", "").replace("openai/", "")
+                            result["models_status"][m] = (
+                                clean_id in available_ids or len(available_ids) == 0
+                            )
+                else:
+                    result["error"] = f"HTTP {resp.status_code}"
+        except Exception as e:
+            result["error"] = str(e)
+
+        return result
+
     @classmethod
     def run_zero_token_audit(cls, config: OrchestratorConfig) -> None:
         """Run connectivity check across all configured roles and display a Rich diagnostic table."""
@@ -118,11 +156,52 @@ class ConnectivityChecker:
                 config.openrouter_api_key, openrouter_models
             )
 
+        omniroute_models = [
+            m
+            for _, m in roles_models
+            if m.startswith("omniroute/")
+            or (config.provider == "omniroute" and not m.startswith("openrouter/"))
+        ]
+        omniroute_info: Optional[Dict[str, Any]] = None
+        if omniroute_models or config.provider == "omniroute":
+            omniroute_info = cls.check_omniroute(
+                base_url=config.omniroute_base_url,
+                api_key=config.omniroute_api_key,
+                required_models=omniroute_models,
+            )
+
         for role_name, model_str in roles_models:
             provider_status = "[gray]Not Configured[/gray]"
             model_status = "[gray]Unverified[/gray]"
 
-            if model_str.startswith("openrouter/"):
+            if model_str.startswith("omniroute/") or (
+                config.provider == "omniroute"
+                and not (
+                    model_str.startswith("openrouter/")
+                    or model_str.startswith("gemini/")
+                    or model_str.startswith("anthropic/")
+                    or model_str.startswith("groq/")
+                )
+            ):
+                if omniroute_info and omniroute_info["connected"]:
+                    provider_status = (
+                        f"[green][OK] Connected[/green]\n[dim]{config.omniroute_base_url}[/dim]"
+                    )
+                    is_avail = omniroute_info["models_status"].get(model_str, True)
+                    model_status = (
+                        "[green][OK] Active on OmniRoute[/green]"
+                        if is_avail
+                        else "[yellow][?] Dynamic Route[/yellow]"
+                    )
+                else:
+                    err = (
+                        omniroute_info["error"]
+                        if omniroute_info
+                        else "Gateway Unreachable"
+                    )
+                    provider_status = f"[red][ERR] OmniRoute: {err}[/red]"
+                    model_status = "[red]Unavailable[/red]"
+            elif model_str.startswith("openrouter/"):
                 if not config.openrouter_api_key:
                     provider_status = "[red][ERR] Missing Key[/red]"
                     model_status = "[red]No Access[/red]"

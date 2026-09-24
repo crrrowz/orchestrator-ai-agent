@@ -124,6 +124,17 @@ class OrchestratorConfig(BaseModel):
     groq_api_key: Optional[str] = Field(
         default_factory=lambda: os.environ.get("GROQ_API_KEY")
     )
+    omniroute_api_key: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("OMNIROUTE_API_KEY")
+    )
+    omniroute_base_url: str = Field(
+        default_factory=lambda: os.environ.get(
+            "OMNIROUTE_BASE_URL", "http://localhost:20128/v1"
+        )
+    )
+    openai_base_url: Optional[str] = Field(
+        default_factory=lambda: os.environ.get("OPENAI_BASE_URL")
+    )
     provider: str = Field(
         default_factory=lambda: (
             os.environ.get("PROVIDER")

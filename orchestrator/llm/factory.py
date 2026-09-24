@@ -22,8 +22,15 @@ def create_llm_for_role(
     if not api_key_val:
         if model.startswith("anthropic/"):
             api_key_val = config.anthropic_api_key
+        elif model.startswith("omniroute/"):
+            api_key_val = (
+                config.omniroute_api_key
+                or os.environ.get("OMNIROUTE_API_KEY")
+                or config.openai_api_key
+                or "sk-omniroute"
+            )
         elif model.startswith("openai/"):
-            api_key_val = config.openai_api_key
+            api_key_val = config.openai_api_key or config.omniroute_api_key
         elif model.startswith("gemini/") or model.startswith("google/"):
             api_key_val = config.gemini_api_key
         elif model.startswith("openrouter/"):
@@ -33,6 +40,21 @@ def create_llm_for_role(
                 "GROQ_API_KEY"
             )
 
+    base_url = None
+    if model.startswith("omniroute/"):
+        base_url = getattr(config, "omniroute_base_url", None) or os.environ.get(
+            "OMNIROUTE_BASE_URL", "http://localhost:20128/v1"
+        )
+        # Translate to OpenAI-compatible provider slug for LiteLLM engine
+        model = f"openai/{model[len('omniroute/'):]}"
+    elif model.startswith("openai/"):
+        if getattr(config, "openai_base_url", None) or os.environ.get("OPENAI_BASE_URL"):
+            base_url = config.openai_base_url or os.environ.get("OPENAI_BASE_URL")
+        elif getattr(config, "provider", "") == "omniroute":
+            base_url = getattr(config, "omniroute_base_url", None) or os.environ.get(
+                "OMNIROUTE_BASE_URL", "http://localhost:20128/v1"
+            )
+
     if api_key_val:
         if model.startswith("gemini/") or model.startswith("google/"):
             os.environ["GEMINI_API_KEY"] = api_key_val
@@ -40,6 +62,8 @@ def create_llm_for_role(
             os.environ["GROQ_API_KEY"] = api_key_val
         elif model.startswith("openrouter/"):
             os.environ["OPENROUTER_API_KEY"] = api_key_val
+        elif model.startswith("openai/"):
+            os.environ["OPENAI_API_KEY"] = api_key_val
 
     secret = SecretStr(api_key_val) if api_key_val else None
 
@@ -53,6 +77,9 @@ def create_llm_for_role(
         "retry_min_wait": 1,
         "retry_max_wait": 5,
     }
+
+    if base_url:
+        llm_kwargs["base_url"] = base_url
 
     if model.startswith("openrouter/"):
         llm_kwargs["openrouter_site_url"] = "https://github.com/Antigravity-Agent-API"
