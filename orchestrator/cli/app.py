@@ -47,6 +47,7 @@ from orchestrator.cli.handlers import (  # noqa: E402
     handle_self_audit,
     handle_sentinel_heal,
     handle_sentinel_status,
+    handle_sentinel_test_mesh,
     handle_view_logs,
     resolve_task_input,
     resolve_workspace_dir,
@@ -186,6 +187,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Run standalone zero-token AST audit and auto-healing on a Python file.",
     )
+    parser.add_argument(
+        "--sentinel-test-mesh",
+        action="store_true",
+        help="Probe cloud fallback mesh readiness and verify provider circuit breakers.",
+    )
     return parser.parse_args()
 
 
@@ -312,6 +318,10 @@ def main() -> None:
 
     if args.sentinel_heal:
         handle_sentinel_heal(args.sentinel_heal)
+        sys.exit(0)
+
+    if args.sentinel_test_mesh:
+        handle_sentinel_test_mesh(config)
         sys.exit(0)
 
     # Check for --resume, direct audit/docs modes, or interactive wizard

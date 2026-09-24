@@ -168,3 +168,49 @@ class CloudResilienceMesh:
         elif success and provider.lower() in self._degraded_providers:
             self._degraded_providers.discard(provider.lower())
 
+    def test_mesh(self) -> list[dict[str, Any]]:
+        """Probe cloud fallback mesh readiness and return health diagnostics per tier."""
+        import os
+
+        results: list[dict[str, Any]] = []
+        chain = getattr(self._config, "cloud_fallback_chain", [])
+        if not chain:
+            chain = [
+                "openrouter/google/gemini-2.0-flash-001",
+                "gemini/gemini-2.0-flash",
+                "openrouter/anthropic/claude-3.5-sonnet",
+            ]
+
+        key_map = {
+            "openrouter": ["OPENROUTER_API_KEY"],
+            "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+            "google": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+            "groq": ["GROQ_API_KEY"],
+            "anthropic": ["ANTHROPIC_API_KEY"],
+            "openai": ["OPENAI_API_KEY"],
+        }
+
+        for tier, model in enumerate(chain, start=1):
+            prov = model.split("/")[0].lower() if "/" in model else "unknown"
+            req_keys = key_map.get(prov, [f"{prov.upper()}_API_KEY"])
+            has_key = any(bool(os.environ.get(k)) for k in req_keys)
+
+            if prov in self._degraded_providers:
+                circuit_state = "DEGRADED (TRIPPED)"
+            elif has_key:
+                circuit_state = "ONLINE (ARMED)"
+            else:
+                circuit_state = "STANDBY (KEY UNSET)"
+
+            results.append(
+                {
+                    "tier": tier,
+                    "model": model,
+                    "provider": prov,
+                    "circuit_state": circuit_state,
+                    "has_key": has_key,
+                    "keys_checked": req_keys,
+                }
+            )
+        return results
+

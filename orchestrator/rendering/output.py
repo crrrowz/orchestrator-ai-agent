@@ -171,3 +171,49 @@ class ConsoleOutput:
             padding=(1, 2),
         )
         console.print(panel)
+
+    @staticmethod
+    def sentinel_step(action: str, details: str = "") -> None:
+        """Render a formatted step for Cognitive Sentinel supervision."""
+        header = "[bold yellow]🛡️ [SENTINEL][/bold yellow]"
+        msg = f"{header} [white]{action}[/white]"
+        if details:
+            msg += f"\n[dim]{details}[/dim]"
+        console.print(Panel(msg, border_style="yellow", expand=False))
+
+    @staticmethod
+    def self_healing_alert(file_path: str, issue: str, fix: str) -> None:
+        """Render a high-visibility alert when self-healing intercepts and repairs code."""
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold yellow", width=14)
+        grid.add_column(style="white")
+        grid.add_row("Target File:", f"[bold cyan]{file_path}[/bold cyan]")
+        grid.add_row("Detected:", f"[bold red]{issue}[/bold red]")
+        grid.add_row("Self-Healed:", f"[bold green]{fix}[/bold green]")
+        panel = Panel(
+            grid,
+            title="[bold yellow]🛡️ Cognitive Sentinel Auto-Healing Interception[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2),
+        )
+        console.print(panel)
+
+    @staticmethod
+    def cloud_failover_banner(
+        failed_model: str, target_model: str, reason: str = ""
+    ) -> None:
+        """Render an alert when LLM mesh triggers automated provider failover."""
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold yellow", width=16)
+        grid.add_column(style="white")
+        grid.add_row("Degraded Model:", f"[bold red]{failed_model}[/bold red]")
+        grid.add_row("Active Failover:", f"[bold green]{target_model}[/bold green]")
+        if reason:
+            grid.add_row("Trigger Reason:", f"[dim yellow]{reason}[/dim yellow]")
+        panel = Panel(
+            grid,
+            title="[bold red]🌐 Cloud Resilience Mesh: Automated Failover[/bold red]",
+            border_style="red",
+            padding=(1, 2),
+        )
+        console.print(panel)

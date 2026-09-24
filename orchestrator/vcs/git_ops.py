@@ -185,3 +185,19 @@ class GitOps:
         if proc_head.returncode == 0 and proc_head.stdout.strip():
             return proc_head.stdout.strip()
         return None
+
+    def rollback(self, hard: bool = True, target: str = "HEAD") -> bool:
+        """Safely revert uncommitted or broken changes to the last clean target."""
+        if hard:
+            proc = self._run_git("reset", "--hard", target)
+            self._run_git("clean", "-fd")
+            return proc.returncode == 0
+        proc = self._run_git("restore", ".")
+        return proc.returncode == 0
+
+    def create_checkpoint(self, label: str = "sentinel_auto_checkpoint") -> Optional[str]:
+        """Create a safety commit or stash checkpoint before risky operations."""
+        if not self.has_uncommitted_changes():
+            head = self._run_git("rev-parse", "HEAD")
+            return head.stdout.strip() if head.returncode == 0 else None
+        return self.commit(f"chore(sentinel): safety checkpoint before {label}")

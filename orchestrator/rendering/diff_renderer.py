@@ -20,6 +20,7 @@ class DiffRenderer:
         new_content: str,
         language: str = "python",
         title: Optional[str] = None,
+        is_self_healed: bool = False,
     ) -> Panel:
         """Render a single file change with highlighted additions, removals, and unchanged lines."""
         old_lines = old_content.splitlines()
@@ -55,10 +56,12 @@ class DiffRenderer:
                 diff_lines.append(f"[dim]{line}[/dim]")
 
         content = "\n".join(diff_lines)
+        border_color = "magenta" if is_self_healed else "cyan"
+        healed_tag = " 🛡️ [bold magenta][SELF-HEALED][/bold magenta]" if is_self_healed else ""
         return Panel(
             content,
-            title=title or f"📝 [bold cyan]{filepath}[/bold cyan]",
-            border_style="cyan",
+            title=title or f"📝 [bold cyan]{filepath}[/bold cyan]{healed_tag}",
+            border_style=border_color,
             expand=False,
         )
 

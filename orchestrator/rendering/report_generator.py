@@ -17,6 +17,7 @@ class MarkdownReportGenerator:
         total_cost_usd: float,
         steps: Optional[List[Dict[str, Any]]] = None,
         incidents: Optional[List[Dict[str, Any]]] = None,
+        sentinel_stats: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Construct a formatted Markdown document summarizing pipeline run outcomes."""
         lines = [
@@ -52,6 +53,21 @@ class MarkdownReportGenerator:
                 )
         else:
             lines.append("| - | No recorded steps | - | - | - | - | - |")
+
+        if sentinel_stats:
+            lines.extend(
+                [
+                    "",
+                    "---",
+                    "",
+                    "## 🛡️ Cognitive Sentinel & Digital Immunity",
+                    "",
+                    f"- **Total Intercepted Incidents**: `{sentinel_stats.get('total_incidents', 0)}`",
+                    f"- **Autonomous Self-Healed Count**: `{sentinel_stats.get('auto_healed_count', 0)}`",
+                    f"- **Healing Success Rate**: `{sentinel_stats.get('healing_rate', 1.0) * 100:.1f}%`",
+                    f"- **Cloud Failover Events**: `{sentinel_stats.get('failed_cloud_calls', 0)}`",
+                ]
+            )
 
         lines.extend(
             [

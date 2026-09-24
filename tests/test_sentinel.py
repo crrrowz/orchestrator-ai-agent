@@ -258,3 +258,87 @@ def test_workspace_tools_windows_command_translation():
         assert not obs.timed_out
         assert "Security policy violation" not in obs.stderr
 
+
+def test_cloud_resilience_mesh_test_mesh():
+    from orchestrator.config import OrchestratorConfig
+    from orchestrator.llm.manager import CloudResilienceMesh
+
+    cfg = OrchestratorConfig(
+        cloud_fallback_chain=[
+            "openrouter/google/gemini-2.0-flash-001",
+            "gemini/gemini-2.0-flash",
+            "groq/llama-3.3-70b-versatile",
+        ]
+    )
+    mesh = CloudResilienceMesh(cfg)
+    results = mesh.test_mesh()
+    assert len(results) == 3
+    assert results[0]["tier"] == 1
+    assert results[0]["provider"] == "openrouter"
+    assert "circuit_state" in results[0]
+
+
+def test_git_ops_rollback_and_checkpoint():
+    from orchestrator.vcs.git_ops import GitOps
+
+    with TemporaryDirectory() as tmp_dir:
+        repo_dir = Path(tmp_dir)
+        git = GitOps(repo_dir)
+        git.init_repo()
+
+        file_path = repo_dir / "code.py"
+        file_path.write_text("x = 1\n", encoding="utf-8")
+        git.commit("initial commit")
+
+        # Create checkpoint before modification
+        cp = git.create_checkpoint("test_checkpoint")
+        assert cp is not None
+
+        # Corrupt file
+        file_path.write_text("broken_syntax(\n", encoding="utf-8")
+        assert git.has_uncommitted_changes()
+
+        # Execute safe rollback
+        reverted = git.rollback(hard=True)
+        assert reverted
+        assert file_path.read_text(encoding="utf-8") == "x = 1\n"
+        assert not git.has_uncommitted_changes()
+
+
+def test_rendering_sentinel_extensions():
+    from orchestrator.rendering.diff_renderer import DiffRenderer
+    from orchestrator.rendering.output import ConsoleOutput
+    from orchestrator.rendering.report_generator import MarkdownReportGenerator
+
+    # 1. DiffRenderer with self-healed tag
+    panel = DiffRenderer.render_file_change(
+        "app.py", "def foo(): pass", "import os\ndef foo(): pass", is_self_healed=True
+    )
+    assert "SELF-HEALED" in str(panel.title)
+
+    # 2. MarkdownReportGenerator with sentinel stats
+    stats = {
+        "total_incidents": 5,
+        "auto_healed_count": 4,
+        "healing_rate": 0.8,
+        "failed_cloud_calls": 1,
+    }
+    report = MarkdownReportGenerator.generate_pipeline_summary(
+        task="Test task",
+        mode="hybrid",
+        status="SUCCESS",
+        iterations=2,
+        duration_seconds=5.2,
+        total_tokens=1000,
+        total_cost_usd=0.01,
+        sentinel_stats=stats,
+    )
+    assert "Cognitive Sentinel & Digital Immunity" in report
+    assert "Autonomous Self-Healed Count" in report
+
+    # 3. ConsoleOutput methods
+    ConsoleOutput.sentinel_step("AST Check", "Validated clean")
+    ConsoleOutput.self_healing_alert("main.py", "Missing import", "Added import sys")
+    ConsoleOutput.cloud_failover_banner("model-a", "model-b", "Rate limited")
+
+

@@ -231,3 +231,48 @@ def handle_sentinel_heal(target_file: Path) -> None:
     else:
         ConsoleOutput.success(f"'{target_file.name}' verified clean. 0 defects detected.")
 
+
+def handle_sentinel_test_mesh(config: Optional[Any] = None) -> None:
+    """Test cloud resilience mesh readiness and verify provider circuit breakers."""
+    from rich.table import Table
+
+    from orchestrator.config import ConfigLoader
+    from orchestrator.llm.manager import CloudResilienceMesh
+    from orchestrator.rendering.output import console
+
+    cfg = config or ConfigLoader.load()
+    mesh = CloudResilienceMesh(cfg)
+    results = mesh.test_mesh()
+
+    ConsoleOutput.banner(
+        "Cloud Resilience Mesh Probe", "Multi-Tier Fallback Health & Readiness"
+    )
+
+    table = Table(title="Cloud LLM Fallback Tiers", border_style="cyan")
+    table.add_column("Tier", style="bold yellow", justify="center", width=6)
+    table.add_column("Model Identifier", style="bold white")
+    table.add_column("Gateway Provider", style="cyan")
+    table.add_column("Circuit State", style="bold")
+    table.add_column("API Credentials", style="bold")
+
+    for r in results:
+        circuit_color = (
+            "green"
+            if "ONLINE" in r["circuit_state"]
+            else ("yellow" if "STANDBY" in r["circuit_state"] else "red")
+        )
+        cred_text = (
+            "[green]VALID (Detected)[/green]"
+            if r["has_key"]
+            else f"[yellow]MISSING ({', '.join(r['keys_checked'])})[/yellow]"
+        )
+        table.add_row(
+            str(r["tier"]),
+            r["model"],
+            r["provider"].upper(),
+            f"[{circuit_color}]{r['circuit_state']}[/{circuit_color}]",
+            cred_text,
+        )
+
+    console.print(table)
+
