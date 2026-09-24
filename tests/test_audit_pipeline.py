@@ -322,3 +322,53 @@ def test_audit_fix_pipeline_fast_converges_on_clean_contract(tmp_path: Path):
         assert res["status"] == "CONVERGED_CLEAN"
         assert res["iterations"] == 1
         mock_conv.assert_not_called()
+
+
+def test_audit_pipeline_handles_token_budget_interruption_as_incomplete(tmp_path: Path):
+    """When the auditor conversation is interrupted by token ceiling, status must be AUDIT_INCOMPLETE."""
+    from orchestrator.pipeline.base_pipeline import ConvRunResult
+    from orchestrator.analysis.schemas import AuditState
+
+    (tmp_path / "app.py").write_text("def hello(): return 1\n", encoding="utf-8")
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditPipeline(cfg, sm, tmp_path)
+
+    interrupted_result = ConvRunResult(
+        completed=False,
+        interrupted_by_tokens=True,
+        tokens_consumed=104506,
+    )
+
+    with (
+        patch("orchestrator.pipeline.audit_pipeline.Conversation"),
+        patch.object(pipeline, "_run_conv", return_value=interrupted_result),
+    ):
+        res = pipeline.run("Deep audit")
+        assert res["audit_state"] == AuditState.AUDIT_INCOMPLETE.value
+        assert "token budget ceiling" in res["result"].summary
+        report_file = tmp_path / "docs" / "AUDIT_REPORT.md"
+        assert report_file.exists()
+        assert "AUDIT_INCOMPLETE" in report_file.read_text(encoding="utf-8")
+
+
+def test_audit_pipeline_ignores_tool_exit_code_errors_for_agent_status(tmp_path: Path):
+    """Tool observation failures (like dir or grep returning 1) must not trigger AUDIT_FAILED."""
+    from orchestrator.pipeline.base_pipeline import ConvRunResult
+    from orchestrator.analysis.schemas import AuditState
+
+    (tmp_path / "app.py").write_text("def hello(): return 1\n", encoding="utf-8")
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditPipeline(cfg, sm, tmp_path)
+
+    completed_result = ConvRunResult(completed=True)
+
+    with (
+        patch("orchestrator.pipeline.audit_pipeline.Conversation"),
+        patch.object(pipeline, "_run_conv", return_value=completed_result),
+    ):
+        res = pipeline.run("Deep audit")
+        # Since static analysis is clean and agent completed without crash, workspace is AUDIT_CLEAN
+        assert res["audit_state"] == AuditState.AUDIT_CLEAN.value
+

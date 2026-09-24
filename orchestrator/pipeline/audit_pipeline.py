@@ -152,7 +152,8 @@ class AuditPipeline(BasePipeline):
             "STRICT CONSTRAINTS & INSTRUCTIONS:\n"
             "1. Inspect 3-5 critical hotspot files identified above to verify key architecture, boundaries, and duplication.\n"
             "2. Produce an exhaustive, in-depth architectural audit in `docs/AUDIT_REPORT.md` (under `docs/`).\n"
-            "   - You may write the report overview using `operation='write'` and append subsequent detailed sections with `operation='append'` if needed.\n"
+            "   - Write verified structured findings to `docs/audit_findings.json` using workspace_file write operation.\n"
+            "   - Format: {\"status\": \"AUDIT_COMPLETED\", \"findings\": [{\"id\": \"AUD-001\", \"severity\": \"HIGH\", \"type\": \"BUG\", \"file\": \"path/to/file.py\", \"line\": 42, \"evidence\": \"code snippet\", \"problem\": \"exact issue\", \"recommended_fix\": \"exact fix\", \"actionable\": true}]}\n"
             "3. Your report MUST follow this rigorous structure:\n"
             "   - # Codebase Architecture & Security Audit Report\n"
             "   - ## 1. Executive Summary & Architecture Health Score\n"
@@ -162,21 +163,26 @@ class AuditPipeline(BasePipeline):
             "   - ## 5. Error Handling, Edge Cases & Failure Recovery Gaps\n"
             "   - ## 6. Actionable Prioritized Remediation Roadmap (Specific code tasks for Developer agent)\n"
             "4. For Section 6, define concrete target file paths and precise planned code changes.\n"
-            "5. Once `docs/AUDIT_REPORT.md` is complete, call FinishAction to conclude your turn."
+            "5. Once `docs/AUDIT_REPORT.md` and `docs/audit_findings.json` are written, call FinishAction to conclude your turn."
         )
 
         auditor_conv.send_message(self.human_channel.inject_into_prompt(prompt))
+        auditor_budget_ceiling = getattr(self.config, "max_tokens_budget", 250_000)
         auditor_governor = DynamicTokenGovernor.compute_iteration_budget(
             role="auditor",
             severity="HIGH",
             affected_files_count=metrics.get("total_files", 10),
             task_text=focus_directive,
-            hard_ceiling=min(getattr(self.config, "max_tokens_budget", 100_000), 100_000),
+            hard_ceiling=auditor_budget_ceiling,
         )
-        self._run_conv(
+        step_budget = max(
+            getattr(self.config, "max_agent_steps", 12),
+            getattr(auditor_governor, "suggested_max_steps", 8),
+        )
+        conv_result = self._run_conv(
             auditor_conv,
             "Auditor",
-            max_steps=getattr(self.config, "max_agent_steps", 8),
+            max_steps=step_budget,
             max_tokens=auditor_governor.allocation.total_budget,
             task_complexity="high",
             governor=auditor_governor,
@@ -209,6 +215,44 @@ class AuditPipeline(BasePipeline):
                         f"[EVIDENCE INTEGRITY] Dropped invalid finding '{f.id}': {reason}"
                     )
 
+        # Fallback parsing: if docs/audit_findings.json has no findings,
+        # but docs/AUDIT_REPORT.md exists, extract findings from markdown report
+        if not validated_findings and report_file and report_file.exists():
+            try:
+                report_text = report_file.read_text(encoding="utf-8")
+                from orchestrator.pipeline.audit_fix_pipeline import extract_audit_findings_list
+
+                extracted_items = extract_audit_findings_list(report_text)
+                for idx, item in enumerate(extracted_items, start=1):
+                    f_path = ""
+                    f_match = re.search(
+                        r"(?:Target File:\s*|File:\s*|in\s+`?)([\w\-./\\]+\.(?:py|js|ts|json|toml|md))`?",
+                        item.get("content", ""),
+                    )
+                    if f_match:
+                        f_path = f_match.group(1).replace("\\", "/")
+                    elif item.get("title") and ":" in item["title"]:
+                        cand = item["title"].split(":")[0].strip().replace("\\", "/")
+                        if (self.workspace_path / cand).exists():
+                            f_path = cand
+
+                    finding = AuditFinding(
+                        id=item.get("id") or f"AUD-{idx:03d}",
+                        severity=item.get("severity") or "HIGH",
+                        type="BUG",
+                        file=f_path or "unknown.py",
+                        evidence=item.get("content", "")[:200],
+                        problem=item.get("title") or item.get("content", "")[:100],
+                        recommended_fix="Implement recommended changes specified in report",
+                        actionable=True,
+                        source="auditor_report",
+                    )
+                    is_valid, reason = FindingValidator.validate(finding, self.workspace_path)
+                    if is_valid:
+                        validated_findings.append(finding)
+            except Exception as e:
+                ConsoleOutput.warning(f"Failed to parse markdown audit report fallback: {e}")
+
         # Incorporate deterministic static defects if present
         if not is_clean_static and static_issues:
             for idx, iss in enumerate(static_issues, start=1):
@@ -231,27 +275,38 @@ class AuditPipeline(BasePipeline):
                         )
                     )
 
-        # Inspect session log store for unhandled agent errors
-        has_agent_error = any(
-            getattr(step, "is_error", False)
-            for step in getattr(log_store, "steps", [])
-            if getattr(step, "role", "") == "Auditor"
-        )
+        # Check execution status from Conversation runner
+        conv_has_error = bool(conv_result and conv_result.error_message)
+        conv_tokens_exceeded = bool(conv_result and conv_result.interrupted_by_tokens)
+        conv_timeout_exceeded = bool(conv_result and conv_result.interrupted_by_timeout)
 
         # Determine formal lifecycle state
-        if has_agent_error:
+        if conv_has_error:
             audit_state = AuditState.AUDIT_FAILED
-            summary_msg = "Auditor agent encountered an execution error and could not complete the audit."
+            summary_msg = f"Auditor agent execution failed: {conv_result.error_message}"
             ConsoleOutput.error(f"[AUDIT FAILED] {summary_msg}")
+        elif conv_tokens_exceeded:
+            audit_state = AuditState.AUDIT_INCOMPLETE
+            toks = conv_result.tokens_consumed if conv_result else 0
+            summary_msg = (
+                f"Auditor exceeded token budget ceiling ({toks:,} tokens) "
+                "before completing audit report."
+            )
+            ConsoleOutput.warning(f"[AUDIT INCOMPLETE] {summary_msg}")
+        elif conv_timeout_exceeded:
+            audit_state = AuditState.AUDIT_INCOMPLETE
+            summary_msg = "Auditor exceeded timeout cap before completing audit report."
+            ConsoleOutput.warning(f"[AUDIT INCOMPLETE] {summary_msg}")
         elif validated_findings:
             audit_state = AuditState.AUDIT_COMPLETED
             summary_msg = f"Audit completed: {len(validated_findings)} actionable finding(s) verified."
-        elif is_clean_static:
+        elif is_clean_static and conv_result and conv_result.completed:
             audit_state = AuditState.AUDIT_CLEAN
             summary_msg = "Workspace verified clean. Zero actionable defects detected."
         else:
             audit_state = AuditState.AUDIT_INCOMPLETE
             summary_msg = "Auditor agent did not generate complete verified findings."
+            ConsoleOutput.warning(f"[AUDIT INCOMPLETE] {summary_msg}")
 
         final_audit_result = AuditResult(
             status=audit_state,

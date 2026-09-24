@@ -1,6 +1,7 @@
 """Base Pipeline defining common lifecycle, telemetry, git ops, and execution loops."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 import sys
 import threading
 
@@ -9,6 +10,18 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from openhands.sdk import Conversation
+
+
+@dataclass
+class ConvRunResult:
+    """Formal result contract capturing execution status of an agent conversation."""
+
+    completed: bool = True
+    interrupted_by_tokens: bool = False
+    interrupted_by_timeout: bool = False
+    interrupted_by_controller: bool = False
+    tokens_consumed: int = 0
+    error_message: Optional[str] = None
 
 from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.config import (
@@ -174,7 +187,7 @@ class BasePipeline(ABC):
         timeout_seconds: float = 300.0,
         task_complexity: str = "medium",
         governor: Optional[DynamicTokenGovernor] = None,
-    ) -> None:
+    ) -> ConvRunResult:
         """Run agent conversation with dynamic task-aware output budgeting, token cap monitor, and timeout guard."""
         step_limit = max_steps or getattr(self.config, "max_agent_steps", 12)
         token_limit = (
@@ -182,6 +195,8 @@ class BasePipeline(ABC):
             if governor
             else (max_tokens or getattr(self.config, "max_tokens_budget", 350_000))
         )
+
+        run_result = ConvRunResult()
 
         # 1. Dynamic Task-Aware Output Budgeting
         hard_ceil = getattr(self.config, "max_tokens_per_call", 8192)
@@ -204,7 +219,10 @@ class BasePipeline(ABC):
                 ConsoleOutput.warning(
                     f"Conversation execution halted by controller for {role_name}."
                 )
-                return
+                run_result.completed = False
+                run_result.interrupted_by_controller = True
+                setattr(conv, "_run_result", run_result)
+                return run_result
 
             # Record initial token baseline for this specific conversation run
             initial_tok = 0
@@ -231,6 +249,8 @@ class BasePipeline(ABC):
                         ConsoleOutput.warning(
                             f"Agent {role_name} exceeded {timeout_seconds}s timeout cap. Halting."
                         )
+                        run_result.completed = False
+                        run_result.interrupted_by_timeout = True
                         if hasattr(conv, "interrupt"):
                             conv.interrupt()
                         elif hasattr(conv, "pause"):
@@ -283,6 +303,9 @@ class BasePipeline(ABC):
                                                 f"({delta_tok:,} >= {governor.allocation.investigation_budget:,}) "
                                                 f"without code edits. Halting exploration loop."
                                             )
+                                            run_result.completed = False
+                                            run_result.interrupted_by_tokens = True
+                                            run_result.tokens_consumed = delta_tok
                                             if hasattr(conv, "interrupt"):
                                                 conv.interrupt()
                                             elif hasattr(conv, "pause"):
@@ -293,6 +316,9 @@ class BasePipeline(ABC):
                                     ConsoleOutput.warning(
                                         f"Agent {role_name} exceeded hard token cap for this turn ({delta_tok:,} >= {token_limit:,}). Halting execution."
                                     )
+                                    run_result.completed = False
+                                    run_result.interrupted_by_tokens = True
+                                    run_result.tokens_consumed = delta_tok
                                     if hasattr(conv, "interrupt"):
                                         conv.interrupt()
                                     elif hasattr(conv, "pause"):
@@ -301,6 +327,8 @@ class BasePipeline(ABC):
 
                     # Controller abort check
                     if not self.controller.check_should_continue():
+                        run_result.completed = False
+                        run_result.interrupted_by_controller = True
                         if hasattr(conv, "interrupt"):
                             conv.interrupt()
                         elif hasattr(conv, "pause"):
@@ -322,8 +350,16 @@ class BasePipeline(ABC):
                         vis.close(success=True)
                     except Exception:
                         pass
-                return
+                if run_result.tokens_consumed == 0 and llm_baseline and hasattr(llm_baseline, "metrics"):
+                    tu_end = getattr(llm_baseline.metrics, "accumulated_token_usage", None)
+                    if tu_end:
+                        pt_e = getattr(tu_end, "prompt_tokens", 0) or 0
+                        ct_e = getattr(tu_end, "completion_tokens", 0) or 0
+                        run_result.tokens_consumed = max(0, int(pt_e + ct_e) - initial_tok)
+                setattr(conv, "_run_result", run_result)
+                return run_result
             except Exception as e:
+                run_result.completed = False
                 err_text = str(e)
                 # Safely close attached visualizer immediately to release console TTY buffer before printing anything
                 vis = getattr(conv, "visualizer", None) or getattr(
@@ -357,6 +393,8 @@ class BasePipeline(ABC):
                         if "openrouter" in err_text.lower()
                         else "LLM Provider"
                     )
+                    run_result.error_message = f"Quota exhausted ({provider})"
+                    setattr(conv, "_run_result", run_result)
                     raise ProviderQuotaExceededError(
                         provider=provider,
                         message="Daily free-tier request limit has been exhausted (1,000 requests/day).",
@@ -381,6 +419,8 @@ class BasePipeline(ABC):
                 is_bad_request = "400" in err_text or "BadRequestError" in err_text
 
                 if is_not_found or is_auth_error or is_bad_request:
+                    run_result.error_message = err_text.splitlines()[0] if err_text else str(e)
+                    setattr(conv, "_run_result", run_result)
                     # Permanent upstream error - retrying will fail repeatedly and clutter terminal output
                     raise
 
@@ -388,6 +428,9 @@ class BasePipeline(ABC):
                 concise_msg = err_text.splitlines()[0] if err_text else str(e)
                 if len(concise_msg) > 140:
                     concise_msg = concise_msg[:137] + "..."
+
+                run_result.error_message = concise_msg
+                setattr(conv, "_run_result", run_result)
 
                 if attempt < max_retries:
                     backoff = 2**attempt
