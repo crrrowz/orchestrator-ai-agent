@@ -84,7 +84,14 @@ class AuditResult(BaseModel):
         ]
 
         if not self.findings:
-            lines.append("No actionable defects detected. Workspace is clean.")
+            if self.status == AuditState.AUDIT_CLEAN:
+                lines.append("No actionable defects detected. Workspace is clean.")
+            elif self.status == AuditState.AUDIT_FAILED:
+                lines.append(f"⚠️ Audit execution failed: {self.summary or 'Auditor agent encountered an unrecoverable error.'}")
+            elif self.status == AuditState.AUDIT_INCOMPLETE:
+                lines.append(f"⚠️ Audit incomplete: {self.summary or 'Auditor agent turn was interrupted before completing verification.'}")
+            else:
+                lines.append(f"Audit state: {self.status.value}")
         else:
             for f in self.findings:
                 loc_str = f":{f.line}" if f.line else ""
@@ -103,9 +110,17 @@ class AuditResult(BaseModel):
             [
                 "## 4. Key Recommendations",
                 (
-                    "- Zero actionable code defects found; continue adherence to clean architecture."
-                    if not self.findings
-                    else f"- Remediate the {len(self.findings)} verified findings prioritized above."
+                    f"- Resolve audit pipeline failure: {self.summary}"
+                    if self.status == AuditState.AUDIT_FAILED
+                    else (
+                        f"- Resume or investigate incomplete audit: {self.summary}"
+                        if self.status == AuditState.AUDIT_INCOMPLETE
+                        else (
+                            "- Zero actionable code defects found; continue adherence to clean architecture."
+                            if not self.findings
+                            else f"- Remediate the {len(self.findings)} verified findings prioritized above."
+                        )
+                    )
                 ),
                 "",
             ]

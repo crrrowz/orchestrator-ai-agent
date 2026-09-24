@@ -1016,13 +1016,18 @@ class AuditFixPipeline(BasePipeline):
         ts = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         resolved_count = len(resolved_findings) if resolved_findings else 0
         per_score = TelemetryRecorder.calculate_per(resolved_count, total_tokens)
+        clean_task = (task_description or "Comprehensive Audit & Fix").strip()
+        header_task = clean_task.splitlines()[0].strip() if clean_task else "Comprehensive Audit & Fix"
+        if len(header_task) > 120:
+            header_task = header_task[:117] + "..."
+
         lines = [
             "# Autonomous Codebase Audit & Auto-Fix Report",
             "",
             f"- **Execution Timestamp**: {ts}",
             f"- **Final Outcome**: `{final_status}`",
             f"- **Target Workspace**: `{self.workspace_path}`",
-            f"- **Task Directive**: {task_description or 'Comprehensive Audit & Fix'}",
+            f"- **Task Directive**: {header_task}",
             f"- **Progress Efficiency Ratio (PER)**: `{per_score}` findings/100k tokens",
             f"- **Total Python Files**: {metrics.get('total_files', 0)}",
             f"- **Total Lines of Code**: {metrics.get('total_loc', 0)}",

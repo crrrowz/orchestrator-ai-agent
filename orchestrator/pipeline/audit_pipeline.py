@@ -171,7 +171,7 @@ class AuditPipeline(BasePipeline):
             severity="HIGH",
             affected_files_count=metrics.get("total_files", 10),
             task_text=focus_directive,
-            hard_ceiling=getattr(self.config, "max_tokens_budget", 400_000),
+            hard_ceiling=min(getattr(self.config, "max_tokens_budget", 100_000), 100_000),
         )
         self._run_conv(
             auditor_conv,
@@ -231,8 +231,19 @@ class AuditPipeline(BasePipeline):
                         )
                     )
 
+        # Inspect session log store for unhandled agent errors
+        has_agent_error = any(
+            getattr(step, "is_error", False)
+            for step in getattr(log_store, "steps", [])
+            if getattr(step, "role", "") == "Auditor"
+        )
+
         # Determine formal lifecycle state
-        if validated_findings:
+        if has_agent_error:
+            audit_state = AuditState.AUDIT_FAILED
+            summary_msg = "Auditor agent encountered an execution error and could not complete the audit."
+            ConsoleOutput.error(f"[AUDIT FAILED] {summary_msg}")
+        elif validated_findings:
             audit_state = AuditState.AUDIT_COMPLETED
             summary_msg = f"Audit completed: {len(validated_findings)} actionable finding(s) verified."
         elif is_clean_static:
@@ -265,19 +276,24 @@ class AuditPipeline(BasePipeline):
             "codebase_audit",
             iteration=1,
             duration_seconds=dur,
-            success=True,
+            success=(audit_state not in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE)),
             prompt_tokens=u_audit.get("prompt_tokens", 0),
             completion_tokens=u_audit.get("completion_tokens", 0),
             total_tokens=u_audit.get("total_tokens", 0),
             estimated_cost_usd=u_audit.get("accumulated_cost", 0.0)
             or u_audit.get("estimated_cost_usd", 0.0),
         )
-        telemetry.finalize(completed_successfully=True)
+        telemetry.finalize(completed_successfully=(audit_state not in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE)))
         log_store.save_to_file()
 
-        ConsoleOutput.success(
-            f"Audit completed [{audit_state.value}]! Report generated at: {report_file}"
-        )
+        if audit_state in (AuditState.AUDIT_FAILED, AuditState.AUDIT_INCOMPLETE):
+            ConsoleOutput.warning(
+                f"Audit halted with state [{audit_state.value}]. See report: {report_file}"
+            )
+        else:
+            ConsoleOutput.success(
+                f"Audit completed [{audit_state.value}]! Report generated at: {report_file}"
+            )
         return {
             "status": "AUDIT_COMPLETED",
             "audit_state": audit_state.value,
