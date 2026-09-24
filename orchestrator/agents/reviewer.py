@@ -17,27 +17,44 @@ CRITICAL INSTRUCTIONS:
 2. Tools:
    - Inspect files via read-only workspace operations.
 3. Verdict Format:
-   Your review must strictly finish with:
-   VERDICT: [APPROVED | REJECTED]
-   REASONING:
-   - <Point 1>
-   - <Point 2>
-   REQUIRED_FIXES:
-   1. <Fix details if rejected>
+   Your review must conclude with a structured JSON block:
+   ```json
+   {
+     "verdict": "APPROVED",
+     "reasoning": [
+       "Adheres to clean architecture",
+       "Tests cover edge cases"
+     ],
+     "required_fixes": []
+   }
+   ```
+   Or if rejected:
+   ```json
+   {
+     "verdict": "REJECTED",
+     "reasoning": [
+       "Critical security or architectural flaw identified"
+     ],
+     "required_fixes": [
+       "Detail specific actionable code changes needed"
+     ]
+   }
+   ```
 """
 
 
 def create_reviewer_agent(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    workspace_path: Optional[Path] = None
+    workspace_path: Optional[Path] = None,
 ) -> Agent:
     """Build a Reviewer agent with an independent LLM model and review skill."""
     workspace = workspace_path or config.workspace_path
-    
+
     # Enforce independent model check
     if config.reviewer.model == config.developer.model:
         import warnings
+
         warnings.warn(
             f"Reviewer model ({config.reviewer.model}) is identical to Developer model. "
             "For true independent review, configure different models across providers."
@@ -45,7 +62,7 @@ def create_reviewer_agent(
 
     llm = create_llm_for_role(config, config.reviewer)
     context = skill_manager.build_agent_context(config.reviewer.skills)
-    file_tool = create_workspace_file_tool(workspace)
+    file_tool = create_workspace_file_tool(workspace, read_only=True)
 
     return Agent(
         llm=llm,

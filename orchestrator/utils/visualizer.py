@@ -4,19 +4,19 @@ import os
 import sys
 import time
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Set
 
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.tree import Tree
-from rich.live import Live
 
 from openhands.sdk.conversation.visualizer import ConversationVisualizerBase
 from openhands.sdk.event import Event
+from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
 
 
 @dataclass
@@ -37,9 +37,20 @@ class LogStep:
 class SessionLogStore:
     """Stores full structured execution logs for interactive exploration."""
 
-    def __init__(self, workspace_path: Optional[Path] = None):
+    def __init__(
+        self,
+        workspace_path: Optional[Path] = None,
+        max_retained_sessions: int = 10,
+    ):
         self.steps: List[LogStep] = []
         self.workspace_path = workspace_path
+        ws_name = workspace_path.name if workspace_path else "default"
+        import re
+
+        self.project_slug = (
+            re.sub(r"[^a-zA-Z0-9_\-]+", "_", ws_name.lower()).strip("_") or "default"
+        )
+        self.max_retained_sessions = max_retained_sessions
         self.current_role: str = "System"
         self.current_phase: str = "Initializing"
         self.current_model: str = "Unknown"
@@ -47,6 +58,8 @@ class SessionLogStore:
         self.milestones: List[str] = []
         self.start_time: float = time.time()
         self.phase_start_time: float = time.time()
+        self._session_ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime(self.start_time))
+        self._session_file_name = f"session_{self._session_ts}.json"
 
     def set_agent_context(
         self,
@@ -89,33 +102,194 @@ class SessionLogStore:
         self.milestones.append(short_msg)
         if len(self.milestones) > 6:
             self.milestones.pop(0)
-        try:
-            self.save_to_file()
-        except Exception:
-            pass
+
+        # Throttled write to disk to prevent I/O storms (at most once every 5s)
+        now = time.time()
+        if (now - getattr(self, "_last_save_time", 0.0)) >= 5.0:
+            try:
+                self.save_to_file()
+                self._last_save_time = now
+            except Exception:
+                pass
         return step
 
     def save_to_file(self, target_dir: Optional[Path] = None) -> Path:
-        out_dir = target_dir or Path("diagnostics/logs")
+        out_dir = target_dir or (DEFAULT_DIAGNOSTICS_DIR / "logs")
         out_dir.mkdir(parents=True, exist_ok=True)
-        file_path = out_dir / "latest_session.json"
+
+        # 1. Project-specific partitioned directory
+        project_dir = out_dir / self.project_slug
+        project_dir.mkdir(parents=True, exist_ok=True)
+        session_file = project_dir / self._session_file_name
+
         data = {
+            "project": self.project_slug,
+            "workspace": str(self.workspace_path) if self.workspace_path else "",
             "session_start": self.start_time,
             "total_steps": len(self.steps),
             "steps": [asdict(s) for s in self.steps],
         }
-        file_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        return file_path
+        json_content = json.dumps(data, indent=2, ensure_ascii=False)
+
+        # Write timestamped project session file
+        session_file.write_text(json_content, encoding="utf-8")
+
+        # Update project-level latest session pointer
+        (project_dir / "latest_session.json").write_text(json_content, encoding="utf-8")
+
+        # Update global latest session pointer (backwards compatible)
+        (out_dir / "latest_session.json").write_text(json_content, encoding="utf-8")
+
+        # Enforce session retention policy per project (FIFO pruning)
+        self._prune_project_sessions(project_dir)
+
+        return session_file
+
+    def _prune_project_sessions(self, project_dir: Path) -> int:
+        """Prune old session_*.json files in the project directory exceeding max_retained_sessions."""
+        if self.max_retained_sessions <= 0:
+            return 0
+        try:
+            files = sorted(
+                project_dir.glob("session_*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            pruned = 0
+            if len(files) > self.max_retained_sessions:
+                for old in files[self.max_retained_sessions :]:
+                    try:
+                        old.unlink()
+                        pruned += 1
+                    except OSError:
+                        pass
+            return pruned
+        except Exception:
+            return 0
 
 
 class OrchestratorLiveVisualizer(ConversationVisualizerBase):
-    """Quiet, informative live visualizer showing agent, model, execution time, and tokens in real time."""
+    """Quiet, informative live visualizer maintaining a live frozen status card in-place."""
 
-    def __init__(self, log_store: SessionLogStore, console: Optional[Console] = None):
+    def __init__(
+        self,
+        log_store: SessionLogStore,
+        console: Optional[Console] = None,
+        verbosity: str = "normal",
+    ):
         super().__init__()
         self.store = log_store
-        self.console = console or Console()
+        self.console = console or Console(legacy_windows=False)
+        self.verbosity = (verbosity or "normal").lower()
         self._last_thought: Optional[str] = None
+        self._live: Optional[Live] = None
+        self._current_action: str = "Starting agent execution..."
+        self._target_file: str = ""
+        self._last_status: str = ""
+        self._tokens_str: str = ""
+        self._is_tty: bool = (
+            sys.stdout.isatty() if hasattr(sys.stdout, "isatty") else False
+        )
+
+    def _render_box(self) -> Panel:
+        t_now = time.strftime("%H:%M:%S")
+        elapsed = round(time.time() - self.store.phase_start_time, 1)
+        role = self.store.current_role or "Agent"
+        model = self.store.current_model or "LLM"
+
+        grid = Table.grid(padding=(0, 1))
+        grid.add_column(style="bold cyan", width=14)
+        grid.add_column(style="white")
+
+        grid.add_row(
+            "Agent / Role:",
+            f"[bold magenta]{role}[/bold magenta] [blue]({model})[/blue]",
+        )
+        grid.add_row(
+            "Runtime:",
+            f"[yellow]⏱ {elapsed}s[/yellow] [dim]({t_now})[/dim]  {self._tokens_str}",
+        )
+        if self._target_file:
+            grid.add_row(
+                "Target File:", f"[bold green]{self._target_file}[/bold green]"
+            )
+        grid.add_row("Action:", f"[bold white]{self._current_action}[/bold white]")
+        if self._last_status:
+            grid.add_row("Result:", f"{self._last_status}")
+        if self._last_thought and self.verbosity != "quiet":
+            tp = self._last_thought.replace("\n", " ").strip()
+            if len(tp) > 95:
+                tp = tp[:92] + "..."
+            grid.add_row("Plan / Thought:", f"[dim italic]{tp}[/dim italic]")
+
+        border_color = (
+            "magenta"
+            if role == "Developer"
+            else ("green" if role == "Tester" else "cyan")
+        )
+        return Panel(
+            grid,
+            title=f"[bold cyan]◈ Live Agent Activity ({role})[/bold cyan]",
+            border_style=border_color,
+            padding=(0, 1),
+        )
+
+    def _update_live(self) -> None:
+        if not self._is_tty or self.verbosity == "quiet":
+            return
+        try:
+            if self._live is None:
+                self._live = Live(
+                    self._render_box(),
+                    console=self.console,
+                    refresh_per_second=4,
+                    transient=True,
+                )
+                self._live.start()
+            else:
+                self._live.update(self._render_box())
+        except Exception:
+            self._live = None
+
+    def close(self) -> None:
+        """Stop live rendering when agent conversation completes."""
+        if self._live is not None:
+            try:
+                self._live.stop()
+            except Exception:
+                pass
+            self._live = None
+        role = self.store.current_role or "Agent"
+        elapsed = round(time.time() - self.store.phase_start_time, 1)
+        self._safe_print(
+            f"[dim]✓ Finished {role} phase in {elapsed}s {self._tokens_str}[/dim]"
+        )
+
+    def _safe_print(self, *args, **kwargs) -> None:
+        """Safely print to console with fallback for legacy Windows terminal charmap encoding."""
+        try:
+            self.console.print(*args, **kwargs)
+        except (UnicodeEncodeError, Exception):
+            try:
+                cleaned_args = []
+                for a in args:
+                    if isinstance(a, str):
+                        cleaned = (
+                            a.replace("▶", ">")
+                            .replace("🪙", "$")
+                            .replace("⏱", "")
+                            .replace("💭", "*")
+                            .replace("✓", "[OK]")
+                            .replace("✗", "[ERR]")
+                            .encode("ascii", errors="replace")
+                            .decode("ascii")
+                        )
+                        cleaned_args.append(cleaned)
+                    else:
+                        cleaned_args.append(a)
+                self.console.print(*cleaned_args, **kwargs)
+            except Exception:
+                pass
 
     def on_event(self, event: Event) -> None:
         """Process conversation events, log to store, and display real-time progress."""
@@ -124,7 +298,9 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         # 1. Capture Agent Actions & Thoughts
         if event_name == "ActionEvent":
             action_obj = getattr(event, "action", None)
-            thought = getattr(event, "thought", None) or getattr(action_obj, "thought", None)
+            thought = getattr(event, "thought", None) or getattr(
+                action_obj, "thought", None
+            )
             if thought:
                 self._last_thought = str(thought).strip()
 
@@ -163,28 +339,45 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             # Extract live token metrics from active LLM
             tokens_str = ""
             if self.store.current_llm and hasattr(self.store.current_llm, "metrics"):
-                tu = getattr(self.store.current_llm.metrics, "accumulated_token_usage", None)
+                tu = getattr(
+                    self.store.current_llm.metrics, "accumulated_token_usage", None
+                )
                 if tu:
                     in_tok = getattr(tu, "prompt_tokens", 0)
                     out_tok = getattr(tu, "completion_tokens", 0)
                     total_tok = in_tok + out_tok
-                    cost = getattr(self.store.current_llm.metrics, "accumulated_cost", 0.0)
+                    cost = getattr(
+                        self.store.current_llm.metrics, "accumulated_cost", 0.0
+                    )
                     tokens_str = f" [cyan]🪙 {total_tok:,} tok (In:{in_tok:,} Out:{out_tok:,})[/cyan]"
                     if cost > 0:
                         tokens_str += f" [dim](${cost:.4f})[/dim]"
 
-            self.console.print(
-                f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
-                f"[blue]({model})[/blue] "
-                f"[bold white]{summary}[/bold white] "
-                f"[yellow]⏱ {elapsed}s[/yellow]"
-                f"{tokens_str}"
-            )
-            if self._last_thought:
-                thought_preview = self._last_thought.replace("\n", " ").strip()
-                if len(thought_preview) > 110:
-                    thought_preview = thought_preview[:107] + "..."
-                self.console.print(f"       [dim italic]💭 {thought_preview}[/dim italic]")
+            self._current_action = summary
+            self._target_file = path
+            self._tokens_str = tokens_str
+            self._update_live()
+
+            if not self._is_tty:
+                self._safe_print(
+                    f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
+                    f"[blue]({model})[/blue] "
+                    f"[bold white]{summary}[/bold white] "
+                    f"[yellow]⏱ {elapsed}s[/yellow]"
+                    f"{tokens_str}"
+                )
+                if self._last_thought and self.verbosity != "quiet":
+                    if self.verbosity in ("verbose", "debug"):
+                        self._safe_print(
+                            f"       [dim italic]💭 {self._last_thought}[/dim italic]"
+                        )
+                    else:
+                        thought_preview = self._last_thought.replace("\n", " ").strip()
+                        if len(thought_preview) > 110:
+                            thought_preview = thought_preview[:107] + "..."
+                        self._safe_print(
+                            f"       [dim italic]💭 {thought_preview}[/dim italic]"
+                        )
 
         # 2. Capture Tool Observations
         elif event_name == "ObservationEvent":
@@ -209,18 +402,37 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             obs_preview = str(text_res).replace("\n", " ").strip()
             if len(obs_preview) > 95:
                 obs_preview = obs_preview[:92] + "..."
-            icon = "[bold red]✗ ERR[/bold red]" if is_err else "[bold green]✓ OK[/bold green]"
-            self.console.print(f"       {icon} [dim]{obs_preview}[/dim]")
+            icon = (
+                "[bold red]✗ ERR[/bold red]"
+                if is_err
+                else "[bold green]✓ OK[/bold green]"
+            )
+            self._last_status = f"{icon} [dim]{obs_preview}[/dim]"
+            self._update_live()
+
+            if not self._is_tty:
+                if self.verbosity != "quiet" or is_err:
+                    if self.verbosity == "debug":
+                        self._safe_print(f"       {icon} [dim]{text_res}[/dim]")
+                    else:
+                        self._safe_print(f"       {self._last_status}")
 
         # 3. Capture General Messages & Errors
         elif event_name in ("ConversationErrorEvent", "AgentErrorEvent"):
-            err_msg = getattr(event, "error", None) or getattr(event, "message", "Unknown error")
+            err_msg = getattr(event, "error", None) or getattr(
+                event, "message", "Unknown error"
+            )
             self.store.add_step(
                 summary=f"Error: {err_msg}",
                 is_error=True,
                 observation=str(err_msg),
             )
-            self.console.print(f"       [bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]")
+            self._last_status = (
+                f"[bold red]✗ [AGENT ERROR][/bold red] [red]{err_msg}[/red]"
+            )
+            self._update_live()
+            if not self._is_tty:
+                self._safe_print(f"       {self._last_status}")
 
 
 class InteractiveLogExplorer:
@@ -243,20 +455,30 @@ class InteractiveLogExplorer:
 
         steps = self.store.steps
         if not steps:
-            content = Text("No recorded execution events in this session.", style="yellow")
+            content = Text(
+                "No recorded execution events in this session.", style="yellow"
+            )
             return Panel(content, title="Interactive Log Explorer", border_style="cyan")
 
         for idx, step in enumerate(steps):
-            is_selected = (idx == self.selected_idx)
-            is_expanded = (idx in self.expanded_indices)
+            is_selected = idx == self.selected_idx
+            is_expanded = idx in self.expanded_indices
 
             # Cursor & Expand indicator
             cursor = ">" if is_selected else " "
             drop_icon = "[v]" if is_expanded else "[>]"
             ind_style = "bold yellow" if is_selected else "dim"
 
-            role_color = "cyan" if step.role == "Developer" else ("green" if step.role == "Tester" else "magenta")
-            status_style = "bold red" if step.is_error else ("bold white" if is_selected else "white")
+            role_color = (
+                "cyan"
+                if step.role == "Developer"
+                else ("green" if step.role == "Tester" else "magenta")
+            )
+            status_style = (
+                "bold red"
+                if step.is_error
+                else ("bold white" if is_selected else "white")
+            )
 
             indicator_text = f"{cursor}{drop_icon}"
             table.add_row(
@@ -271,14 +493,22 @@ class InteractiveLogExplorer:
             if is_expanded:
                 detail_text = Text()
                 if step.thought:
-                    detail_text.append(f"  Thought:\n    {step.thought}\n\n", style="italic gray")
+                    detail_text.append(
+                        f"  Thought:\n    {step.thought}\n\n", style="italic gray"
+                    )
                 if step.arguments:
                     args_str = json.dumps(step.arguments, indent=2, ensure_ascii=False)
-                    detail_text.append(f"  Arguments:\n{args_str}\n\n", style="dim cyan")
+                    detail_text.append(
+                        f"  Arguments:\n{args_str}\n\n", style="dim cyan"
+                    )
                 if step.observation:
-                    obs_preview = step.observation[:800] + ("..." if len(step.observation) > 800 else "")
+                    obs_preview = step.observation[:800] + (
+                        "..." if len(step.observation) > 800 else ""
+                    )
                     color = "red" if step.is_error else "green"
-                    detail_text.append(f"  Observation Output:\n    {obs_preview}\n", style=color)
+                    detail_text.append(
+                        f"  Observation Output:\n    {obs_preview}\n", style=color
+                    )
 
                 detail_panel = Panel(
                     detail_text,
@@ -329,7 +559,9 @@ class InteractiveLogExplorer:
                     if sub_ch == b"H":  # Up arrow
                         self.selected_idx = max(0, self.selected_idx - 1)
                     elif sub_ch == b"P":  # Down arrow
-                        self.selected_idx = min(len(self.store.steps) - 1, self.selected_idx + 1)
+                        self.selected_idx = min(
+                            len(self.store.steps) - 1, self.selected_idx + 1
+                        )
                     elif sub_ch == b"M":  # Right arrow (expand)
                         self.expanded_indices.add(self.selected_idx)
                     elif sub_ch == b"K":  # Left arrow (collapse)

@@ -3,9 +3,16 @@
 from pathlib import Path
 from typing import Literal, Optional
 
-from orchestrator.config import OrchestratorConfig, SkillManager
-from orchestrator.pipeline import DevTestLoop, FullPipeline
-from orchestrator.utils import ConsoleOutput, GitOps
+from orchestrator.config import ORCHESTRATOR_ROOT, OrchestratorConfig, SkillManager
+from orchestrator.pipeline import (
+    AuditFixPipeline,
+    AuditPipeline,
+    DevTestLoop,
+    DocumentationPipeline,
+    FullPipeline,
+)
+from orchestrator.pipeline.checkpoint import PipelineCheckpoint
+from orchestrator.rendering.output import ConsoleOutput
 
 
 class Orchestrator:
@@ -13,21 +20,40 @@ class Orchestrator:
 
     def __init__(self, config: Optional[OrchestratorConfig] = None):
         self.config = config or OrchestratorConfig()
-        self.skill_manager = SkillManager(Path.cwd())
+        self.skill_manager = SkillManager(ORCHESTRATOR_ROOT)
         self.workspace = self.config.workspace_path
 
     def run_task(
         self,
         task: str,
-        mode: Literal["dev-test", "full"] = "dev-test",
+        mode: Literal["dev-test", "full", "audit", "audit-fix", "docs"] = "dev-test",
         workspace_override: Optional[Path] = None,
+        checkpoint: Optional[PipelineCheckpoint] = None,
     ) -> dict:
         """Run an autonomous multi-agent task execution."""
-        ws = (workspace_override or self.workspace).resolve()
-
-        if mode == "full":
-            pipeline = FullPipeline(self.config, self.skill_manager, ws)
+        raw_ws = (workspace_override or self.workspace).resolve()
+        # Guard against file path accidentally passed as workspace directory
+        if raw_ws.is_file():
+            ConsoleOutput.warning(
+                f"Target workspace '{raw_ws}' is a file. Resolving to parent directory: '{raw_ws.parent}'."
+            )
+            ws = raw_ws.parent
         else:
-            pipeline = DevTestLoop(self.config, self.skill_manager, ws)
+            ws = raw_ws
+
+        if mode == "audit":
+            pipeline = AuditPipeline(self.config, self.skill_manager, ws)
+        elif mode == "audit-fix":
+            pipeline = AuditFixPipeline(self.config, self.skill_manager, ws)
+        elif mode == "docs":
+            pipeline = DocumentationPipeline(self.config, self.skill_manager, ws)
+        elif mode == "full":
+            pipeline = FullPipeline(
+                self.config, self.skill_manager, ws, checkpoint=checkpoint
+            )
+        else:
+            pipeline = DevTestLoop(
+                self.config, self.skill_manager, ws, checkpoint=checkpoint
+            )
 
         return pipeline.run(task)

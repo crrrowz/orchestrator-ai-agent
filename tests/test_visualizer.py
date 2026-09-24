@@ -1,8 +1,7 @@
 """Unit tests for quiet visualizer, session log store, and interactive log explorer."""
 
 from pathlib import Path
-from orchestrator.utils import SessionLogStore, InteractiveLogExplorer, OrchestratorLiveVisualizer
-from orchestrator.utils.visualizer import LogStep
+from orchestrator.utils import SessionLogStore, InteractiveLogExplorer
 
 
 def test_session_log_store_add_and_save(tmp_path: Path):
@@ -15,7 +14,7 @@ def test_session_log_store_add_and_save(tmp_path: Path):
         arguments={"path": "index.html", "operation": "write"},
         thought="Writing index.html for the user",
         observation="File written successfully",
-        is_error=False
+        is_error=False,
     )
 
     assert step1.index == 1

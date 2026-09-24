@@ -15,11 +15,12 @@ htmlcov/
 
 # Local workspace & state
 workspace/
-diagnostics/logs/
+diagnostics/
 html page/
 .env
 PowerShellHistory.txt
+.orchestrator_state.json
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
-/diagnostics
+اريد رود ماب md لتطوير المشروع Dfil.txt

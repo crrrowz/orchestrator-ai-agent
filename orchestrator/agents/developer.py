@@ -5,7 +5,10 @@ from typing import Optional
 
 from openhands.sdk import Agent
 from orchestrator.config import OrchestratorConfig, SkillManager, create_llm_for_role
-from orchestrator.tools import create_workspace_file_tool, create_workspace_terminal_tool
+from orchestrator.tools import (
+    create_workspace_file_tool,
+    create_workspace_terminal_tool,
+)
 
 DEVELOPER_SYSTEM_PROMPT = """You are the Senior Staff Developer Agent.
 Your objective is to produce production-grade, bug-free, fully implemented software.
@@ -20,20 +23,32 @@ CRITICAL INSTRUCTIONS:
 3. Quality:
    - Never output `# TODO` or incomplete code.
    - Always ensure module imports, classes, and function signatures match architectural requirements.
+4. Deliverables:
+   - For all newly implemented services or libraries, create a concise `README.md` (quickstart + usage commands) and a standalone runnable `demo.py` verifying functionality interactively.
+5. Environment & Tool Discipline:
+   - Host OS is Windows (PowerShell / CMD).
+   - UNIX-specific utilities (grep, find -name, cat | head, and bash pipe '|') are strictly prohibited and violate security policy.
+   - To inspect a specific function or class cleanly, use `workspace_file` with operation='symbol', path='...', symbol='<name>'.
+   - To search codebase text, use `workspace_terminal` with `git grep -n "<pattern>"`.
 """
 
 
 def create_developer_agent(
     config: OrchestratorConfig,
     skill_manager: SkillManager,
-    workspace_path: Optional[Path] = None
+    workspace_path: Optional[Path] = None,
+    allow_test_writes: bool = False,
+    task_text: str = "",
 ) -> Agent:
     """Build a Developer agent configured with developer skills and tools."""
     workspace = workspace_path or config.workspace_path
     llm = create_llm_for_role(config, config.developer)
-    context = skill_manager.build_agent_context(config.developer.skills)
+    context = skill_manager.build_agent_context(
+        config.developer.skills, task_text=task_text
+    )
 
-    file_tool = create_workspace_file_tool(workspace)
+    blocked = None if allow_test_writes else ["tests/"]
+    file_tool = create_workspace_file_tool(workspace, blocked_write_prefixes=blocked)
     terminal_tool = create_workspace_terminal_tool(workspace)
 
     return Agent(

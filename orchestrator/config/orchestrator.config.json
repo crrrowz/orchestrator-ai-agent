@@ -1,0 +1,105 @@
+{
+  "$schema": "./config_schema.json",
+  "version": "1.0.0",
+  "execution": {
+    "max_iterations": 4,
+    "max_budget_usd": 0.50,
+    "max_tokens_budget": 350000,
+    "max_agent_steps": 12,
+    "max_tokens_per_call": 8192,
+    "circuit_breaker_threshold": 2,
+    "conversation_timeout_seconds": 300,
+    "auto_commit": true,
+    "auto_chain_audit": true,
+    "workspace_path": "./workspace"
+  },
+  "agents": {
+    "architect": {
+      "role": "architect",
+      "temperature": 0.3,
+      "skills": [
+        "architectural-decomposition",
+        "api-design-contract",
+        "graft-architecture-intelligence"
+      ]
+    },
+    "developer": {
+      "role": "developer",
+      "temperature": 0.2,
+      "skills": [
+        "clean-python-architecture",
+        "systematic-debugging",
+        "docker-devops-containerization",
+        "graft-architecture-intelligence"
+      ]
+    },
+    "tester": {
+      "role": "tester",
+      "temperature": 0.0,
+      "skills": [
+        "pytest-rigorous-testing"
+      ]
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "temperature": 0.1,
+      "skills": [
+        "code-review-standards",
+        "security-audit-hardening"
+      ]
+    }
+  },
+  "memory": {
+    "enabled": true,
+    "relevance_min_score": 3.0,
+    "max_memory_results": 3,
+    "max_memory_chars": 1500
+  },
+  "telemetry": {
+    "max_retained_reports": 20,
+    "max_retained_sessions_per_project": 10,
+    "log_save_debounce_seconds": 5
+  },
+  "safety": {
+    "terminal_command_allowlist": [
+      "pytest",
+      "python",
+      "pip",
+      "uv",
+      "git",
+      "ruff",
+      "mypy",
+      "graft",
+      "ls",
+      "dir",
+      "cat",
+      "type",
+      "echo"
+    ],
+    "blocked_write_prefixes_developer": [
+      "tests/"
+    ],
+    "allowed_write_prefixes_architect": [
+      "PLAN.md"
+    ],
+    "allowed_write_prefixes_auditor": [
+      "AUDIT_REPORT.md",
+      "audit_report.md"
+    ]
+  },
+  "graft": {
+    "enabled": true,
+    "max_age_seconds": 300,
+    "max_map_chars": 1500
+  },
+  "rendering": {
+    "verbosity": "normal",
+    "show_diff_preview": true,
+    "diff_max_lines_per_file": 50,
+    "diff_max_chars": 4000
+  },
+  "human_in_the_loop": {
+    "interactive": false,
+    "approval_gates": []
+  }
+}
