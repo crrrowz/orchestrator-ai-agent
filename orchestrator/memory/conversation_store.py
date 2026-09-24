@@ -70,8 +70,18 @@ COMMON_TASK_STOPWORDS: set[str] = {
 class ConversationStore:
     """Manages persistent cross-run task memory stored in diagnostics/memory/."""
 
-    def __init__(self, memory_dir: Optional[Path] = None):
-        target = memory_dir or (DEFAULT_DIAGNOSTICS_DIR / "memory")
+    def __init__(
+        self,
+        memory_dir: Optional[Path] = None,
+        workspace_path: Optional[Path] = None,
+    ):
+        if memory_dir:
+            target = memory_dir
+        elif workspace_path:
+            target = workspace_path / "diagnostics" / "memory"
+        else:
+            target = DEFAULT_DIAGNOSTICS_DIR / "memory"
+
         if target.name != "memory":
             target = target / "memory"
         self.memory_dir = target.resolve()
@@ -191,3 +201,9 @@ class ConversationStore:
 
         res = "\n".join(lines).strip()
         return res[:max_chars]
+
+
+# Backward compatibility and contextual aliases
+ConversationMemoryStore = ConversationStore
+SessionMemoryStore = ConversationStore
+

@@ -34,7 +34,7 @@ class GraftInjector(ContextInjector):
 
     def get_context(self, task: str, workspace: Path) -> Optional[str]:
         try:
-            from orchestrator.utils.graft_context import GraftContextProvider
+            from orchestrator.analysis.graft_context import GraftContextProvider
 
             graft_map = GraftContextProvider.get_condensed_map(
                 workspace, max_chars=self.max_chars

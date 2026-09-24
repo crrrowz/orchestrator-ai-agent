@@ -96,31 +96,36 @@
 - Python 3.12+ required.
 
 ## Current State
-- Status: **Phase P12 (Telemetry Log Rotation, Auto-Pruning & Project Partitioning) Complete**.
-- Active Stopping Point: Production-ready with 100% verified test coverage.
+- Status: **Phase P13 (Systemic Deep Audit, Resilience Hardening & Cross-Layer Remediation) Complete**.
+- Active Stopping Point: Production-ready with 100% verified test coverage across 224 unit & integration tests.
 - Working Files:
-  - `orchestrator/config.py`
   - `orchestrator/telemetry/recorder.py`
-  - `orchestrator/pipeline/base_pipeline.py`
-  - `orchestrator/utils/visualizer.py`
-  - `orchestrator/main.py`
-  - `.env.example`
-  - `tests/test_log_rotation_and_partitioning.py`
+  - `orchestrator/pipeline/dev_test_loop.py`
+  - `orchestrator/pipeline/full_pipeline.py`
+  - `orchestrator/pipeline/audit_report_io.py`
+  - `orchestrator/memory/conversation_store.py`
+  - `orchestrator/sentinel/diagnostics_db.py`
+  - `orchestrator/ui/session_store.py`
+  - `orchestrator/tools/workspace_tools.py`
+  - `orchestrator/control/token_governance.py`
+  - `tests/test_systemic_resilience_audit.py`
 - What Works:
-  - FIFO Auto-pruning for `diagnostics/reports/run_*.json` keeping latest N reports (configurable via `MAX_RETAINED_REPORTS`, default 20).
-  - Project-partitioned session logs in `diagnostics/logs/<project_slug>/session_<timestamp>.json` with per-project `latest_session.json` pointer.
-  - Global `diagnostics/logs/latest_session.json` maintained for backward compatibility.
-  - Automated per-project session history pruning (keeps latest 10 sessions per project).
-  - `handle_view_logs` CLI correctly resolves project-specific logs when `--workspace` is passed.
+  - Circuit Breaker dual-signature compatibility (`check_circuit_breaker(diff, error)` and `check_circuit_breaker(error)`).
+  - Proper FSM terminal state transitions (`PipelinePhase.FAILED`) on unexpected pipeline exceptions.
+  - Case-insensitive and normalized resolution of `docs/AUDIT_REPORT.md`.
+  - SQLite WAL mode and busy timeout handling in Sentinel diagnostics database.
+  - Thread-safe `SessionLogStore` preventing state corruption under concurrent events.
+  - Symbol extraction token governance clamping to prevent context window blowup.
+  - Re-exported clean utils modules without code duplication.
 - Known Bugs / Blockers: None.
 
 ## Next Steps
-1. [PRODUCTION] Ready for production end-to-end task execution and evaluation.
+1. [PRODUCTION] Continuous multi-agent task execution and autonomous self-healing monitoring.
 
 ## Context Required for Continuation
 - The primary codebase path is: `D:\files\Contracted projects\IdeaProjects\Antigravity-Agent-API\orchestrator-ai-agent`.
 - All commands should be run using `uv run pytest tests/ -v` or `uv run python -m orchestrator.main ...`.
-- Graft graph is built and cached in `graft/` (291 nodes, 874 edges). Run `graft map` for an instant architectural sitemap.
-- Test suite currently has 64 passing tests across 16 test modules. Do not break existing contracts.
+- Graft graph is built and cached in `graft/`. Run `graft map` for an instant architectural sitemap.
+- Test suite currently has 224 passing tests across 34 test modules. Do not break existing contracts.
 
 

@@ -17,19 +17,25 @@ def locate_and_normalize_report(
         The canonical Path under docs/ if found or migrated, otherwise None.
     """
     docs_dir = workspace_path / "docs"
-    docs_file = docs_dir / filename
-    root_file = workspace_path / filename
+    candidates = [filename, filename.lower(), filename.upper()]
 
-    if docs_file.exists():
-        return docs_file
+    # 1. Check under docs/
+    for name in candidates:
+        cand_path = docs_dir / name
+        if cand_path.exists() and cand_path.is_file():
+            return cand_path
 
-    if root_file.exists():
-        docs_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            root_file.replace(docs_file)
-            return docs_file
-        except OSError:
-            return root_file
+    # 2. Check at workspace root and migrate to docs/
+    for name in candidates:
+        root_cand = workspace_path / name
+        if root_cand.exists() and root_cand.is_file():
+            docs_dir.mkdir(parents=True, exist_ok=True)
+            target = docs_dir / filename
+            try:
+                root_cand.replace(target)
+                return target
+            except OSError:
+                return root_cand
 
     return None
 

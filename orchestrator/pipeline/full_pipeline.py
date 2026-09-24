@@ -493,7 +493,8 @@ class FullPipeline(BasePipeline):
                 compact_failure = PytestOutputParser.extract_compact_failures(
                     test_run.stdout, test_run.stderr
                 )
-                circuit_broken = recorder.check_circuit_breaker(compact_failure)
+                curr_diff = self.git.get_diff() or self.git.get_status()
+                circuit_broken = recorder.check_circuit_breaker(curr_diff, compact_failure)
                 recorder.record_incident(
                     f"Iteration_{iteration}_Pytest", "test_failure", compact_failure
                 )
@@ -731,6 +732,8 @@ class FullPipeline(BasePipeline):
             )
 
         except Exception as e:
+            if self.state_machine.can_transition(PipelinePhase.FAILED):
+                self.state_machine.transition_to(PipelinePhase.FAILED)
             ConsoleOutput.error(f"Pipeline crashed: {e}")
             log_store.add_step(f"Fatal pipeline crash: {str(e)}", is_error=True)
             log_store.save_to_file()

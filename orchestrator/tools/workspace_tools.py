@@ -382,6 +382,17 @@ def execute_file_action(
             ):
                 annotated_lines.append(f"{idx:4d}: {line}")
             annotated_content = "\n".join(annotated_lines)
+
+            # Enforce governance character budget clamping (~3,000 tokens ceiling)
+            if len(annotated_content) > MAX_READ_CHARS:
+                cut_point = annotated_content.rfind("\n", 0, MAX_READ_CHARS)
+                if cut_point < MAX_READ_CHARS // 2:
+                    cut_point = MAX_READ_CHARS
+                annotated_content = (
+                    annotated_content[:cut_point]
+                    + f"\n\n[Governance Notice: Symbol output clamped at {MAX_READ_CHARS} chars to protect token budget.]"
+                )
+
             selected_content = sanitize_output_secrets(annotated_content)
 
             return WorkspaceFileObservation(

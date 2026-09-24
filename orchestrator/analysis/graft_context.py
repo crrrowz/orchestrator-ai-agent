@@ -68,6 +68,8 @@ class GraftContextProvider:
             pass
         return None
 
+    get_condensed_map = get_compact_map
+
     @classmethod
     def get_skeleton(cls, workspace: Path, relative_file: str) -> Optional[str]:
         """Fetch API surface and function/class definitions without full implementation tokens."""

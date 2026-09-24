@@ -233,7 +233,9 @@ class TelemetryRecorder:
             return True
         return False
 
-    def check_circuit_breaker(self, diff_text: str, error_text: str) -> bool:
+    def check_circuit_breaker(
+        self, diff_text: str = "", error_text: Optional[str] = None
+    ) -> bool:
         """
         Smart semantic circuit breaker:
         Checks for:
@@ -241,6 +243,11 @@ class TelemetryRecorder:
         2. Exact same failing pytest test cases repeating across iterations
         3. High error message similarity (>=0.88) indicating repetitive failure
         """
+        if error_text is None:
+            # Handle single-argument calls where only error_text was provided
+            error_text = diff_text or ""
+            diff_text = ""
+
         curr_diff_hash = hashlib.sha256(diff_text.strip().encode("utf-8")).hexdigest()
         curr_error_hash = hashlib.sha256(error_text.strip().encode("utf-8")).hexdigest()
         curr_error_clean = error_text.strip()

@@ -166,28 +166,35 @@ class DynamicTokenGovernor:
             return TokenPhase.INVESTIGATION
 
         act_name = action_type if isinstance(action_type, str) else type(action_type).__name__
+        act_lower = act_name.lower()
 
-        if "File" in act_name:
+        # Handle file operations
+        if "file" in act_lower or "write" in act_lower or "edit" in act_lower:
+            op = ""
             if isinstance(arguments, dict):
                 op = str(arguments.get("operation", "")).lower()
-            else:
+            elif arguments is not None:
                 op = str(getattr(arguments, "operation", "")).lower()
-            if op in ("edit", "write", "append"):
+
+            if op in ("edit", "write", "append") or "edit" in act_lower or "write" in act_lower:
                 return TokenPhase.IMPLEMENTATION
             return TokenPhase.INVESTIGATION
 
-        if "Terminal" in act_name:
+        # Handle terminal / bash operations
+        if "terminal" in act_lower or "bash" in act_lower or "cmd" in act_lower or "exec" in act_lower:
+            cmd = ""
             if isinstance(arguments, dict):
                 cmd = str(arguments.get("command", "")).lower()
-            else:
+            elif arguments is not None:
                 cmd = str(getattr(arguments, "command", "")).lower()
-            if "pytest" in cmd or "test" in cmd:
+
+            if "pytest" in cmd or "npm test" in cmd or "test" in cmd:
                 return TokenPhase.TESTING
-            if any(k in cmd for k in ("git diff", "git status", "git log")):
+            if any(k in cmd for k in ("git diff", "git status", "git log", "git show")):
                 return TokenPhase.TESTING
             return TokenPhase.INVESTIGATION
 
-        if "Think" in act_name:
+        if "think" in act_lower:
             return TokenPhase.INVESTIGATION
 
         return TokenPhase.INVESTIGATION
