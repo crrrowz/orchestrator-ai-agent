@@ -114,7 +114,9 @@ class ConnectivityChecker:
                     available_ids = {m.get("id") for m in data if isinstance(m, dict)}
                     if required_models:
                         for m in required_models:
-                            clean_id = m.replace("omniroute/", "").replace("openai/", "")
+                            clean_id = m.replace("omniroute/", "").replace(
+                                "openai/", ""
+                            )
                             result["models_status"][m] = (
                                 clean_id in available_ids or len(available_ids) == 0
                             )
@@ -184,9 +186,7 @@ class ConnectivityChecker:
                 )
             ):
                 if omniroute_info and omniroute_info["connected"]:
-                    provider_status = (
-                        f"[green][OK] Connected[/green]\n[dim]{config.omniroute_base_url}[/dim]"
-                    )
+                    provider_status = f"[green][OK] Connected[/green]\n[dim]{config.omniroute_base_url}[/dim]"
                     is_avail = omniroute_info["models_status"].get(model_str, True)
                     model_status = (
                         "[green][OK] Active on OmniRoute[/green]"

@@ -799,6 +799,29 @@ def execute_terminal_action(
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
 
+    # Prepend workspace .venv bin/Scripts to PATH if present to ensure project tools and packages are used
+    venv_bin = (
+        workspace_root
+        / ".venv"
+        / ("Scripts" if (sys.platform == "win32" or os.name == "nt") else "bin")
+    )
+    if venv_bin.exists():
+        existing_path = env.get("PATH", "")
+        env["PATH"] = (
+            f"{str(venv_bin)}{os.pathsep}{existing_path}"
+            if existing_path
+            else str(venv_bin)
+        )
+        env["VIRTUAL_ENV"] = str(workspace_root / ".venv")
+
+    # Inject workspace_root into PYTHONPATH so project packages are always importable
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        f"{str(workspace_root)}{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else str(workspace_root)
+    )
+
     # Command translation for Windows builtins or direct executable resolution
     base_name = Path(cmd_tokens[0]).name.lower()
     if base_name.endswith(".exe"):
@@ -820,7 +843,9 @@ def execute_terminal_action(
     if (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]
     else:
-        resolved_bin = shutil.which(cmd_tokens[0]) or cmd_tokens[0]
+        resolved_bin = (
+            shutil.which(cmd_tokens[0], path=env.get("PATH")) or cmd_tokens[0]
+        )
         exec_args = [resolved_bin, *cmd_tokens[1:]]
 
     try:

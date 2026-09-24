@@ -116,7 +116,10 @@ class FullPipeline(BasePipeline):
                 architect_prompt = self.build_prompt(
                     task=task_description,
                     role="architect",
-                    extra_instructions="Decompose this task into a clean technical design and write `PLAN.md` into the workspace.",
+                    extra_instructions=(
+                        "Decompose this task into a clean technical design and write `PLAN.md` into the workspace using your file tool (workspace_file with operation='write', path='PLAN.md').\n"
+                        "Structure your PLAN.md with clear milestones (e.g. '## Milestone 1: ...', '## Milestone 2: ...') so the Developer can execute them iteratively."
+                    ),
                 )
                 architect_conv.send_message(
                     self.human_channel.inject_into_prompt(architect_prompt)
@@ -135,9 +138,55 @@ class FullPipeline(BasePipeline):
                     total_tokens=u_arch["total_tokens"],
                     estimated_cost_usd=u_arch["estimated_cost_usd"],
                 )
-                ConsoleOutput.success(
-                    f"Architect generated PLAN.md (Tokens: {u_arch['total_tokens']:,}, Cost: ${u_arch['estimated_cost_usd']:.4f})."
-                )
+
+                # Auto-recover PLAN.md from architect conversation output if not written via tools
+                plan_file = self.workspace_path / "PLAN.md"
+                if (
+                    not plan_file.exists()
+                    or not plan_file.read_text(
+                        encoding="utf-8", errors="replace"
+                    ).strip()
+                ) and architect_conv:
+                    recovered_plan = ""
+                    if (
+                        hasattr(architect_conv, "state")
+                        and architect_conv.state
+                        and hasattr(architect_conv.state, "events")
+                    ):
+                        for ev in reversed(architect_conv.state.events):
+                            text = str(
+                                getattr(ev, "content", "")
+                                or getattr(ev, "text", "")
+                                or ""
+                            ).strip()
+                            if text and (
+                                "#" in text
+                                or "milestone" in text.lower()
+                                or "architecture" in text.lower()
+                                or len(text) > 80
+                            ):
+                                recovered_plan = text
+                                break
+                    if recovered_plan:
+                        try:
+                            plan_file.write_text(recovered_plan, encoding="utf-8")
+                            ConsoleOutput.info(
+                                "Auto-recovered PLAN.md from Architect response stream."
+                            )
+                        except Exception:
+                            pass
+
+                if (
+                    plan_file.exists()
+                    and plan_file.read_text(encoding="utf-8", errors="replace").strip()
+                ):
+                    ConsoleOutput.success(
+                        f"Architect generated PLAN.md (Tokens: {u_arch['total_tokens']:,}, Cost: ${u_arch['estimated_cost_usd']:.4f})."
+                    )
+                else:
+                    ConsoleOutput.info(
+                        f"Architect completed design pass (Tokens: {u_arch['total_tokens']:,}, Cost: ${u_arch['estimated_cost_usd']:.4f})."
+                    )
 
             if recorder.check_budget(_get_total_cost()):
                 ConsoleOutput.error(
@@ -347,6 +396,20 @@ class FullPipeline(BasePipeline):
             # -------------------------------------------------------------------
             # Phase 3: Iterative Test & Fix Loop
             # -------------------------------------------------------------------
+            raw_max_iter = getattr(self.config, "max_iterations", "auto")
+            if str(raw_max_iter).lower() == "auto":
+                effective_max_iterations = (
+                    max(min(len(milestones) * 2, 12), 4) if milestones else 4
+                )
+                ConsoleOutput.info(
+                    f"Auto-iteration scaling engaged: dynamically allocated {effective_max_iterations} iteration(s)."
+                )
+            else:
+                try:
+                    effective_max_iterations = int(raw_max_iter)
+                except (ValueError, TypeError):
+                    effective_max_iterations = self.config.numeric_max_iterations
+
             iteration = 1
             tests_passed = False
             tester_conv = Conversation(
@@ -355,7 +418,7 @@ class FullPipeline(BasePipeline):
                 visualizer=visualizer,
             )
 
-            while iteration <= self.config.max_iterations:
+            while iteration <= effective_max_iterations:
                 if not self.controller.check_should_continue():
                     ConsoleOutput.warning(
                         f"Execution stopped by controller before test iteration {iteration}."
@@ -441,9 +504,9 @@ class FullPipeline(BasePipeline):
                     )
                     break
 
-                if iteration < self.config.max_iterations:
+                if iteration < effective_max_iterations:
                     ConsoleOutput.warning(
-                        f"Tests failed (Iteration {iteration}). Developer fixing..."
+                        f"Tests failed (Iteration {iteration}/{effective_max_iterations}). Developer fixing..."
                     )
                     log_store.set_agent_context(
                         "Developer",

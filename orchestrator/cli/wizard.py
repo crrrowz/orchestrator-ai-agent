@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
-from orchestrator.cli.handlers import resolve_workspace_dir
+from orchestrator.cli.handlers import resolve_task_input, resolve_workspace_dir
 from orchestrator.core.config import OrchestratorConfig
 from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.skills.manager import SkillManager
@@ -85,7 +85,7 @@ def interactive_wizard(
             Path(ws_input) if ws_input else None, config.workspace_path
         )
 
-        return task, mode, workspace
+        return resolve_task_input(task), mode, workspace
     except (KeyboardInterrupt, EOFError):
         print("\nOperation cancelled by user.")
         sys.exit(0)

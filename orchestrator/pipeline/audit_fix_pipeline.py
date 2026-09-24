@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from openhands.sdk import Conversation
+from orchestrator.analysis.schemas import (
+    AuditResult,
+    AuditState,
+    FindingValidator,
+)
 from orchestrator.config import (
     OrchestratorConfig,
     SkillManager,
@@ -103,15 +108,27 @@ def extract_audit_findings_list(report_content: str) -> List[Dict[str, Any]]:
             clean_static = (
                 "[clean]" in report_content.lower()
                 or "0 defects detected" in report_content.lower()
+                or "zero actionable code defects found" in report_content.lower()
+            )
+            has_explicit_file = bool(
+                re.search(r"[\w\-./\\]+\.(?:py|js|ts|json)", fallback_text)
             )
             generic_phrases = [
                 "address any ast syntax failures and static linter warnings listed above",
                 "address any ast syntax failures",
+                "review file size hotspots",
+                "zero syntax or linter defects",
+                "clean architecture",
+                "zero actionable code defects",
             ]
             is_generic_advice = any(
                 gp in fallback_text.lower() for gp in generic_phrases
             )
-            if clean_static and is_generic_advice and "###" not in fallback_text:
+            if (
+                clean_static
+                and (is_generic_advice or not has_explicit_file)
+                and "###" not in fallback_text
+            ):
                 pass
             else:
                 findings.append(
@@ -207,6 +224,10 @@ DEFAULT_AUDIT_FIX_TASKS = {
     "autonomous auto-fix validation",
     "comprehensive codebase architecture, security, and bug audit.",
     "comprehensive codebase architecture, security, and bug audit",
+    "audit and fix",
+    "audit & fix",
+    "audit",
+    "audit-fix",
     "",
 }
 
@@ -402,8 +423,69 @@ class AuditFixPipeline(BasePipeline):
                 f"Loaded active audit report ({len(existing_report_content)} chars)."
             )
 
+        # Priority 1: Structured Audit Contract (docs/audit_findings.json)
+        findings_json_file = self.workspace_path / "docs" / "audit_findings.json"
+        structured_result = AuditResult.load_json(findings_json_file)
+
         audit_findings_queue: List[Dict[str, Any]] = []
-        if existing_report_content:
+
+        if structured_result:
+            ConsoleOutput.info(
+                f"Loaded structured audit contract [{structured_result.status.value}] ({len(structured_result.findings)} finding(s))."
+            )
+            if structured_result.status in (
+                AuditState.AUDIT_INCOMPLETE,
+                AuditState.AUDIT_FAILED,
+            ):
+                ConsoleOutput.warning(
+                    f"Audit contract state is {structured_result.status.value}. "
+                    "Halting audit-fix pipeline immediately to prevent ghost defect remediation."
+                )
+                return {
+                    "status": structured_result.status.value,
+                    "iterations": 0,
+                    "converged": False,
+                    "reason": f"Audit phase ended with status {structured_result.status.value}",
+                    "fixes_applied": [],
+                }
+            elif structured_result.status == AuditState.AUDIT_CLEAN or (
+                structured_result.clean_static and not structured_result.findings
+            ):
+                audit_findings_queue = []
+                ConsoleOutput.info(
+                    "Structured audit contract indicates workspace is clean (AUDIT_CLEAN)."
+                )
+            elif structured_result.findings:
+                for f in structured_result.findings:
+                    is_valid, reason = FindingValidator.validate(f, self.workspace_path)
+                    if is_valid:
+                        if not any(
+                            r in f.problem.lower() or f.problem.lower() in r
+                            for r in resolved_titles
+                        ):
+                            audit_findings_queue.append(
+                                {
+                                    "id": f.id,
+                                    "severity": f.severity,
+                                    "weight": (
+                                        1
+                                        if f.severity == "CRITICAL"
+                                        else (2 if f.severity == "HIGH" else 3)
+                                    ),
+                                    "title": f"{f.file}: {f.problem}",
+                                    "content": (
+                                        f"Target File: {f.file}\n"
+                                        f"Problem: {f.problem}\n"
+                                        f"Evidence:\n{f.evidence}\n"
+                                        f"Recommended Fix: {f.recommended_fix}"
+                                    ),
+                                }
+                            )
+                    else:
+                        ConsoleOutput.warning(
+                            f"[EVIDENCE INTEGRITY] Dropped invalid finding '{f.id}': {reason}"
+                        )
+        elif existing_report_content:
             raw_findings = extract_audit_findings_list(existing_report_content)
             # Filter out findings that were already resolved in prior iterations
             if resolved_titles:
@@ -473,14 +555,6 @@ class AuditFixPipeline(BasePipeline):
             # Reset append safeguards per iteration
             reset_append_counts()
 
-            # Fresh, isolated developer conversation per iteration (eliminates context ballooning)
-            dev_conv = Conversation(
-                agent=developer_agent,
-                workspace=str(self.workspace_path),
-                visualizer=visualizer,
-            )
-            dev_conv.human_channel = self.human_channel
-
             # Run zero-token auto-fix before each inspection pass
             self.run_zero_token_autofix()
 
@@ -503,9 +577,15 @@ class AuditFixPipeline(BasePipeline):
 
             # 3. If static and tests are clean, pull from audit findings backlog
             if not all_issues:
+                findings_json_file = (
+                    self.workspace_path / "docs" / "audit_findings.json"
+                )
+                structured_result = AuditResult.load_json(findings_json_file)
+
                 if (
                     iteration == 1
                     and not existing_report_content
+                    and not structured_result
                     and self.auto_chain_audit
                 ):
                     from orchestrator.pipeline.audit_pipeline import AuditPipeline
@@ -522,9 +602,58 @@ class AuditFixPipeline(BasePipeline):
                         controller=self.controller,
                     )
                     audit_pipe.run(task_description=task_description)
+                    structured_result = AuditResult.load_json(findings_json_file)
                     audit_content = read_report(self.workspace_path, "AUDIT_REPORT.md")
                     if audit_content:
                         existing_report_content = audit_content
+
+                # Enforce state machine and evidence integrity on backlog
+                if iteration == 1 and not audit_findings_queue:
+                    if structured_result:
+                        if structured_result.status == AuditState.AUDIT_CLEAN or (
+                            structured_result.clean_static
+                            and not structured_result.findings
+                        ):
+                            audit_findings_queue = []
+                        elif structured_result.status in (
+                            AuditState.AUDIT_INCOMPLETE,
+                            AuditState.AUDIT_FAILED,
+                        ):
+                            ConsoleOutput.warning(
+                                f"Audit pipeline finished with state: {structured_result.status.value}. "
+                                "Halting auto-fix pipeline without code edits to prevent ghost defect remediation."
+                            )
+                            final_status = structured_result.status.value
+                            break
+                        elif structured_result.findings:
+                            for f in structured_result.findings:
+                                is_valid, reason = FindingValidator.validate(
+                                    f, self.workspace_path
+                                )
+                                if is_valid:
+                                    audit_findings_queue.append(
+                                        {
+                                            "id": f.id,
+                                            "severity": f.severity,
+                                            "weight": (
+                                                1
+                                                if f.severity == "CRITICAL"
+                                                else (2 if f.severity == "HIGH" else 3)
+                                            ),
+                                            "title": f"{f.file}: {f.problem}",
+                                            "content": (
+                                                f"Target File: {f.file}\n"
+                                                f"Problem: {f.problem}\n"
+                                                f"Evidence:\n{f.evidence}\n"
+                                                f"Recommended Fix: {f.recommended_fix}"
+                                            ),
+                                        }
+                                    )
+                                else:
+                                    ConsoleOutput.warning(
+                                        f"[EVIDENCE INTEGRITY] Dropped invalid finding '{f.id}': {reason}"
+                                    )
+                    elif existing_report_content:
                         audit_findings_queue = extract_audit_findings_list(
                             existing_report_content
                         )
@@ -673,6 +802,12 @@ class AuditFixPipeline(BasePipeline):
             )
 
             t_dev = time.perf_counter()
+            dev_conv = Conversation(
+                agent=developer_agent,
+                workspace=str(self.workspace_path),
+                visualizer=visualizer,
+            )
+            dev_conv.human_channel = self.human_channel
             dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
             try:
                 self._run_conv(

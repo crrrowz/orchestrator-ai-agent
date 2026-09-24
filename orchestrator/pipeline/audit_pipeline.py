@@ -1,11 +1,18 @@
 """Deep Codebase Audit Pipeline: Static AST + Flake8/Ruff Lint + LLM Auditor Agent."""
 
+import re
 import time
 from pathlib import Path
 from typing import Optional
 
 from openhands.sdk import Conversation
 from orchestrator.agents import create_auditor_agent
+from orchestrator.analysis.schemas import (
+    AuditFinding,
+    AuditResult,
+    AuditState,
+    FindingValidator,
+)
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import (
     DynamicTokenGovernor,
@@ -177,7 +184,8 @@ class AuditPipeline(BasePipeline):
         dur = time.perf_counter() - t_start
         u_audit = get_llm_usage(auditor_agent.llm)
 
-        # Step 2: Locate and normalize AUDIT_REPORT.md
+        # Step 2: Locate or synthesize AuditResult contract and report
+        findings_json_file = self.workspace_path / "docs" / "audit_findings.json"
         report_file = locate_and_normalize_report(
             self.workspace_path, "AUDIT_REPORT.md"
         )
@@ -185,39 +193,72 @@ class AuditPipeline(BasePipeline):
             report_file = self.workspace_path / "docs" / "AUDIT_REPORT.md"
             report_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Step 3: Fallback report generation if agent did not write the file (e.g. offline/mock)
-        if not report_file.exists():
-            top_files_md = "\n".join(
-                f"- `{f}` ({loc} LOC)" for f, loc in metrics["top_files"]
-            )
-            if "CLEAN" in static_report:
-                rec_text = (
-                    "- Workspace static analysis is clean; zero syntax or linter defects detected.\n"
-                    "- Review file size hotspots exceeding 300 LOC for decomposition."
-                )
-            else:
-                rec_text = (
-                    "- Address any AST syntax failures and static linter warnings listed above.\n"
-                    "- Review file size hotspots exceeding 300 LOC for decomposition."
-                )
+        is_clean_static, static_issues = self.adapter.run_static_analysis(
+            self.workspace_path
+        )
+        loaded_result = AuditResult.load_json(findings_json_file)
 
-            fallback_content = (
-                f"# Codebase Architecture & Security Audit Report\n\n"
-                f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n"
-                f"**Audit Focus**: {focus_directive}\n\n"
-                f"## 1. Executive Summary & Code Metrics\n"
-                f"- **Total Files**: {metrics['total_files']}\n"
-                f"- **Total Lines of Code**: {metrics['total_loc']}\n"
-                f"- **Average File Size**: {metrics['avg_loc']} LOC\n\n"
-                f"### Largest Modules\n{top_files_md}\n\n"
-                f"## 2. Static Analysis Findings\n"
-                f"{static_report}\n\n"
-                f"## 3. Architecture Overview\n"
-                f"```text\n{graft_map or 'No Graft map available.'}\n```\n\n"
-                f"## 4. Key Recommendations\n"
-                f"{rec_text}\n"
-            )
-            report_file.write_text(fallback_content, encoding="utf-8")
+        validated_findings: list[AuditFinding] = []
+        if loaded_result and loaded_result.findings:
+            for f in loaded_result.findings:
+                is_valid, reason = FindingValidator.validate(f, self.workspace_path)
+                if is_valid:
+                    validated_findings.append(f)
+                else:
+                    ConsoleOutput.warning(
+                        f"[EVIDENCE INTEGRITY] Dropped invalid finding '{f.id}': {reason}"
+                    )
+
+        # Incorporate deterministic static defects if present
+        if not is_clean_static and static_issues:
+            for idx, iss in enumerate(static_issues, start=1):
+                f_match = re.search(r"([\w\-./\\]+\.py)", iss)
+                f_target = (
+                    f_match.group(1).replace("\\", "/") if f_match else "unknown.py"
+                )
+                if (self.workspace_path / f_target).exists():
+                    validated_findings.append(
+                        AuditFinding(
+                            id=f"STATIC-{idx:03d}",
+                            severity="HIGH",
+                            type="BUG",
+                            file=f_target,
+                            evidence=iss,
+                            problem="Deterministic static analysis defect or syntax error",
+                            recommended_fix="Correct the syntax or linter error specified in evidence",
+                            actionable=True,
+                            source="deterministic_linter",
+                        )
+                    )
+
+        # Determine formal lifecycle state
+        if validated_findings:
+            audit_state = AuditState.AUDIT_COMPLETED
+            summary_msg = f"Audit completed: {len(validated_findings)} actionable finding(s) verified."
+        elif is_clean_static:
+            audit_state = AuditState.AUDIT_CLEAN
+            summary_msg = "Workspace verified clean. Zero actionable defects detected."
+        else:
+            audit_state = AuditState.AUDIT_INCOMPLETE
+            summary_msg = "Auditor agent did not generate complete verified findings."
+
+        final_audit_result = AuditResult(
+            status=audit_state,
+            summary=summary_msg,
+            findings=validated_findings,
+            total_files_scanned=metrics["total_files"],
+            total_loc=metrics["total_loc"],
+            clean_static=is_clean_static,
+        )
+        final_audit_result.save_json(findings_json_file)
+
+        # Synchronize presentation markdown with verified audit result
+        if not report_file.exists() or audit_state in (
+            AuditState.AUDIT_CLEAN,
+            AuditState.AUDIT_INCOMPLETE,
+            AuditState.AUDIT_FAILED,
+        ):
+            report_file.write_text(final_audit_result.to_markdown(), encoding="utf-8")
 
         telemetry.record_step(
             "auditor",
@@ -235,11 +276,15 @@ class AuditPipeline(BasePipeline):
         log_store.save_to_file()
 
         ConsoleOutput.success(
-            f"Audit completed successfully! Report generated at: {report_file}"
+            f"Audit completed [{audit_state.value}]! Report generated at: {report_file}"
         )
         return {
             "status": "AUDIT_COMPLETED",
+            "audit_state": audit_state.value,
+            "result": final_audit_result,
             "report_path": str(report_file),
+            "findings_json_path": str(findings_json_file),
+            "findings_count": len(validated_findings),
             "metrics": metrics,
             "tokens": u_audit.get("total_tokens", 0),
             "cost_usd": u_audit.get("estimated_cost_usd", 0.0),

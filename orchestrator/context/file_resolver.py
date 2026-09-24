@@ -9,6 +9,7 @@ class FilePathResolver:
     """Detects and resolves file paths embedded within task descriptions and inlines their content."""
 
     PATH_PATTERNS = [
+        r'["\']([A-Za-z]:\\[^"\'<>|\n\r]+?\.\w{1,5}|/[^"\'<>|\n\r]+?\.\w{1,5}|\./[^"\'<>|\n\r]+?\.\w{1,5}|[^"\'<>|\n\r]+/[^"\'<>|\n\r]+?\.\w{1,5})["\']',  # Quoted paths (supports spaces)
         r'(?:[A-Za-z]:\\[^\s"\'<>|\n\r]+?\.\w{1,5})',  # Windows absolute: D:\specs\auth.md
         r"(?:/[a-zA-Z0-9_\-.]+/[a-zA-Z0-9_\-/.]+\.\w{1,5})",  # Unix absolute: /etc/config.json
         r"(?:\./[a-zA-Z0-9_\-/.]+\.\w{1,5})",  # Explicit relative: ./specs/auth.md
@@ -30,9 +31,31 @@ class FilePathResolver:
 
         workspace_resolved = workspace.resolve()
 
+        # Check if the entire task is a single file path (including unquoted paths with spaces)
+        clean_task = task.strip().strip("'\"")
+        try:
+            p_direct = Path(clean_task)
+            if not p_direct.is_absolute():
+                p_direct = (workspace_resolved / p_direct).resolve()
+            if p_direct.is_file():
+                content = p_direct.read_text(encoding="utf-8", errors="replace").strip()
+                if content:
+                    if len(content) > max_chars_per_file:
+                        content = (
+                            content[:max_chars_per_file] + "\n... [Content Truncated]"
+                        )
+                    already_seen.add(p_direct)
+                    resolved_files.append(str(p_direct))
+                    injected_blocks.append(
+                        f"[Referenced File: {p_direct.name} ({p_direct})]:\n{content}"
+                    )
+        except Exception:
+            pass
+
         for pattern in cls.PATH_PATTERNS:
             for match in re.finditer(pattern, task):
-                raw_path = match.group(0).strip(" \t\n\r'\"<>")
+                raw_path = match.group(1) if match.groups() else match.group(0)
+                raw_path = raw_path.strip(" \t\n\r'\"<>")
                 candidate = Path(raw_path)
                 target: Path
 

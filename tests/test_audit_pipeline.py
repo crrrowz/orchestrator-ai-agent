@@ -146,3 +146,179 @@ def test_audit_report_io_normalization_and_reading(tmp_path: Path):
     # read_report should return content
     content = read_report(tmp_path, "AUDIT_REPORT.md")
     assert "Root Audit" in content
+
+
+def test_audit_result_contract_serialization_and_markdown(tmp_path: Path):
+    """Test structured AuditResult JSON serialization and markdown rendering."""
+    from orchestrator.analysis.schemas import AuditFinding, AuditResult, AuditState
+
+    target_file = tmp_path / "src" / "service.py"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("def process(): pass\n", encoding="utf-8")
+
+    finding = AuditFinding(
+        id="AUD-001",
+        severity="HIGH",
+        type="BUG",
+        file="src/service.py",
+        line=1,
+        evidence="def process(): pass",
+        problem="Empty stub function",
+        recommended_fix="Implement logic",
+        actionable=True,
+    )
+
+    result = AuditResult(
+        status=AuditState.AUDIT_COMPLETED,
+        summary="Found 1 defect",
+        findings=[finding],
+        total_files_scanned=10,
+        total_loc=500,
+        clean_static=True,
+    )
+
+    json_path = tmp_path / "docs" / "audit_findings.json"
+    result.save_json(json_path)
+    assert json_path.exists()
+
+    loaded = AuditResult.load_json(json_path)
+    assert loaded is not None
+    assert loaded.status == AuditState.AUDIT_COMPLETED
+    assert len(loaded.findings) == 1
+    assert loaded.findings[0].id == "AUD-001"
+
+    md = loaded.to_markdown()
+    assert "AUD-001" in md
+    assert "src/service.py" in md
+    assert "Empty stub function" in md
+
+
+def test_finding_validator_evidence_integrity(tmp_path: Path):
+    """Test FindingValidator rejects non-existent files, generic advice, and non-actionable findings."""
+    from orchestrator.analysis.schemas import AuditFinding, FindingValidator
+
+    real_file = tmp_path / "app.py"
+    real_file.write_text("x = 1\n", encoding="utf-8")
+
+    # 1. Valid finding
+    valid = AuditFinding(
+        id="AUD-001",
+        severity="HIGH",
+        type="BUG",
+        file="app.py",
+        line=1,
+        evidence="x = 1",
+        problem="Hardcoded variable",
+        recommended_fix="Use config setting",
+        actionable=True,
+    )
+    ok, reason = FindingValidator.validate(valid, tmp_path)
+    assert ok is True
+    assert reason is None
+
+    # 2. Non-existent file
+    ghost_file = AuditFinding(
+        id="AUD-002",
+        severity="HIGH",
+        type="BUG",
+        file="nonexistent.py",
+        evidence="some code",
+        problem="Ghost problem",
+        recommended_fix="Fix it",
+        actionable=True,
+    )
+    ok, reason = FindingValidator.validate(ghost_file, tmp_path)
+    assert ok is False
+    assert "does not exist on disk" in reason
+
+    # 3. Generic informational advisory
+    generic = AuditFinding(
+        id="AUD-003",
+        severity="HIGH",
+        type="BUG",
+        file="app.py",
+        line=None,
+        evidence="hotspot advisory",
+        problem="Review file size hotspots exceeding 300 LOC",
+        recommended_fix="Decompose files",
+        actionable=True,
+    )
+    ok, reason = FindingValidator.validate(generic, tmp_path)
+    assert ok is False
+    assert "generic informational advisory" in reason
+
+    # 4. Non-actionable flag
+    non_actionable = AuditFinding(
+        id="AUD-004",
+        severity="LOW",
+        type="CONVENTION",
+        file="app.py",
+        evidence="x = 1",
+        problem="Style note",
+        recommended_fix="Refactor",
+        actionable=False,
+    )
+    ok, reason = FindingValidator.validate(non_actionable, tmp_path)
+    assert ok is False
+    assert "non-actionable" in reason
+
+
+def test_audit_fix_pipeline_halts_on_incomplete_audit_state(tmp_path: Path):
+    """When audit findings state is AUDIT_INCOMPLETE, audit-fix must halt immediately."""
+    from orchestrator.analysis.schemas import AuditResult, AuditState
+    from orchestrator.pipeline import AuditFixPipeline
+
+    (tmp_path / "main.py").write_text("print('test')\n", encoding="utf-8")
+
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    incomplete_result = AuditResult(
+        status=AuditState.AUDIT_INCOMPLETE,
+        summary="Audit failed or was incomplete",
+        findings=[],
+        total_files_scanned=1,
+        total_loc=1,
+        clean_static=True,
+    )
+    incomplete_result.save_json(docs_dir / "audit_findings.json")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+
+    with patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv:
+        res = pipeline.run("Audit and fix")
+        assert res["status"] == "AUDIT_INCOMPLETE"
+        assert res["converged"] is False
+        # Developer agent conversation must never be instantiated
+        mock_conv.assert_not_called()
+
+
+def test_audit_fix_pipeline_fast_converges_on_clean_contract(tmp_path: Path):
+    """When audit contract is AUDIT_CLEAN, audit-fix must converge in iteration 1 without dev steps."""
+    from orchestrator.analysis.schemas import AuditResult, AuditState
+    from orchestrator.pipeline import AuditFixPipeline
+
+    (tmp_path / "main.py").write_text("print('test')\n", encoding="utf-8")
+
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    clean_result = AuditResult(
+        status=AuditState.AUDIT_CLEAN,
+        summary="Workspace clean",
+        findings=[],
+        total_files_scanned=1,
+        total_loc=1,
+        clean_static=True,
+    )
+    clean_result.save_json(docs_dir / "audit_findings.json")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=4)
+    sm = SkillManager(ORCHESTRATOR_ROOT)
+    pipeline = AuditFixPipeline(cfg, sm, tmp_path)
+
+    with patch("orchestrator.pipeline.audit_fix_pipeline.Conversation") as mock_conv:
+        res = pipeline.run("Audit and fix")
+        assert res["status"] == "CONVERGED_CLEAN"
+        assert res["iterations"] == 1
+        mock_conv.assert_not_called()

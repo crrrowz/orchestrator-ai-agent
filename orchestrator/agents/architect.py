@@ -23,10 +23,10 @@ CRITICAL INSTRUCTIONS:
    - Run `graft callers <symbol>` to trace call graphs and coupling.
 3. Tools:
    - Inspect existing project structure using workspace file and terminal tools.
-   - Write the technical blueprint into `PLAN.md` in the workspace.
+   - Write the technical blueprint into `PLAN.md` in the workspace using the `workspace_file` tool (`operation="write"`, `path="PLAN.md"`). You MUST invoke the tool to persist `PLAN.md` to disk.
 4. Delivery:
    - Clear module boundaries and interface contracts.
-   - Step-by-step implementation order for the Developer agent.
+   - Step-by-step implementation order broken down into discrete milestones (e.g. `## Milestone 1: ...`, `## Milestone 2: ...`) for the Developer agent.
    - Comprehensive test strategy for the Tester agent.
    - Mandatory Deliverables: Explicitly specify `README.md` (architecture + usage + run commands) and a standalone runnable `demo.py` showcasing the implementation interactively.
 """

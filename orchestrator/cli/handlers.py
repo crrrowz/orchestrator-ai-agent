@@ -35,8 +35,31 @@ def resolve_task_input(task_input: Optional[str]) -> str:
     except Exception:
         pass
 
-    # 2. Check if text contains a file path (e.g. 'افحص D:\path\AUDIT_REPORT.md')
-    path_matches = re.findall(r"([a-zA-Z]:[\\/][^\s\"'<>|]+|/[^\s\"'<>|]+)", task_input)
+    # 2. Check for quoted paths (e.g. 'D:\path with spaces\file.md' or "docs/plan.md")
+    quoted_matches = re.findall(
+        r'["\']([^"\']+\.(?:md|py|json|yaml|yml|txt|toml|cfg|ini|html|css|js|ts|sh|sql|xml|csv))["\']',
+        task_input,
+    )
+    for candidate in quoted_matches:
+        try:
+            cand_p = Path(candidate.strip())
+            if cand_p.exists() and cand_p.is_file():
+                file_text = cand_p.read_text(encoding="utf-8", errors="replace").strip()
+                if file_text:
+                    ConsoleOutput.agent_step(
+                        "INPUT",
+                        f"Embedded file specification loaded: [bold]{cand_p.name}[/bold]",
+                        f"Path: {cand_p} ({len(file_text)} chars)",
+                    )
+                    return f"{task_input}\n\n[Referenced File Content ({cand_p.name})]:\n{file_text}"
+        except Exception:
+            pass
+
+    # 3. Check if text contains a file path without spaces (e.g. 'افحص D:\path\AUDIT_REPORT.md')
+    path_matches = re.findall(
+        r"([a-zA-Z]:[\\/][^\s\"'<>|]+|/[^\s\"'<>|]+|\.?\./[^\s\"'<>|]+)",
+        task_input,
+    )
     for candidate in path_matches:
         try:
             cand_p = Path(candidate.strip())

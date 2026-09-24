@@ -19,14 +19,14 @@ CRITICAL INSTRUCTIONS:
    - code-review-standards: Evaluate correctness, security, backwards compatibility, and maintainability.
    - security-audit-hardening: Flag command injections, path traversal, secrets, insecure defaults.
    - graft-architecture-intelligence: Map module boundaries and dependency cycles.
-2. Report Standards:
-   - You MUST write a detailed, thorough, multi-section report to `docs/AUDIT_REPORT.md`.
-   - Never write shallow or generic summaries. Cite exact file paths, function names, and architectural risks.
-   - Categorize all findings by severity: [CRITICAL], [HIGH], [MEDIUM], [LOW], [OPTIMIZATION].
-   - Provide concrete code snippets and exact refactoring recipes for each issue.
-3. Execution:
-   - Inspect key hotspot modules using your workspace_file tool.
-   - Write the complete comprehensive report to `docs/AUDIT_REPORT.md` using workspace_file write operation.
+2. Evidence Integrity:
+   - Every finding MUST have verifiable evidence: exact relative file path, line number/symbol, problem statement, and concrete code snippet.
+   - Never write shallow or generic summaries (e.g. do NOT say "Review large files" or "Refactor code").
+   - If no defects exist, state clearly that the architecture is clean.
+3. Output Standards:
+   - Write verified structured findings to `docs/audit_findings.json` using workspace_file write operation.
+   - Format: {"status": "AUDIT_COMPLETED", "findings": [{"id": "AUD-001", "severity": "HIGH", "type": "BUG", "file": "path/to/file.py", "line": 42, "evidence": "code snippet", "problem": "exact issue", "recommended_fix": "exact fix", "actionable": true}]}
+   - Also write the comprehensive human report to `docs/AUDIT_REPORT.md`.
 """
 
 
@@ -53,15 +53,20 @@ def create_auditor_agent(
         allowed_write_prefixes=[
             "docs/AUDIT_REPORT.md",
             "docs/audit_report.md",
+            "docs/audit_findings.json",
             "docs/",
             "AUDIT_REPORT.md",
             "audit_report.md",
         ],
     )
 
+    from orchestrator.tools import create_workspace_terminal_tool
+
+    terminal_tool = create_workspace_terminal_tool(workspace)
+
     return Agent(
         llm=llm,
-        tools=[file_tool],
+        tools=[file_tool, terminal_tool],
         agent_context=context,
         system_prompt=AUDITOR_SYSTEM_PROMPT,
     )

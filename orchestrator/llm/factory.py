@@ -46,9 +46,11 @@ def create_llm_for_role(
             "OMNIROUTE_BASE_URL", "http://localhost:20128/v1"
         )
         # Translate to OpenAI-compatible provider slug for LiteLLM engine
-        model = f"openai/{model[len('omniroute/'):]}"
+        model = f"openai/{model[len('omniroute/') :]}"
     elif model.startswith("openai/"):
-        if getattr(config, "openai_base_url", None) or os.environ.get("OPENAI_BASE_URL"):
+        if getattr(config, "openai_base_url", None) or os.environ.get(
+            "OPENAI_BASE_URL"
+        ):
             base_url = config.openai_base_url or os.environ.get("OPENAI_BASE_URL")
         elif getattr(config, "provider", "") == "omniroute":
             base_url = getattr(config, "omniroute_base_url", None) or os.environ.get(

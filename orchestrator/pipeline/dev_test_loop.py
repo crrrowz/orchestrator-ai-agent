@@ -181,6 +181,18 @@ class DevTestLoop(BasePipeline):
                     }
 
             # Step 2: Iterative Test & Fix Loop
+            raw_max_iter = getattr(self.config, "max_iterations", "auto")
+            if str(raw_max_iter).lower() == "auto":
+                effective_max_iterations = 4
+                ConsoleOutput.info(
+                    f"Auto-iteration scaling engaged: dynamically allocated {effective_max_iterations} iteration(s)."
+                )
+            else:
+                try:
+                    effective_max_iterations = int(raw_max_iter)
+                except (ValueError, TypeError):
+                    effective_max_iterations = self.config.numeric_max_iterations
+
             iteration = 1
             tests_passed = False
             tester_conv = Conversation(
@@ -189,7 +201,7 @@ class DevTestLoop(BasePipeline):
                 visualizer=visualizer,
             )
 
-            while iteration <= self.config.max_iterations:
+            while iteration <= effective_max_iterations:
                 if not self.controller.check_should_continue():
                     ConsoleOutput.warning(
                         f"Execution stopped by controller before test iteration {iteration}."
@@ -277,9 +289,9 @@ class DevTestLoop(BasePipeline):
                     )
                     break
 
-                if iteration < self.config.max_iterations:
+                if iteration < effective_max_iterations:
                     ConsoleOutput.warning(
-                        f"Tests failed (Iteration {iteration}). Developer fixing..."
+                        f"Tests failed (Iteration {iteration}/{effective_max_iterations}). Developer fixing..."
                     )
                     log_store.set_agent_context(
                         "Developer",

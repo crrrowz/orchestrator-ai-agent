@@ -8,11 +8,15 @@ from orchestrator.analysis.connectivity import ConnectivityChecker
 
 
 def test_omniroute_config_defaults():
-    with patch.dict(os.environ, {
-        "OMNIROUTE_API_KEY": "sk-test-key",
-        "OMNIROUTE_BASE_URL": "http://localhost:20128/v1",
-        "PROVIDER": "omniroute",
-    }, clear=False):
+    with patch.dict(
+        os.environ,
+        {
+            "OMNIROUTE_API_KEY": "sk-test-key",
+            "OMNIROUTE_BASE_URL": "http://localhost:20128/v1",
+            "PROVIDER": "omniroute",
+        },
+        clear=False,
+    ):
         config = OrchestratorConfig()
         assert config.omniroute_api_key == "sk-test-key"
         assert config.omniroute_base_url == "http://localhost:20128/v1"
