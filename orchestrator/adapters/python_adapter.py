@@ -160,10 +160,16 @@ class PythonAdapter(ProjectAdapter):
         """Return the shell command to execute the pytest suite."""
         has_tests_dir = (workspace / "tests").exists()
         has_uv = bool(shutil.which("uv"))
-        has_uv_lock = (workspace / "uv.lock").exists() or (workspace / "pyproject.toml").exists()
+        has_uv_lock = (workspace / "uv.lock").exists() or (
+            workspace / "pyproject.toml"
+        ).exists()
 
         if has_uv and has_uv_lock:
-            return "uv run pytest tests/ -v" if has_tests_dir else "uv run pytest -v"
+            return (
+                "uv run python -m pytest tests/ -v"
+                if has_tests_dir
+                else "uv run python -m pytest -v"
+            )
         elif has_tests_dir:
             return "pytest tests/ -v"
         return "pytest -v"
