@@ -184,8 +184,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sentinel-heal",
         type=Path,
+        nargs="?",
+        const=Path("."),
         default=None,
-        help="Run standalone zero-token AST audit and auto-healing on a Python file.",
+        help="Run standalone zero-token AST audit and auto-healing on a Python file or directory (defaults to current directory if omitted).",
     )
     parser.add_argument(
         "--sentinel-test-mesh",
@@ -316,7 +318,7 @@ def main() -> None:
         handle_sentinel_status(config)
         sys.exit(0)
 
-    if args.sentinel_heal:
+    if args.sentinel_heal is not None:
         handle_sentinel_heal(args.sentinel_heal)
         sys.exit(0)
 

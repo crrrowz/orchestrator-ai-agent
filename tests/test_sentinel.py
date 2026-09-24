@@ -110,9 +110,13 @@ def test_cloud_governor_circuit_breaker():
 
 
 def test_heuristics_drift_detector():
-    detector = HeuristicsDriftDetector(max_steps_without_edit=3, token_burn_threshold=10_000)
+    detector = HeuristicsDriftDetector(
+        max_steps_without_edit=3, token_burn_threshold=10_000
+    )
     # Low tokens -> no drift
-    drift, _ = detector.evaluate_investigation_drift("developer", steps=2, tokens_burned=5000, edits_done=0)
+    drift, _ = detector.evaluate_investigation_drift(
+        "developer", steps=2, tokens_burned=5000, edits_done=0
+    )
     assert not drift
 
     # High tokens and steps with 0 edits -> drift detected
@@ -341,4 +345,27 @@ def test_rendering_sentinel_extensions():
     ConsoleOutput.self_healing_alert("main.py", "Missing import", "Added import sys")
     ConsoleOutput.cloud_failover_banner("model-a", "model-b", "Rate limited")
 
+
+def test_handle_sentinel_heal_directory():
+    from orchestrator.cli.handlers import handle_sentinel_heal
+
+    with TemporaryDirectory() as tmp_dir:
+        base_dir = Path(tmp_dir)
+        sub_dir = base_dir / "pkg"
+        sub_dir.mkdir()
+
+        # Clean file
+        (base_dir / "clean.py").write_text("def ok(): return 1\n", encoding="utf-8")
+        # Missing import file -> auto-heal
+        (sub_dir / "needs_heal.py").write_text(
+            "def worker(): return json.dumps({'a': 1})\n", encoding="utf-8"
+        )
+        # Broken syntax file
+        (sub_dir / "broken.py").write_text("def broken(\n", encoding="utf-8")
+
+        handle_sentinel_heal(base_dir)
+
+        # Check healed file got auto-healed
+        healed_content = (sub_dir / "needs_heal.py").read_text(encoding="utf-8")
+        assert "import json" in healed_content
 

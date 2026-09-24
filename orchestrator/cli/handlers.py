@@ -204,32 +204,102 @@ def handle_sentinel_status(config: Optional[Any] = None) -> None:
         "Self-Healing Success Rate", f"{stats.get('healing_rate', 1.0) * 100:.1f}%"
     )
     table.add_row("Total Cloud LLM Calls", str(stats.get("total_cloud_calls", 0)))
-    table.add_row(
-        "Cloud Failures / Throttled", str(stats.get("failed_cloud_calls", 0))
-    )
+    table.add_row("Cloud Failures / Throttled", str(stats.get("failed_cloud_calls", 0)))
 
     console.print(table)
 
 
-def handle_sentinel_heal(target_file: Path) -> None:
-    """Run standalone zero-token AST audit and auto-healing on a Python file."""
+def handle_sentinel_heal(target_path: Path) -> None:
+    """Run standalone zero-token AST audit and auto-healing on a Python file or directory."""
+    from rich.table import Table
+
+    from orchestrator.rendering.output import console
     from orchestrator.sentinel.ast_guard import ASTGuard
 
-    if not target_file.exists():
-        ConsoleOutput.error(f"File '{target_file}' not found.")
+    if not target_path.exists():
+        ConsoleOutput.error(f"Path '{target_path}' not found.")
         return
 
-    content = target_file.read_text(encoding="utf-8", errors="replace")
     guard = ASTGuard()
-    is_safe, msg, healed = guard.intercept_ast(target_file, content)
 
-    if not is_safe:
-        ConsoleOutput.error(f"AST Audit failed on '{target_file.name}': {msg}")
-    elif healed and healed != content:
-        target_file.write_text(healed, encoding="utf-8")
-        ConsoleOutput.success(f"Successfully auto-healed '{target_file.name}': {msg}")
-    else:
-        ConsoleOutput.success(f"'{target_file.name}' verified clean. 0 defects detected.")
+    # Case 1: Target is a single file
+    if target_path.is_file():
+        if target_path.suffix.lower() != ".py":
+            ConsoleOutput.warning(f"Skipping non-Python file: {target_path}")
+            return
+        content = target_path.read_text(encoding="utf-8", errors="replace")
+        is_safe, msg, healed = guard.intercept_ast(target_path, content)
+        if not is_safe:
+            ConsoleOutput.error(f"AST Audit failed on '{target_path.name}': {msg}")
+        elif healed and healed != content:
+            target_path.write_text(healed, encoding="utf-8")
+            ConsoleOutput.success(f"Successfully auto-healed '{target_path.name}': {msg}")
+        else:
+            ConsoleOutput.success(
+                f"'{target_path.name}' verified clean. 0 defects detected."
+            )
+        return
+
+    # Case 2: Target is a directory -> recursively scan and heal all Python files
+    resolved_dir = target_path.resolve()
+    ConsoleOutput.banner(
+        "Autonomous Sentinel AST Workspace Self-Healing",
+        f"Scanning: {resolved_dir}",
+    )
+    ignored_dirs = {
+        ".venv",
+        "venv",
+        ".git",
+        "__pycache__",
+        "build",
+        "dist",
+        ".pytest_cache",
+        ".ruff_cache",
+        "node_modules",
+        ".agents",
+    }
+
+    py_files: list[Path] = []
+    for p in resolved_dir.rglob("*.py"):
+        if any(part in ignored_dirs for part in p.parts):
+            continue
+        py_files.append(p)
+
+    if not py_files:
+        ConsoleOutput.warning(f"No Python files found in '{target_path}'.")
+        return
+
+    total = len(py_files)
+    healed_count = 0
+    failed_count = 0
+    clean_count = 0
+
+    for py_file in py_files:
+        try:
+            content = py_file.read_text(encoding="utf-8", errors="replace")
+            is_safe, msg, healed = guard.intercept_ast(py_file, content)
+            rel_name = py_file.relative_to(resolved_dir)
+            if not is_safe:
+                failed_count += 1
+                ConsoleOutput.error(f"[{rel_name}] AST syntax failure: {msg}")
+            elif healed and healed != content:
+                healed_count += 1
+                py_file.write_text(healed, encoding="utf-8")
+                ConsoleOutput.success(f"[{rel_name}] Auto-healed: {msg}")
+            else:
+                clean_count += 1
+        except Exception as e:
+            failed_count += 1
+            ConsoleOutput.error(f"[{py_file.name}] Read/Heal error: {e}")
+
+    table = Table(title="AST Audit & Auto-Healing Summary", border_style="cyan")
+    table.add_column("Total Files Scanned", justify="center")
+    table.add_column("Verified Clean", justify="center", style="bold green")
+    table.add_column("Auto-Healed", justify="center", style="bold yellow")
+    table.add_column("Syntax Errors / Blocked", justify="center", style="bold red")
+
+    table.add_row(str(total), str(clean_count), str(healed_count), str(failed_count))
+    console.print(table)
 
 
 def handle_sentinel_test_mesh(config: Optional[Any] = None) -> None:
@@ -275,4 +345,3 @@ def handle_sentinel_test_mesh(config: Optional[Any] = None) -> None:
         )
 
     console.print(table)
-
