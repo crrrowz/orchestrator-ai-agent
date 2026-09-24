@@ -116,6 +116,55 @@ class LLMManager:
             role_config.model = new_model
         return self.get_llm(role)
 
+    def failover_model(self, role: str) -> Optional[str]:
+        """Automatically swap the role to the next healthy model in the cloud fallback chain."""
+        role_config = getattr(self._config, role, None)
+        current_model = getattr(role_config, "model", "") if role_config else ""
+        chain = getattr(self._config, "cloud_fallback_chain", [])
+        next_model = None
+        for candidate in chain:
+            if candidate != current_model:
+                next_model = candidate
+                break
+        if next_model:
+            self.swap_model(role, next_model)
+            return next_model
+        return None
+
     def reset_pool(self) -> None:
         """Clear all pooled LLM instances."""
         self._pool.clear()
+
+
+class CloudResilienceMesh:
+    """Multi-tier provider failover and latency monitoring mesh."""
+
+    def __init__(self, config: Optional["OrchestratorConfig"] = None) -> None:
+        from orchestrator.config import OrchestratorConfig
+
+        self._config = config or OrchestratorConfig()
+        self._degraded_providers: set[str] = set()
+
+    def get_healthy_provider(self, requested_provider: str) -> str:
+        """Return healthy provider or fallback if requested is degraded."""
+        if requested_provider.lower() not in self._degraded_providers:
+            return requested_provider
+        for candidate in getattr(self._config, "cloud_fallback_chain", []):
+            prov = candidate.split("/")[0] if "/" in candidate else candidate
+            if prov.lower() not in self._degraded_providers:
+                return prov
+        return requested_provider
+
+    def record_provider_result(
+        self,
+        provider: str,
+        success: bool,
+        latency_ms: float,
+        error_code: Optional[int] = None,
+    ) -> None:
+        """Update degraded status based on call result."""
+        if not success and error_code in (429, 500, 502, 503):
+            self._degraded_providers.add(provider.lower())
+        elif success and provider.lower() in self._degraded_providers:
+            self._degraded_providers.discard(provider.lower())
+

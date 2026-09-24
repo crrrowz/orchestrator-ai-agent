@@ -40,3 +40,16 @@ class ProviderQuotaExceededError(OrchestratorException):
         self.message = message
         self.reset_info = reset_info
         self.remedy = remedy
+
+
+class CognitiveLoopDetectedError(OrchestratorException):
+    """Raised when an agent is detected to be cycling in an unproductive cognitive or exploratory loop."""
+
+
+class CloudMeshExhaustionError(OrchestratorException):
+    """Raised when all configured cloud model providers in the fallback chain have been exhausted."""
+
+
+class SecurityBoundaryViolationError(OrchestratorException):
+    """Raised when an action violates workspace or sandbox isolation security boundaries."""
+

@@ -394,8 +394,23 @@ def execute_file_action(
 
         elif action.operation == "write":
             target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_text(action.content or "", encoding="utf-8")
-            msg = f"File '{action.path}' written successfully ({len(action.content or '')} chars)."
+            content_to_write = action.content or ""
+            if target_path.suffix == ".py":
+                from orchestrator.sentinel.ast_guard import ASTGuard
+
+                guard = ASTGuard()
+                is_safe, err_msg, healed = guard.intercept_ast(target_path, content_to_write)
+                if not is_safe:
+                    return WorkspaceFileObservation(
+                        content=[TextContent(text=f"AST Integrity Violation: {err_msg}")],
+                        is_error=True,
+                        success=False,
+                        message=f"AST Integrity Violation: {err_msg}",
+                    )
+                if healed:
+                    content_to_write = healed
+            target_path.write_text(content_to_write, encoding="utf-8")
+            msg = f"File '{action.path}' written successfully ({len(content_to_write)} chars)."
             return WorkspaceFileObservation(
                 content=[TextContent(text=msg)],
                 is_error=False,
@@ -463,7 +478,32 @@ def execute_file_action(
                     success=False,
                     message=err_msg,
                 )
-            if action.target_text not in existing:
+
+            target = action.target_text
+            replacement = action.replacement_text or ""
+            new_content = None
+
+            if target in existing:
+                new_content = existing.replace(target, replacement, 1)
+            elif target.replace("\r\n", "\n") in existing.replace("\r\n", "\n"):
+                normalized_existing = existing.replace("\r\n", "\n")
+                normalized_target = target.replace("\r\n", "\n")
+                new_content = normalized_existing.replace(normalized_target, replacement, 1)
+            else:
+                existing_lines = existing.splitlines(keepends=True)
+                target_lines = [tl.rstrip() for tl in target.splitlines() if tl.strip()]
+                match_start = -1
+                for i in range(len(existing_lines)):
+                    window = [el.rstrip() for el in existing_lines[i : i + len(target_lines)] if el.strip()]
+                    if window == target_lines:
+                        match_start = i
+                        break
+                if match_start != -1:
+                    pre = "".join(existing_lines[:match_start])
+                    post = "".join(existing_lines[match_start + len(target_lines):])
+                    new_content = pre + replacement + ("\n" if not replacement.endswith("\n") else "") + post
+
+            if new_content is None:
                 err_msg = f"Target text was not found in '{action.path}'."
                 return WorkspaceFileObservation(
                     content=[TextContent(text=err_msg)],
@@ -471,9 +511,22 @@ def execute_file_action(
                     success=False,
                     message=err_msg,
                 )
-            new_content = existing.replace(
-                action.target_text, action.replacement_text or "", 1
-            )
+
+            if target_path.suffix == ".py":
+                from orchestrator.sentinel.ast_guard import ASTGuard
+
+                guard = ASTGuard()
+                is_safe, err_msg, healed = guard.intercept_ast(target_path, new_content)
+                if not is_safe:
+                    return WorkspaceFileObservation(
+                        content=[TextContent(text=f"AST Integrity Violation: {err_msg}")],
+                        is_error=True,
+                        success=False,
+                        message=f"AST Integrity Violation: {err_msg}",
+                    )
+                if healed:
+                    new_content = healed
+
             target_path.write_text(new_content, encoding="utf-8")
             msg = f"Successfully edited '{action.path}'."
             return WorkspaceFileObservation(
@@ -684,6 +737,16 @@ DEFAULT_ALLOWED_COMMANDS = {
     "pwd",
     "tree",
     "find",
+    "findstr",
+    "del",
+    "copy",
+    "move",
+    "cls",
+    "grep",
+    "rm",
+    "cp",
+    "mv",
+    "clear",
 }
 
 
@@ -838,8 +901,25 @@ def execute_terminal_action(
         elif base_name == "cat":
             cmd_tokens = ["type", *cmd_tokens[1:]]
             base_name = "type"
+        elif base_name == "grep":
+            cmd_tokens = ["findstr", *cmd_tokens[1:]]
+            base_name = "findstr"
+        elif base_name == "rm":
+            cmd_tokens = ["del", *cmd_tokens[1:]]
+            base_name = "del"
+        elif base_name == "cp":
+            cmd_tokens = ["copy", *cmd_tokens[1:]]
+            base_name = "copy"
+        elif base_name == "mv":
+            cmd_tokens = ["move", *cmd_tokens[1:]]
+            base_name = "move"
+        elif base_name == "clear":
+            cmd_tokens = ["cls"]
+            base_name = "cls"
 
-    shell_builtins = {"dir", "type", "cd", "echo", "where"}
+    shell_builtins = {
+        "dir", "type", "cd", "echo", "where", "findstr", "del", "copy", "move", "cls"
+    }
     if (sys.platform == "win32" or os.name == "nt") and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]
     else:

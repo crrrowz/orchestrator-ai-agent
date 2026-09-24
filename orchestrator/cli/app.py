@@ -45,6 +45,8 @@ from orchestrator.cli.handlers import (  # noqa: E402
     handle_check_config,
     handle_list_skills,
     handle_self_audit,
+    handle_sentinel_heal,
+    handle_sentinel_status,
     handle_view_logs,
     resolve_task_input,
     resolve_workspace_dir,
@@ -173,6 +175,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override LLM model across all agents (e.g. 'openrouter/z-ai/glm-5.2:free', 'gemini/gemini-2.0-flash').",
     )
+    parser.add_argument(
+        "--sentinel-status",
+        action="store_true",
+        help="Display live Sentinel diagnostics, circuit health, and self-healing statistics.",
+    )
+    parser.add_argument(
+        "--sentinel-heal",
+        type=Path,
+        default=None,
+        help="Run standalone zero-token AST audit and auto-healing on a Python file.",
+    )
     return parser.parse_args()
 
 
@@ -291,6 +304,14 @@ def main() -> None:
 
     if args.logs:
         handle_view_logs(args.workspace)
+        sys.exit(0)
+
+    if args.sentinel_status:
+        handle_sentinel_status(config)
+        sys.exit(0)
+
+    if args.sentinel_heal:
+        handle_sentinel_heal(args.sentinel_heal)
         sys.exit(0)
 
     # Check for --resume, direct audit/docs modes, or interactive wizard

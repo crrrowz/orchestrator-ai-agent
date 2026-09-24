@@ -3,7 +3,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from orchestrator.analysis.connectivity import ConnectivityChecker
 from orchestrator.core.config import OrchestratorConfig
@@ -175,3 +175,59 @@ def handle_view_logs(workspace: Optional[Path] = None) -> None:
         InteractiveLogExplorer(store).run()
     except Exception as e:
         ConsoleOutput.error(f"Error loading session log: {str(e)}")
+
+
+def handle_sentinel_status(config: Optional[Any] = None) -> None:
+    """Display Sentinel diagnostics, mesh circuit health, and self-healing statistics."""
+    from rich.table import Table
+
+    from orchestrator.rendering.output import console
+    from orchestrator.sentinel.diagnostics_db import SentinelDiagnosticsDB
+
+    ConsoleOutput.banner(
+        "Autonomous Cognitive Sentinel & SRE Mesh Status", "Live System Telemetry"
+    )
+
+    db = SentinelDiagnosticsDB()
+    stats = db.get_stats()
+
+    table = Table(title="Sentinel Operational Statistics", border_style="yellow")
+    table.add_column("Metric", style="bold white")
+    table.add_column("Value", style="cyan")
+
+    table.add_row(
+        "Sentinel Mode", "[bold green]● ENFORCING (Autonomous Protection)[/bold green]"
+    )
+    table.add_row("Total Incidents Intercepted", str(stats.get("total_incidents", 0)))
+    table.add_row("Self-Healed Anomaly Count", str(stats.get("auto_healed_count", 0)))
+    table.add_row(
+        "Self-Healing Success Rate", f"{stats.get('healing_rate', 1.0) * 100:.1f}%"
+    )
+    table.add_row("Total Cloud LLM Calls", str(stats.get("total_cloud_calls", 0)))
+    table.add_row(
+        "Cloud Failures / Throttled", str(stats.get("failed_cloud_calls", 0))
+    )
+
+    console.print(table)
+
+
+def handle_sentinel_heal(target_file: Path) -> None:
+    """Run standalone zero-token AST audit and auto-healing on a Python file."""
+    from orchestrator.sentinel.ast_guard import ASTGuard
+
+    if not target_file.exists():
+        ConsoleOutput.error(f"File '{target_file}' not found.")
+        return
+
+    content = target_file.read_text(encoding="utf-8", errors="replace")
+    guard = ASTGuard()
+    is_safe, msg, healed = guard.intercept_ast(target_file, content)
+
+    if not is_safe:
+        ConsoleOutput.error(f"AST Audit failed on '{target_file.name}': {msg}")
+    elif healed and healed != content:
+        target_file.write_text(healed, encoding="utf-8")
+        ConsoleOutput.success(f"Successfully auto-healed '{target_file.name}': {msg}")
+    else:
+        ConsoleOutput.success(f"'{target_file.name}' verified clean. 0 defects detected.")
+

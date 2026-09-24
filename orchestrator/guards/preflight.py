@@ -9,8 +9,48 @@ class PreFlightGuard:
     """Performs offline static syntax validation in <50ms without invoking LLMs."""
 
     @staticmethod
-    def check_syntax(workspace: Path) -> Tuple[bool, str]:
+    def heal_workspace(workspace: Path) -> List[str]:
+        """Automatically audit and heal missing standard library imports across all Python files."""
+        from orchestrator.sentinel.ast_guard import ASTGuard
+
+        guard = ASTGuard()
+        healed_reports = []
+        ignored = {
+            "__pycache__",
+            ".venv",
+            "venv",
+            "build",
+            "dist",
+            "site-packages",
+            "node_modules",
+            ".git",
+            ".pytest_cache",
+            ".ruff_cache",
+        }
+        for root, dirs, files in os.walk(workspace):
+            dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+            for f in files:
+                if f.endswith(".py"):
+                    fp = Path(root) / f
+                    try:
+                        content = fp.read_text(encoding="utf-8", errors="replace")
+                        is_safe, msg, healed = guard.intercept_ast(fp, content)
+                        if is_safe and healed and healed != content:
+                            fp.write_text(healed, encoding="utf-8")
+                            healed_reports.append(f"{fp.relative_to(workspace)}: {msg}")
+                    except Exception:
+                        continue
+        return healed_reports
+
+    @classmethod
+    def check_syntax(cls, workspace: Path, auto_heal: bool = True) -> Tuple[bool, str]:
         """Compile all Python files in the workspace. Returns (is_valid, error_message)."""
+        if auto_heal:
+            try:
+                cls.heal_workspace(workspace)
+            except Exception:
+                pass
+
         ignored = {
             "__pycache__",
             ".venv",

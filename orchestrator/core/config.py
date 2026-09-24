@@ -106,6 +106,28 @@ class OrchestratorConfig(BaseModel):
         default=int(os.environ.get("LOG_SAVE_DEBOUNCE_SECONDS", "5"))
     )
 
+    # Sentinel Cognitive Supervision & SRE Settings
+    enable_cognitive_sentinel: bool = Field(
+        default=os.environ.get("ENABLE_COGNITIVE_SENTINEL", "true").lower() == "true"
+    )
+    self_healing_level: str = Field(
+        default=os.environ.get("SELF_HEALING_LEVEL", "full_autonomous")
+    )
+    cloud_fallback_chain: List[str] = Field(
+        default_factory=lambda: [
+            m.strip()
+            for m in os.environ.get(
+                "CLOUD_FALLBACK_CHAIN",
+                "openrouter/google/gemini-2.0-flash-exp:free,openrouter/qwen/qwen3.8-27b:free,groq/llama-3.3-70b-versatile",
+            ).split(",")
+            if m.strip()
+        ]
+    )
+    max_auto_patches_per_file: int = Field(
+        default=int(os.environ.get("MAX_AUTO_PATCHES_PER_FILE", "3"))
+    )
+
+
     # Provider keys
     anthropic_api_key: Optional[str] = Field(
         default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY")

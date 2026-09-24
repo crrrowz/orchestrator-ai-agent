@@ -12,23 +12,13 @@ from typing import Any, Dict, Optional, Tuple
 from openhands.sdk import Conversation
 
 
-@dataclass
-class ConvRunResult:
-    """Formal result contract capturing execution status of an agent conversation."""
-
-    completed: bool = True
-    interrupted_by_tokens: bool = False
-    interrupted_by_timeout: bool = False
-    interrupted_by_controller: bool = False
-    tokens_consumed: int = 0
-    error_message: Optional[str] = None
-
 from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.config import (
     DEFAULT_DIAGNOSTICS_DIR,
     OrchestratorConfig,
     SkillManager,
 )
+from orchestrator.context import ContextManager
 from orchestrator.control import (
     BudgetGuard,
     ContextBudgetManager,
@@ -41,14 +31,13 @@ from orchestrator.guards.preflight import PreFlightGuard
 from orchestrator.memory import ConversationMemoryStore
 from orchestrator.pipeline.checkpoint import PipelineCheckpoint
 from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
+from orchestrator.skills import SkillResolver
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import (
     WorkspaceTerminalAction,
     WorkspaceTerminalObservation,
     execute_terminal_action,
 )
-from orchestrator.context import ContextManager
-from orchestrator.skills import SkillResolver
 from orchestrator.utils import (
     ConsoleOutput,
     GitOps,
@@ -57,6 +46,18 @@ from orchestrator.utils import (
     OrchestratorLiveVisualizer,
     SessionLogStore,
 )
+
+
+@dataclass
+class ConvRunResult:
+    """Formal result contract capturing execution status of an agent conversation."""
+
+    completed: bool = True
+    interrupted_by_tokens: bool = False
+    interrupted_by_timeout: bool = False
+    interrupted_by_controller: bool = False
+    tokens_consumed: int = 0
+    error_message: Optional[str] = None
 
 
 class BasePipeline(ABC):
@@ -84,6 +85,12 @@ class BasePipeline(ABC):
         )
         self.adapter: ProjectAdapter = detect_adapter(self.workspace_path)
         self.context_manager = ContextManager.create_default(self.config)
+        if getattr(config, "enable_cognitive_sentinel", True):
+            from orchestrator.sentinel import CognitiveSentinelSupervisor
+
+            self.sentinel = CognitiveSentinelSupervisor(self.config, self.workspace_path)
+        else:
+            self.sentinel = None
 
     def build_prompt(
         self,
@@ -361,6 +368,19 @@ class BasePipeline(ABC):
             except Exception as e:
                 run_result.completed = False
                 err_text = str(e)
+                if self.sentinel:
+                    try:
+                        self.sentinel.handle_runtime_error(
+                            e,
+                            {
+                                "role": role_name,
+                                "attempt": attempt,
+                                "task": getattr(conv, "task", ""),
+                                "error": err_text,
+                            },
+                        )
+                    except Exception:
+                        pass
                 # Safely close attached visualizer immediately to release console TTY buffer before printing anything
                 vis = getattr(conv, "visualizer", None) or getattr(
                     self, "visualizer", None
