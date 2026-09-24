@@ -1,6 +1,5 @@
 """Unit tests verifying DiagnosticsManager, indexing, search, and cleanup."""
 
-import json
 from pathlib import Path
 
 from orchestrator.diagnostics import DiagnosticsManager
@@ -49,6 +48,6 @@ def test_diagnostics_manager_overview_and_indexing(tmp_path: Path):
     assert matching_mems[0].task == "Implement feature X"
 
     # Test clean and index generation
-    clean_res = manager.clean()
+    manager.clean()
     assert (diag_dir / "INDEX.md").exists()
     assert "Implement feature X" in (diag_dir / "INDEX.md").read_text(encoding="utf-8")

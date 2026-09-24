@@ -1,23 +1,9 @@
 {
   "status": "AUDIT_COMPLETED",
-  "summary": "Audit completed: 1 actionable finding(s) verified.",
-  "findings": [
-    {
-      "id": "STATIC-001",
-      "severity": "HIGH",
-      "type": "BUG",
-      "file": "orchestrator/cli/app.py",
-      "line": null,
-      "evidence": "[Ruff Lint Issues (6)]\norchestrator\\cli\\app.py:46:5: F401 [*] `orchestrator.cli.handlers.handle_diagnostics_clean` imported but unused\norchestrator\\cli\\app.py:47:5: F401 [*] `orchestrator.cli.handlers.handle_diagnostics_dashboard` imported but unused\norchestrator\\cli\\app.py:48:5: F401 [*] `orchestrator.cli.handlers.handle_diagnostics_search` imported but unused\norchestrator\\memory\\conversation_store.py:8:31: F401 [*] `typing.List` imported but unused\nFound 4 errors.\n[*] 4 fixable with the `--fix` option.",
-      "problem": "Deterministic static analysis defect or syntax error",
-      "recommended_fix": "Correct the syntax or linter error specified in evidence",
-      "actionable": true,
-      "confidence": 1.0,
-      "source": "deterministic_linter"
-    }
-  ],
-  "total_files_scanned": 146,
-  "total_loc": 22935,
-  "clean_static": false,
-  "timestamp": "2026-09-24 09:12:11 UTC"
+  "summary": "Audit completed: 0 actionable finding(s) verified.",
+  "findings": [],
+  "total_files_scanned": 149,
+  "total_loc": 23631,
+  "clean_static": true,
+  "timestamp": "2026-09-24 09:30:00 UTC"
 }

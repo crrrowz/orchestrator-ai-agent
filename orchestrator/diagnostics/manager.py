@@ -2,16 +2,14 @@
 
 import json
 import shutil
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from rich.panel import Panel
 from rich.table import Table
 
 from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
-from orchestrator.memory.conversation_store import ConversationStore, MemoryEntry
+from orchestrator.memory.conversation_store import ConversationStore
 from orchestrator.rendering.output import ConsoleOutput, console
 from orchestrator.sentinel.diagnostics_db import SentinelDiagnosticsDB
 
@@ -32,7 +30,11 @@ class DiagnosticsManager:
     def get_overview(self) -> Dict[str, Any]:
         """Aggregate high-level metrics across all diagnostics domains."""
         # 1. Reports stats
-        report_files = list(self.reports_dir.glob("run_*.json")) if self.reports_dir.exists() else []
+        report_files = (
+            list(self.reports_dir.glob("run_*.json"))
+            if self.reports_dir.exists()
+            else []
+        )
         total_reports = len(report_files)
         successful_reports = 0
         total_tokens = 0
@@ -73,7 +75,9 @@ class DiagnosticsManager:
             "reports": {
                 "total": total_reports,
                 "successful": successful_reports,
-                "success_rate": (successful_reports / total_reports * 100) if total_reports else 100.0,
+                "success_rate": (successful_reports / total_reports * 100)
+                if total_reports
+                else 100.0,
                 "total_tokens": total_tokens,
                 "total_cost_usd": total_cost,
                 "latest_time": latest_report_time,
@@ -91,10 +95,14 @@ class DiagnosticsManager:
         """Render a unified Rich CLI dashboard of the diagnostics ecosystem."""
         overview = self.get_overview()
 
-        ConsoleOutput.banner("Unified Diagnostics Intelligence Dashboard", f"Path: {self.base_dir}")
+        ConsoleOutput.banner(
+            "Unified Diagnostics Intelligence Dashboard", f"Path: {self.base_dir}"
+        )
 
         # Summary Quadrant Table
-        summary_table = Table(title="Diagnostics Subsystems Health & Metrics", border_style="cyan")
+        summary_table = Table(
+            title="Diagnostics Subsystems Health & Metrics", border_style="cyan"
+        )
         summary_table.add_column("Subsystem", style="bold white", width=22)
         summary_table.add_column("Key Metric", style="cyan", width=25)
         summary_table.add_column("Secondary Metric", style="yellow", width=25)
@@ -113,7 +121,9 @@ class DiagnosticsManager:
             "Persistent Memory",
             f"Total Memories: [bold]{mem['total_memories']}[/bold]",
             f"Files Touched: [bold]{mem['unique_files_touched']}[/bold]",
-            "[green]INDEXED[/green]" if mem["total_memories"] > 0 else "[dim]EMPTY[/dim]",
+            "[green]INDEXED[/green]"
+            if mem["total_memories"] > 0
+            else "[dim]EMPTY[/dim]",
         )
 
         snt = overview["sentinel"]
@@ -136,7 +146,9 @@ class DiagnosticsManager:
 
         # Recent Runs Table
         if rep["recent"]:
-            runs_table = Table(title="Recent Pipeline Runs (Latest 5)", border_style="magenta")
+            runs_table = Table(
+                title="Recent Pipeline Runs (Latest 5)", border_style="magenta"
+            )
             runs_table.add_column("Run ID", style="bold white", width=26)
             runs_table.add_column("Mode", style="cyan", width=12)
             runs_table.add_column("Status", width=10)
@@ -145,21 +157,29 @@ class DiagnosticsManager:
             runs_table.add_column("Task Description", style="dim white")
 
             for r in rep["recent"]:
-                status_str = "[bold green]PASS[/bold green]" if r.get("completed_successfully") else "[bold red]FAIL[/bold red]"
+                status_str = (
+                    "[bold green]PASS[/bold green]"
+                    if r.get("completed_successfully")
+                    else "[bold red]FAIL[/bold red]"
+                )
                 runs_table.add_row(
                     r.get("report_id", "unknown"),
                     r.get("pipeline_mode", "dev-test"),
                     status_str,
                     f"{r.get('total_tokens', 0):,}",
                     f"${r.get('total_cost_usd', 0.0):.4f}",
-                    (r.get("task_description", "")[:60] + "...") if len(r.get("task_description", "")) > 60 else r.get("task_description", ""),
+                    (r.get("task_description", "")[:60] + "...")
+                    if len(r.get("task_description", "")) > 60
+                    else r.get("task_description", ""),
                 )
             console.print(runs_table)
 
         # Recent Incidents Table
         incidents = self.sentinel_db.get_incident_history(limit=5)
         if incidents:
-            inc_table = Table(title="Recent Sentinel Incidents (Latest 5)", border_style="yellow")
+            inc_table = Table(
+                title="Recent Sentinel Incidents (Latest 5)", border_style="yellow"
+            )
             inc_table.add_column("Incident ID", style="bold white", width=15)
             inc_table.add_column("Severity", width=10)
             inc_table.add_column("Module", style="cyan", width=16)
@@ -167,7 +187,11 @@ class DiagnosticsManager:
             inc_table.add_column("Auto-Healed", width=12)
 
             for inc in incidents:
-                healed_str = "[bold green]YES[/bold green]" if inc.get("auto_healed") else "[bold yellow]NO[/bold yellow]"
+                healed_str = (
+                    "[bold green]YES[/bold green]"
+                    if inc.get("auto_healed")
+                    else "[bold yellow]NO[/bold yellow]"
+                )
                 inc_table.add_row(
                     str(inc.get("incident_id", ""))[:14],
                     str(inc.get("severity", "MEDIUM")),
@@ -184,7 +208,9 @@ class DiagnosticsManager:
             return
 
         clean_q = query.strip()
-        ConsoleOutput.banner(f"Diagnostics Universal Search: '{clean_q}'", f"Scope: {self.base_dir}")
+        ConsoleOutput.banner(
+            f"Diagnostics Universal Search: '{clean_q}'", f"Scope: {self.base_dir}"
+        )
 
         matches_found = 0
 
@@ -192,14 +218,18 @@ class DiagnosticsManager:
         matching_mems = self.memory_store.search_memories(clean_q, limit=5)
         if matching_mems:
             matches_found += len(matching_mems)
-            mem_table = Table(title=f"Matching Memories ({len(matching_mems)})", border_style="green")
+            mem_table = Table(
+                title=f"Matching Memories ({len(matching_mems)})", border_style="green"
+            )
             mem_table.add_column("ID", style="bold white", width=10)
             mem_table.add_column("Status", width=8)
             mem_table.add_column("Task", style="cyan", width=30)
             mem_table.add_column("Summary / Lessons", style="dim white")
 
             for m in matching_mems:
-                status_str = "[green]PASS[/green]" if m.tests_passed else "[red]FAIL[/red]"
+                status_str = (
+                    "[green]PASS[/green]" if m.tests_passed else "[red]FAIL[/red]"
+                )
                 detail = m.summary
                 if m.lessons:
                     detail += f" | Lesson: {m.lessons}"
@@ -220,7 +250,10 @@ class DiagnosticsManager:
 
         if matching_reports:
             matches_found += len(matching_reports)
-            rep_table = Table(title=f"Matching Telemetry Reports ({len(matching_reports)})", border_style="magenta")
+            rep_table = Table(
+                title=f"Matching Telemetry Reports ({len(matching_reports)})",
+                border_style="magenta",
+            )
             rep_table.add_column("Report ID", style="bold white", width=26)
             rep_table.add_column("Mode", width=10)
             rep_table.add_column("Task", style="cyan", width=35)
@@ -238,13 +271,18 @@ class DiagnosticsManager:
         # 3. Search Sentinel Incidents
         all_incidents = self.sentinel_db.get_incident_history(limit=50)
         matching_incidents = [
-            inc for inc in all_incidents
-            if clean_q.lower() in f"{inc.get('error_signature', '')} {inc.get('raw_payload', '')} {inc.get('remedy_description', '')} {inc.get('origin_module', '')}".lower()
+            inc
+            for inc in all_incidents
+            if clean_q.lower()
+            in f"{inc.get('error_signature', '')} {inc.get('raw_payload', '')} {inc.get('remedy_description', '')} {inc.get('origin_module', '')}".lower()
         ]
 
         if matching_incidents:
             matches_found += len(matching_incidents)
-            inc_table = Table(title=f"Matching Sentinel Incidents ({len(matching_incidents)})", border_style="yellow")
+            inc_table = Table(
+                title=f"Matching Sentinel Incidents ({len(matching_incidents)})",
+                border_style="yellow",
+            )
             inc_table.add_column("Incident ID", style="bold white", width=14)
             inc_table.add_column("Module", width=15)
             inc_table.add_column("Error Signature", style="red", width=25)
@@ -260,9 +298,13 @@ class DiagnosticsManager:
             console.print(inc_table)
 
         if matches_found == 0:
-            ConsoleOutput.info(f"No records matching '{clean_q}' found across diagnostics.")
+            ConsoleOutput.info(
+                f"No records matching '{clean_q}' found across diagnostics."
+            )
 
-    def clean(self, max_retained_reports: int = 20, max_retained_memories: int = 30) -> Dict[str, int]:
+    def clean(
+        self, max_retained_reports: int = 20, max_retained_memories: int = 30
+    ) -> Dict[str, int]:
         """Prune test pollution, enforce strict retention, and rebuild indexes."""
         cleaned_counts = {
             "test_log_dirs_removed": 0,
@@ -274,7 +316,9 @@ class DiagnosticsManager:
         # 1. Clean test log directories from logs_dir
         if self.logs_dir.exists():
             for p in self.logs_dir.iterdir():
-                if p.is_dir() and (p.name.startswith("test_") or p.name.startswith("tmp_")):
+                if p.is_dir() and (
+                    p.name.startswith("test_") or p.name.startswith("tmp_")
+                ):
                     try:
                         shutil.rmtree(p)
                         cleaned_counts["test_log_dirs_removed"] += 1
@@ -352,13 +396,15 @@ class DiagnosticsManager:
         else:
             lines.append("| _No runs recorded yet_ | - | - | - | - | - |")
 
-        lines.extend([
-            "\n---",
-            "\n## CLI Commands for Diagnostics Management",
-            "- **`orchestrator --diagnostics`**: Open visual interactive dashboard.",
-            "- **`orchestrator --diagnostics-search <query>`**: Full-text search across all memories, reports, and logs.",
-            "- **`orchestrator --diagnostics-clean`**: Clean test artifacts and prune stale logs.",
-        ])
+        lines.extend(
+            [
+                "\n---",
+                "\n## CLI Commands for Diagnostics Management",
+                "- **`orchestrator --diagnostics`**: Open visual interactive dashboard.",
+                "- **`orchestrator --diagnostics-search <query>`**: Full-text search across all memories, reports, and logs.",
+                "- **`orchestrator --diagnostics-clean`**: Clean test artifacts and prune stale logs.",
+            ]
+        )
 
         index_file.write_text("\n".join(lines), encoding="utf-8")
         return index_file
