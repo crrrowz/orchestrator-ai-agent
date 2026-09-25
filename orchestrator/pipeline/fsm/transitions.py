@@ -350,8 +350,16 @@ class TransitionMatrix:
         )
 
         # ==========================================
-        # 9. Universal Universal Abort Rule
+        # 9. Universal Interruption & Abort Rules
         # ==========================================
+        matrix.add_rule(
+            TransitionRule(
+                source_state=None,  # Wildcard matches any state
+                trigger_event=EventType.HUMAN_INTERVENTION_REQUIRED,
+                target_state=FSMState.BLOCKED,
+                description="Circuit breaker or human intervention halted execution to BLOCKED state.",
+            )
+        )
         matrix.add_rule(
             TransitionRule(
                 source_state=None,  # Wildcard matches any state

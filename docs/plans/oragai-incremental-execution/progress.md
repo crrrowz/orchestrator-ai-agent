@@ -1,5 +1,37 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P5-01 - Adaptive Resource Governance & AST Context Clamper (P4 Engine Deployment)
+- **Plan Reference:** P12 Section 3.6, P4 Full Specification
+- **Target Files & Symbols:**
+  - `orchestrator/control/adaptive/models.py` (`ResourcePhase`, `CircuitState`, `ResourceExhaustionReason`, `PhaseBudgetProfile`, `ResourceGovernorConfig`, `TurnBudgetResult`, `ResourceUsageSnapshot`, `CircuitBreakerStatus`)
+  - `orchestrator/control/adaptive/allocator.py` (`AdaptiveBudgetAllocator`, `compute_complexity_score`, `allocate_turn_budget`)
+  - `orchestrator/control/adaptive/clamper.py` (`ASTAwareContextClamper`, `fold_python_source`, `assemble_clamped_context`)
+  - `orchestrator/control/adaptive/circuit_breaker.py` (`MonetaryCircuitBreaker`, `ProviderQuotaProtector`)
+  - `orchestrator/control/adaptive/governor.py` (`AdaptiveResourceGovernor`, `pre_dispatch_allocate`, `post_yield_record`, `assemble_prompt_context`)
+  - `orchestrator/control/adaptive/__init__.py`
+  - `orchestrator/control/__init__.py`
+  - `orchestrator/pipeline/fsm/engine.py` (Wired `AdaptiveResourceGovernor` pre-dispatch allocation and post-yield telemetry recording, circuit breaker BLOCKED handling)
+  - `orchestrator/pipeline/fsm/transitions.py` (Added wildcard `HUMAN_INTERVENTION_REQUIRED` rule transitioning to `FSMState.BLOCKED`)
+  - `orchestrator/config/migration_routing.json` (`use_adaptive_governance: true`)
+  - `tests/test_adaptive_governance.py` (11 comprehensive unit and integration tests)
+- **Acceptance Criteria Verified:**
+  - Dynamic turn scaling based on continuous task complexity scoring $S_{\text{comp}} = 0.35 C_{\text{AC}} + 0.25 C_{\text{DAG}} + 0.20 C_{\text{files}} + 0.20 C_{\text{symbols}}$ and formula $T_{\text{allocated}} = \text{clamp}(T_{\text{min}}, \lfloor T_{\text{base}} \cdot (1.0 + 0.8 \cdot S_{\text{comp}}) - P_{\text{stagnation}} \rfloor, T_{\text{max}})$, completely eliminating legacy 5-step caps.
+  - 100% investigation token allocation guaranteed in `PLANNING` and `AUDIT` phases without premature thread kills or interrupts.
+  - AST-aware intelligent code folding via `ast.NodeTransformer` replacing non-target function bodies with docstrings and notices while preserving target symbols and valid Python syntax via `ast.unparse()`.
+  - Multi-tier `MonetaryCircuitBreaker` with $5.00 ceiling, $4.00 warning threshold, and deterministic state transitions to `OPEN` on exhaustion.
+  - Stagnation penalties systematically tightening loop turns on repetitive unproductive yields and resetting on meaningful progress.
+  - `ProviderQuotaProtector` exponential jittered backoff calculation for 429/529 errors and max retry threshold tripping.
+  - Priority-tiered prompt context assembly (Tier 0 to Tier 3) preserving guaranteed model output headroom.
+  - Seamless integration into `GuardedFSMEngine` setting OpenHands `max_iteration_per_run` and recording financial spend.
+- **Test Evidence:** `tests/test_adaptive_governance.py` (11 passed), `tests/` total (351 passed) (Exit code: 0, Duration: 23.69s)
+- **PreFlight Status:** SYNTAX_CLEAN
+- **Baseline Invariant:** 244/244 PASSED + 57/57 PASSED + 14/14 PASSED + 23/23 PASSED + 2/2 PASSED + 11/11 PASSED = 351/351 PASSED (0 Regressions)
+- **PER 2.0 Score:** 100.0 (Classification: THRIVING)
+- **Checkpoint Tag:** `v0.6.0-adaptive-governance`
+- **Remaining Blockers / Next Eligible Bite:** Phase 6 (Context & Evidence Handoff Mesh - P6 Specification)
+
+---
+
 ### Bite Record: BITE-P4-01 - Guarded FSM Engine & Unified Lifecycle Orchestration (P3 Engine Deployment)
 - **Plan Reference:** P12 Section 3.5, P3 Full Specification
 - **Target Files & Symbols:**

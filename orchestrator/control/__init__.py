@@ -15,6 +15,21 @@ from .token_governance import (
     PhaseBudgetAllocation,
     TokenPhase,
 )
+from .adaptive import (
+    AdaptiveBudgetAllocator,
+    AdaptiveResourceGovernor,
+    ASTAwareContextClamper,
+    CircuitBreakerStatus,
+    CircuitState,
+    MonetaryCircuitBreaker,
+    PhaseBudgetProfile,
+    ProviderQuotaProtector,
+    ResourceExhaustionReason,
+    ResourceGovernorConfig,
+    ResourcePhase,
+    ResourceUsageSnapshot,
+    TurnBudgetResult,
+)
 
 HumanChannel = HumanInterventionChannel
 
@@ -31,4 +46,17 @@ __all__ = [
     "DynamicTokenGovernor",
     "PhaseBudgetAllocation",
     "TokenPhase",
+    "AdaptiveBudgetAllocator",
+    "AdaptiveResourceGovernor",
+    "ASTAwareContextClamper",
+    "CircuitBreakerStatus",
+    "CircuitState",
+    "MonetaryCircuitBreaker",
+    "PhaseBudgetProfile",
+    "ProviderQuotaProtector",
+    "ResourceExhaustionReason",
+    "ResourceGovernorConfig",
+    "ResourcePhase",
+    "ResourceUsageSnapshot",
+    "TurnBudgetResult",
 ]

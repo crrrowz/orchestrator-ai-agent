@@ -7,6 +7,7 @@ cryptographically verified checkpoints.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -16,10 +17,16 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 from orchestrator.adapters import ProjectAdapter, detect_adapter
 from orchestrator.analysis.pytest_parser import PytestOutputParser, TestExecutionResult
 from orchestrator.config import OrchestratorConfig, SkillManager
+from orchestrator.control.adaptive import (
+    AdaptiveResourceGovernor,
+    ResourceGovernorConfig,
+    ResourcePhase,
+)
 from orchestrator.control.human_channel import HumanChannel, get_active_channel
 from orchestrator.control.pipeline_controller import PipelineController
 from orchestrator.engine.openhands_bridge import (
     AgentExecutionOutcome as BridgeAgentOutcome,
+    AgentExitReason,
     OpenHandsRuntimeBridge,
     PromptView,
     TurnEnvelope,
@@ -103,6 +110,7 @@ class FSMContext:
     diagnostics_db: Optional[Any] = None
     git_ops: Optional[GitOps] = None
     adapter: Optional[ProjectAdapter] = None
+    governor: Optional[AdaptiveResourceGovernor] = None
 
 
 class GuardedFSMEngine:
@@ -120,6 +128,7 @@ class GuardedFSMEngine:
         log_store: Optional[Any] = None,
         visualizer: Optional[Any] = None,
         diagnostics_db: Optional[Any] = None,
+        governor: Optional[AdaptiveResourceGovernor] = None,
     ) -> None:
         self.config = config
         self.skill_manager = skill_manager or SkillManager()
@@ -131,6 +140,14 @@ class GuardedFSMEngine:
         self.log_store = log_store
         self.visualizer = visualizer
         self.diagnostics_db = diagnostics_db
+
+        # Adaptive Resource Governor initialization
+        if governor is not None:
+            self.governor: Optional[AdaptiveResourceGovernor] = governor
+        elif self._is_adaptive_governance_enabled():
+            self.governor = AdaptiveResourceGovernor()
+        else:
+            self.governor = None
 
         # Initialize Sandboxes & Runtime Bridge
         self.sandbox_manager = ToolSandboxManager(workspace_root=self.workspace_path)
@@ -160,6 +177,7 @@ class GuardedFSMEngine:
             llm_manager=self.llm_manager,
             runtime_bridge=self.runtime_bridge,
             sandbox_manager=self.sandbox_manager,
+            governor=self.governor,
             log_store=self.log_store,
             visualizer=self.visualizer,
             diagnostics_db=self.diagnostics_db,
@@ -167,6 +185,22 @@ class GuardedFSMEngine:
         )
 
         self.transition_matrix = TransitionMatrix.build_default()
+
+    @staticmethod
+    def _is_adaptive_governance_enabled() -> bool:
+        """Check whether adaptive governance is active via migration_routing.json."""
+        try:
+            routing_path = (
+                Path(__file__).resolve().parent.parent.parent
+                / "config"
+                / "migration_routing.json"
+            )
+            if routing_path.is_file():
+                data = json.loads(routing_path.read_text(encoding="utf-8"))
+                return bool(data.get("use_adaptive_governance", True))
+        except Exception:
+            pass
+        return True
 
     @property
     def current_state(self) -> FSMState:
@@ -281,6 +315,25 @@ class GuardedFSMEngine:
                     )
                 )
                 break
+
+            # If in BLOCKED or AMBIGUOUS state, check if human input is available to unblock
+            if self.context.current_state in (FSMState.BLOCKED, FSMState.AMBIGUOUS):
+                if self.human_channel and self.human_channel.has_message():
+                    msg = self.human_channel.get_message()
+                    self.process_event(
+                        PipelineEvent(
+                            event_type=EventType.HUMAN_INPUT_RECEIVED,
+                            source_phase=self.context.current_state,
+                            payload={"message": msg},
+                        )
+                    )
+                    continue
+                else:
+                    logger.info(
+                        f"Execution halted at non-terminal state {self.context.current_state.value}; "
+                        "awaiting human intervention or external resolution."
+                    )
+                    break
 
             # Execute handler for active state
             next_event = self._execute_state_handler(self.context.current_state)
@@ -422,6 +475,20 @@ class GuardedFSMEngine:
         if plan_file.exists():
             plan_content = plan_file.read_text(encoding="utf-8")
 
+        allocated_turns = self.profile.default_agent_turn_limit
+        if self.governor:
+            turn_res = self.governor.pre_dispatch_allocate(
+                phase=ResourcePhase.PLANNING,
+                acceptance_criteria_count=1,
+            )
+            allocated_turns = turn_res.allocated_turns
+            if self.governor.is_tripped:
+                return PipelineEvent(
+                    event_type=EventType.HUMAN_INTERVENTION_REQUIRED,
+                    source_phase=FSMState.PLANNING,
+                    error_message=f"Monetary/Resource circuit breaker tripped: {self.governor.status.trip_reason}",
+                )
+
         if not plan_content and self.runtime_bridge and self.llm_manager:
             prompt = (
                 f"Decompose the following task into discrete milestones and acceptance criteria:\n\n"
@@ -433,11 +500,11 @@ class GuardedFSMEngine:
                 workspace_path=self.workspace_path,
                 prompt_view=PromptView(compiled_prompt=prompt),
                 turn_envelope=TurnEnvelope(
-                    max_turns=self.profile.default_agent_turn_limit
+                    max_turns=allocated_turns
                 ),
                 sandbox_manager=self.sandbox_manager,
             )
-            self._accumulate_outcome(outcome)
+            self._accumulate_outcome(outcome, phase=ResourcePhase.PLANNING)
             if plan_file.exists():
                 plan_content = plan_file.read_text(encoding="utf-8")
 
@@ -509,6 +576,28 @@ class GuardedFSMEngine:
 
         compiled_prompt = "\n".join(prompt_lines)
 
+        allocated_turns = self.profile.default_agent_turn_limit
+        if self.governor:
+            ac_count = len(self.context.milestone_dag) if self.context.milestone_dag else 1
+            if self.context.task_truth_graph and hasattr(self.context.task_truth_graph, "acceptance_criteria"):
+                ac_count = max(1, len(self.context.task_truth_graph.acceptance_criteria))
+            dag_depth = max(1, len(self.context.milestone_dag))
+            target_files = max(1, len(self.context.mutated_files))
+
+            turn_res = self.governor.pre_dispatch_allocate(
+                phase=ResourcePhase.IMPLEMENTATION,
+                acceptance_criteria_count=ac_count,
+                dag_depth=dag_depth,
+                target_files_count=target_files,
+            )
+            allocated_turns = turn_res.allocated_turns
+            if self.governor.is_tripped:
+                return PipelineEvent(
+                    event_type=EventType.HUMAN_INTERVENTION_REQUIRED,
+                    source_phase=FSMState.IMPLEMENTATION,
+                    error_message=f"Monetary/Resource circuit breaker tripped: {self.governor.status.trip_reason}",
+                )
+
         outcome = None
         if self.runtime_bridge and self.llm_manager:
             outcome = self.runtime_bridge.execute_bounded_turn(
@@ -516,11 +605,11 @@ class GuardedFSMEngine:
                 workspace_path=self.workspace_path,
                 prompt_view=PromptView(compiled_prompt=compiled_prompt),
                 turn_envelope=TurnEnvelope(
-                    max_turns=self.profile.default_agent_turn_limit
+                    max_turns=allocated_turns
                 ),
                 sandbox_manager=self.sandbox_manager,
             )
-            self._accumulate_outcome(outcome)
+            self._accumulate_outcome(outcome, phase=ResourcePhase.IMPLEMENTATION)
 
         exec_outcome = AgentExecutionOutcome.NATURAL_COMPLETION
         if outcome and outcome.exit_reason:
@@ -639,6 +728,20 @@ class GuardedFSMEngine:
                 source_phase=FSMState.REVIEW,
             )
 
+        allocated_turns = 5
+        if self.governor:
+            turn_res = self.governor.pre_dispatch_allocate(
+                phase=ResourcePhase.REVIEW,
+                acceptance_criteria_count=max(1, len(self.context.milestone_dag)),
+            )
+            allocated_turns = turn_res.allocated_turns
+            if self.governor.is_tripped:
+                return PipelineEvent(
+                    event_type=EventType.HUMAN_INTERVENTION_REQUIRED,
+                    source_phase=FSMState.REVIEW,
+                    error_message=f"Monetary/Resource circuit breaker tripped: {self.governor.status.trip_reason}",
+                )
+
         verdict = ReviewerVerdict(approved=True, verdict="APPROVED")
         if self.runtime_bridge and self.llm_manager:
             prompt = (
@@ -649,10 +752,10 @@ class GuardedFSMEngine:
                 role_name="reviewer",
                 workspace_path=self.workspace_path,
                 prompt_view=PromptView(compiled_prompt=prompt),
-                turn_envelope=TurnEnvelope(max_turns=5),
+                turn_envelope=TurnEnvelope(max_turns=allocated_turns),
                 sandbox_manager=self.sandbox_manager,
             )
-            self._accumulate_outcome(outcome)
+            self._accumulate_outcome(outcome, phase=ResourcePhase.REVIEW)
             verdict = ReviewerVerdict.parse(outcome.final_thought or "APPROVED")
 
         self.context.review_verdict = verdict
@@ -709,13 +812,32 @@ class GuardedFSMEngine:
     # Helpers & Checkpointing
     # =========================================================================
 
-    def _accumulate_outcome(self, outcome: BridgeAgentOutcome) -> None:
+    def _accumulate_outcome(
+        self,
+        outcome: BridgeAgentOutcome,
+        phase: ResourcePhase = ResourcePhase.IMPLEMENTATION,
+    ) -> None:
         """Record telemetry and mutated files from an agent turn."""
         self.context.last_outcome = outcome
         self.context.total_tokens_consumed += outcome.total_tokens
         self.context.total_cost_usd += outcome.cost_usd
         for f in outcome.mutated_files:
             self.context.mutated_files.add(f)
+
+        if self.governor:
+            made_progress = (
+                bool(outcome.mutated_files)
+                or phase in (ResourcePhase.PLANNING, ResourcePhase.REVIEW, ResourcePhase.AUDIT)
+                or getattr(outcome, "completed_naturally", False)
+                or getattr(outcome, "exit_reason", None) == AgentExitReason.NATURAL_COMPLETION
+            )
+            self.governor.post_yield_record(
+                phase=phase,
+                cost_usd=outcome.cost_usd,
+                tokens_consumed=outcome.total_tokens,
+                turns_used=outcome.iterations_executed or 1,
+                made_meaningful_progress=made_progress,
+            )
 
     def _resume_from_checkpoint(self, checkpoint: Any) -> None:
         """Restore FSMContext from a serialized FSMCheckpoint."""
