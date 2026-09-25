@@ -1,0 +1,9 @@
+name: architectural-decomposition
+description: Senior Architect methodology. Decomposes high-level requirements into formal specifications, dependency trees, and incremental implementation phases.
+triggers:
+  - plan
+  - architect
+  - design
+  - decompose
+  - specification
+role: architect

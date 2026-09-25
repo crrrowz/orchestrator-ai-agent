@@ -1,5 +1,37 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P4-01 - Guarded FSM Engine & Unified Lifecycle Orchestration (P3 Engine Deployment)
+- **Plan Reference:** P12 Section 3.5, P3 Full Specification
+- **Target Files & Symbols:**
+  - `orchestrator/pipeline/fsm/states.py` (`FSMState` taxonomy with 11 discrete states, terminal & recoverable state properties)
+  - `orchestrator/pipeline/fsm/events.py` (`EventType`, `AgentExecutionOutcome`, `PipelineEvent`)
+  - `orchestrator/pipeline/fsm/guards.py` (`ImplementationState`, `VerificationState`, `RequirementStatus`, `CompletionStatus`, `CompletionDecision`, `evaluate_task_completion`, `TaskTruthSemanticQueries`, `FSMGuards`)
+  - `orchestrator/pipeline/fsm/transitions.py` (`TransitionRule`, `TransitionResult`, `TransitionMatrix`)
+  - `orchestrator/pipeline/fsm/profiles.py` (`PipelineMode`, `LifecycleProfile`, `PROFILES`, `get_profile`)
+  - `orchestrator/pipeline/fsm/checkpoint.py` (`MilestoneStateSnapshot`, `FSMCheckpoint`, `FSMCheckpointManager`)
+  - `orchestrator/pipeline/fsm/engine.py` (`FSMContext`, `GuardedFSMEngine`)
+  - `orchestrator/pipeline/fsm/__init__.py`
+  - `orchestrator/pipeline/__init__.py`
+  - `orchestrator/config/migration_routing.json` (`use_guarded_fsm: true`)
+  - `tests/test_guarded_fsm.py` (23 comprehensive unit and integration tests)
+- **Acceptance Criteria Verified:**
+  - Complete `FSMState` taxonomy with 11 states cleanly replacing procedural `PipelineStateMachine` and 5 legacy scripts.
+  - Strongly typed `PipelineEvent` schema driving all deterministic state transitions with zero direct state mutation.
+  - Pure boolean `FSMGuards` delegating to `TaskTruthSemanticQueries` and 14-step `evaluate_task_completion` without computing code logic directly.
+  - Canonical `TransitionMatrix` with exact transition rules, wildcards, and on_entry/on_exit hooks.
+  - Unified `LifecycleProfile` mechanism synthesizing `DEV_TEST`, `FULL`, `AUDIT`, `AUDIT_FIX`, and `DOCS` execution modes.
+  - Cryptographically validated `FSMCheckpointManager` with SHA-256 workspace fingerprinting enabling zero-token safe resume.
+  - Ephemeral agent execution delegation via `OpenHandsRuntimeBridge` with secret masking and structured yield telemetry.
+  - Multi-tiered recovery loops in `RESOLUTION` handling incomplete requirements, test failures, and stagnation circuit breakers.
+- **Test Evidence:** `tests/test_guarded_fsm.py` (23 passed), `tests/` total (340 passed) (Exit code: 0, Duration: 23.75s)
+- **PreFlight Status:** SYNTAX_CLEAN
+- **Baseline Invariant:** 244/244 PASSED + 57/57 PASSED + 14/14 PASSED + 23/23 PASSED + 2/2 PASSED = 340/340 PASSED (0 Regressions)
+- **PER 2.0 Score:** 100.0 (Classification: THRIVING)
+- **Checkpoint Tag:** `v0.5.0-guarded-fsm`
+- **Remaining Blockers / Next Eligible Bite:** Phase 5 (Legacy Pipeline Decommissioning & Repository Cleansing)
+
+---
+
 ### Bite Record: BITE-P3-01 - SDK Seam & Clean Boundary Deployment (P10 OpenHands Bridge)
 - **Plan Reference:** P12 Section 3.4, P10 Full Specification
 - **Target Files & Symbols:** 

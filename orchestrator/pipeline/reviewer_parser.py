@@ -74,6 +74,9 @@ class ReviewerVerdict:
 
         # 3. Fallback: robust regex and semantic pattern matching
         upper_text = clean_text.upper()
+        if upper_text in ("APPROVED", "APPROVE", "PASSED", "PASS", "LGTM"):
+            return cls(approved=True, verdict="APPROVED", raw_text=clean_text)
+
         approval_markers = [
             r"VERDICT[\s:\-]+APPROVED",
             r'"VERDICT"\s*:\s*"APPROVED"',

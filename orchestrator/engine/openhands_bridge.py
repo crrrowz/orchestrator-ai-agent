@@ -41,7 +41,13 @@ from openhands.sdk.event import (
     ObservationEvent,
 )
 from openhands.sdk.event.conversation_error import ConversationErrorEvent
-from openhands.sdk.tool import Action, Observation, ToolDefinition, ToolExecutor
+from openhands.sdk.tool import (
+    Action,
+    Observation,
+    ToolDefinition,
+    ToolExecutor,
+    register_tool,
+)
 
 if TYPE_CHECKING:
     from orchestrator.config import OrchestratorConfig
@@ -405,6 +411,17 @@ class HardenedWorkspaceTerminalTool(
                 executor=HardenedTerminalExecutor(mgr),
             )
         ]
+
+
+try:
+    register_tool("workspace_file", HardenedWorkspaceFileTool)
+except Exception:
+    pass
+
+try:
+    register_tool("workspace_terminal", HardenedWorkspaceTerminalTool)
+except Exception:
+    pass
 
 
 # =====================================================================

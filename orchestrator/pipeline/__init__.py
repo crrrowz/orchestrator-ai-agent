@@ -11,6 +11,22 @@ from .full_pipeline import FullPipeline
 from .milestone_dag import MilestoneParser, SubtaskMilestone
 from .reviewer_parser import ReviewerVerdict
 from .state_machine import PipelinePhase, PipelineStateMachine
+from .fsm import (
+    CompletionDecision,
+    CompletionStatus,
+    EventType,
+    FSMCheckpoint,
+    FSMCheckpointManager,
+    FSMGuards,
+    FSMState,
+    GuardedFSMEngine,
+    LifecycleProfile,
+    PipelineMode,
+    PipelineEvent,
+    TaskTruthSemanticQueries,
+    evaluate_task_completion,
+    get_profile,
+)
 
 __all__ = [
     "BasePipeline",
@@ -28,4 +44,18 @@ __all__ = [
     "ReviewerVerdict",
     "locate_and_normalize_report",
     "read_report",
+    "FSMState",
+    "EventType",
+    "PipelineEvent",
+    "GuardedFSMEngine",
+    "LifecycleProfile",
+    "PipelineMode",
+    "get_profile",
+    "FSMCheckpoint",
+    "FSMCheckpointManager",
+    "FSMGuards",
+    "TaskTruthSemanticQueries",
+    "CompletionDecision",
+    "CompletionStatus",
+    "evaluate_task_completion",
 ]

@@ -1,0 +1,9 @@
+name: clean-python-architecture
+description: Senior Python architectural standard. Enforces idiomatic Python 3.12+, strict type hints, dependency injection, modular cohesion, and zero placeholder/stub code.
+triggers:
+  - python
+  - develop
+  - implement
+  - code
+  - module
+role: developer

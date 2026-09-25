@@ -14,6 +14,7 @@ class SkillMetadata:
     source: str
     char_count: int
     is_compacted: bool = False
+    role: Optional[str] = None
     tags: List[str] = field(default_factory=list)
 
 
@@ -23,20 +24,30 @@ class SkillRegistry:
     def __init__(self, skills: Optional[List[Skill]] = None):
         self._skills: Dict[str, Skill] = {}
         self._metadata: Dict[str, SkillMetadata] = {}
+        self._role_index: Dict[str, List[str]] = {}
         if skills:
             for s in skills:
                 self.register(s)
 
-    def register(self, skill: Skill) -> None:
+    def register(self, skill: Skill, role: Optional[str] = None) -> None:
         """Register a skill into the registry."""
         self._skills[skill.name] = skill
         desc = skill.description or ""
         tags = [w.lower() for w in skill.name.replace("-", " ").split()]
+        if role:
+            tags.append(role.lower())
+            role_key = role.lower()
+            if role_key not in self._role_index:
+                self._role_index[role_key] = []
+            if skill.name not in self._role_index[role_key]:
+                self._role_index[role_key].append(skill.name)
+
         self._metadata[skill.name] = SkillMetadata(
             name=skill.name,
             description=desc,
             source=str(skill.source) if skill.source else "local",
             char_count=len(skill.content or ""),
+            role=role,
             tags=tags,
         )
 
@@ -47,6 +58,11 @@ class SkillRegistry:
     def get_metadata(self, name: str) -> Optional[SkillMetadata]:
         """Fetch metadata for a skill."""
         return self._metadata.get(name)
+
+    def get_by_role(self, role: str) -> List[Skill]:
+        """Fetch all skills bound to a specific persona role."""
+        names = self._role_index.get(role.lower(), [])
+        return [self._skills[n] for n in names if n in self._skills]
 
     def list_all(self) -> List[SkillMetadata]:
         """Return metadata for all registered skills."""
@@ -64,3 +80,4 @@ class SkillRegistry:
             ):
                 results.append(self._skills[name])
         return results
+

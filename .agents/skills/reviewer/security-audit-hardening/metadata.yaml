@@ -1,0 +1,10 @@
+name: security-audit-hardening
+description: Comprehensive security auditing and defensive hardening skill. Prevents OWASP Top 10 vulnerabilities, command injection, path traversal, secret leaks, and insecure deserialization.
+triggers:
+  - security
+  - audit
+  - vulnerability
+  - sanitize
+  - auth
+  - token
+role: reviewer

@@ -1,0 +1,9 @@
+name: docker-devops-containerization
+description: Production containerization and DevOps protocol. Enforces multi-stage builds, non-root users, minimal image footprints, and docker-compose orchestration.
+triggers:
+  - docker
+  - container
+  - devops
+  - dockerfile
+  - compose
+role: developer

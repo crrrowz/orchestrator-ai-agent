@@ -1,0 +1,10 @@
+name: systematic-debugging
+description: Systematic root cause analysis protocol. Fixes test failures and runtime errors methodically without introducing regressions or guess-and-check patches.
+triggers:
+  - fix
+  - debug
+  - error
+  - failure
+  - traceback
+  - remedy
+role: remediation

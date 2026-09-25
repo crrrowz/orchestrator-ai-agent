@@ -192,3 +192,6 @@ class HumanInterventionChannel:
             return "approved"
         except (EOFError, KeyboardInterrupt):
             return "rejected"
+
+
+HumanChannel = HumanInterventionChannel

@@ -1,0 +1,10 @@
+name: api-design-contract
+description: Enterprise API contract specification skill. Enforces RESTful conventions, semantic HTTP status codes, structured error payloads, and OpenAPI schemas.
+triggers:
+  - api
+  - rest
+  - endpoint
+  - route
+  - schema
+  - contract
+role: architect

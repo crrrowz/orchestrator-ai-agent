@@ -1,0 +1,11 @@
+name: graft-architecture-intelligence
+description: Codebase intelligence and wiring graph navigation via Graft CLI. Zero-token repository orientation, clusters, API skeletons, blast radius, and call graphs.
+triggers:
+  - graft
+  - architecture
+  - map
+  - skeleton
+  - callers
+  - blast
+  - dependency
+role: architect

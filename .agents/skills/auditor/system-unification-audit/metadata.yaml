@@ -1,0 +1,11 @@
+name: system-unification-audit
+description: System-wide codebase consolidation, architectural audit, and responsibility unification protocol. Enforces "One responsibility -> One owner -> One implementation -> One source of truth", state isolation, unified security boundaries, and systematic zero-regression discovery.
+triggers:
+  - audit
+  - unification
+  - consolidation
+  - refactor
+  - architecture
+  - dependency-map
+  - state-ownership
+role: auditor

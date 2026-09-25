@@ -1,0 +1,9 @@
+name: pytest-rigorous-testing
+description: Senior testing protocol. Enforces isolated unit tests, edge-case coverage, deterministic fixtures, parameterization, and actionable test failure diagnostics.
+triggers:
+  - test
+  - pytest
+  - unittest
+  - verify
+  - assert
+role: tester

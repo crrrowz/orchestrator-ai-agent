@@ -1,0 +1,8 @@
+name: code-review-standards
+description: Independent code review rubric. Evaluates security, correctness, backward compatibility, performance, and adherence to clean architecture principles.
+triggers:
+  - review
+  - critique
+  - audit
+  - inspect
+role: reviewer
