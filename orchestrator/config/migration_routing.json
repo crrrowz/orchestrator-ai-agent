@@ -4,5 +4,6 @@
   "use_guarded_fsm": true,
   "use_adaptive_governance": true,
   "use_context_handoff_mesh": true,
+  "use_deep_inspection_engine": true,
   "canary_percentage": 0
 }
