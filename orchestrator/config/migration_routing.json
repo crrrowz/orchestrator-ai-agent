@@ -5,5 +5,6 @@
   "use_adaptive_governance": true,
   "use_context_handoff_mesh": true,
   "use_deep_inspection_engine": true,
+  "use_stagnation_recovery_engine": true,
   "canary_percentage": 0
 }

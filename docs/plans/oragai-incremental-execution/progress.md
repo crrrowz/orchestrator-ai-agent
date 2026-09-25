@@ -1,5 +1,35 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P8-01 - Progress, Stagnation & Recovery Engine (P8 Specification Deployment)
+- **Plan Reference:** P12 Section 3.9, P8 Full Specification
+- **Target Files & Symbols:**
+  - `orchestrator/control/recovery/models.py` (`BreakerState`, `ProgressHealth`, `CyclePattern`, `MutationStrategyType`, `RecoveryActionType`, `ASTSymbolSignature`, `StateFingerprint`, `ProgressVelocityMetrics`, `StrategyMutationDirective`, `RecoveryDecision`, `QuarantinedMilestoneRecord`, `HITLEscalationPayload`)
+  - `orchestrator/control/recovery/tracker.py` (`SemanticProgressTracker`, 4-dimensional velocity vector: $V_{\text{code}}$, $V_{\text{verif}}$, $V_{\text{evid}}$, $V_{\text{defect}}$, PER 2.0, normalized score)
+  - `orchestrator/control/recovery/oscillation.py` (`OscillationDetector`, sliding-window finite sequence autocorrelation buffer $W=5$, Direct Stagnation $p=1$, Flip-Flop $p=2$, Periodic Cycles $p=3..5$)
+  - `orchestrator/control/recovery/circuit_breaker.py` (`AdaptiveCircuitBreaker`, 4-tier state machine: `CLOSED` $\to$ `DEGRADED` $\to$ `STRATEGY_MUTATING` $\to$ `TRIPPED_ESCALATING`)
+  - `orchestrator/control/recovery/mutator.py` (`StrategyMutator`, 4-tier taxonomy: `PROMPT_STEERING`, `TARGET_DECOMPOSITION`, `TOOL_CONSTRICTION`, `MODEL_ELEVATION`)
+  - `orchestrator/control/recovery/orchestrator.py` (`RecoveryOrchestrator`, unified façade coordinating tracker, oscillation detector, adaptive breaker, strategy mutator, GitOps atomic rollback handles, and Sentinel SQLite WAL logging)
+  - `orchestrator/control/recovery/__init__.py` (Package exports)
+  - `orchestrator/control/__init__.py` (Exposed recovery models and engines)
+  - `orchestrator/config/migration_routing.json` (`use_stagnation_recovery_engine: true`)
+  - `tests/test_stagnation_recovery.py` (18 comprehensive unit and integration tests)
+- **Acceptance Criteria Verified:**
+  - Multi-dimensional semantic progress tracking ignoring superficial comment, formatting, whitespace, and docstring churn ($V_{\text{code}} = 0.0 \implies \text{STAGNANT}$).
+  - Verification velocity calculating net test node advancement ($\Delta \text{PassNodes} + 0.5 \Delta \text{FailNodes}$) and detecting severe regressions ($V_{\text{verif}} < -2.0$).
+  - Sliding-window sequence autocorrelation detecting direct stagnation ($p=1$), flip-flop cycles ($A \to B \to A, p=2$), and periodic oscillations ($p \in [3, 5]$).
+  - 4-tier adaptive circuit breaker transitioning `CLOSED` $\to$ `DEGRADED` on single stagnant turn, `STRATEGY_MUTATING` on repeated failures/cycles, and `TRIPPED_ESCALATING` on tier-4 exhaustion.
+  - Dynamic strategy mutation generating anti-oscillation prompt steering directives, sub-atomic milestone decomposition, tool constriction (disabling bash, locking to AST file operations), and high-reasoning model tier elevation.
+  - Transactional rollback decision emission on severe regressions ($V_{\text{verif}} < -2.0$) and milestone quarantine handling (`docs/quarantined_findings.json`).
+  - Sentinel SQLite WAL telemetry recording progress snapshots and recovery events.
+- **Test Evidence:** `tests/test_stagnation_recovery.py` (18 passed), `tests/` total (400 passed) (Exit code: 0, Duration: 26.67s)
+- **PreFlight Status:** SYNTAX_CLEAN (`PreFlightGuard.check_syntax()` 100% clean)
+- **Baseline Invariant:** 382/382 PASSED + 18/18 PASSED = 400/400 PASSED (0 Regressions)
+- **PER 2.0 Score:** 100.0 (Classification: THRIVING)
+- **Checkpoint Tag:** `v0.9.0-stagnation-recovery`
+- **Remaining Blockers / Next Eligible Bite:** Phase 9 (Tooling, Context Windows & Sandbox Hardening Plan - P9 Specification)
+
+---
+
 ### Bite Record: BITE-P7-01 - Audit, Deep Inspection & Self-Evolution Engine (P7 Specification Deployment)
 - **Plan Reference:** P12 Section 3.8, P7 Full Specification
 - **Target Files & Symbols:**

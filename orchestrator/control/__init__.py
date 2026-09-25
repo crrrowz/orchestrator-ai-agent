@@ -30,6 +30,25 @@ from .adaptive import (
     ResourceUsageSnapshot,
     TurnBudgetResult,
 )
+from .recovery import (
+    AdaptiveCircuitBreaker,
+    ASTSymbolSignature,
+    BreakerState,
+    CyclePattern,
+    HITLEscalationPayload,
+    MutationStrategyType,
+    OscillationDetector,
+    ProgressHealth,
+    ProgressVelocityMetrics,
+    QuarantinedMilestoneRecord,
+    RecoveryActionType,
+    RecoveryDecision,
+    RecoveryOrchestrator,
+    SemanticProgressTracker,
+    StateFingerprint,
+    StrategyMutationDirective,
+    StrategyMutator,
+)
 
 HumanChannel = HumanInterventionChannel
 
@@ -59,4 +78,21 @@ __all__ = [
     "ResourcePhase",
     "ResourceUsageSnapshot",
     "TurnBudgetResult",
+    "AdaptiveCircuitBreaker",
+    "ASTSymbolSignature",
+    "BreakerState",
+    "CyclePattern",
+    "HITLEscalationPayload",
+    "MutationStrategyType",
+    "OscillationDetector",
+    "ProgressHealth",
+    "ProgressVelocityMetrics",
+    "QuarantinedMilestoneRecord",
+    "RecoveryActionType",
+    "RecoveryDecision",
+    "RecoveryOrchestrator",
+    "SemanticProgressTracker",
+    "StateFingerprint",
+    "StrategyMutationDirective",
+    "StrategyMutator",
 ]
