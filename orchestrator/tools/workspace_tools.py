@@ -1,4 +1,5 @@
 import ast
+import json
 import os
 import re
 import shlex
@@ -6,7 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Literal, Optional, Sequence, Any, Tuple
+from typing import Literal, Optional, Sequence, Any, Tuple, Set
 from pydantic import ConfigDict, Field
 from openhands.sdk.tool import (
     Tool,
@@ -19,6 +20,25 @@ from openhands.sdk.tool import (
 from openhands.sdk.tool.schema import TextContent
 from orchestrator.config import DEFAULT_WORKSPACE_DIR
 from orchestrator.control.human_channel import get_active_channel
+from orchestrator.tools.hardened.manager import ToolSandboxManager
+from orchestrator.tools.hardened.models import (
+    FileActionRequest,
+    TerminalActionRequest,
+)
+
+
+def is_hardened_sandbox_enabled() -> bool:
+    """Check whether hardened sandbox routing is enabled via migration_routing.json."""
+    config_file = (
+        Path(__file__).resolve().parent.parent / "config" / "migration_routing.json"
+    )
+    if config_file.exists():
+        try:
+            data = json.loads(config_file.read_text(encoding="utf-8"))
+            return bool(data.get("use_hardened_sandbox", True))
+        except Exception:
+            return True
+    return True
 
 
 # ==========================================
@@ -41,7 +61,9 @@ class WorkspaceFileAction(Action):
     """File manipulation action within the workspace sandbox."""
 
     model_config = ConfigDict(extra="ignore")
-    operation: Literal["read", "write", "edit", "list", "delete", "append", "symbol"]
+    operation: Literal[
+        "read", "write", "edit", "patch", "list", "delete", "append", "symbol", "outline"
+    ]
     path: str
     symbol: Optional[str] = None
     content: Optional[str] = None
@@ -49,6 +71,8 @@ class WorkspaceFileAction(Action):
     replacement_text: Optional[str] = None
     start_line: Optional[int] = None
     end_line: Optional[int] = None
+    offset_line: Optional[int] = 1
+    limit_lines: Optional[int] = 250
 
 
 def extract_ast_symbol(
@@ -169,6 +193,40 @@ def execute_file_action(
     blocked_write_prefixes: Optional[Sequence[str]] = None,
 ) -> WorkspaceFileObservation:
     """Safely execute file operation within workspace."""
+    if is_hardened_sandbox_enabled():
+        workspace_root = (
+            base_dir
+            or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+        )
+        manager = ToolSandboxManager(
+            workspace_root=workspace_root,
+            read_only=read_only,
+            allowed_write_prefixes=allowed_write_prefixes,
+            blocked_write_prefixes=blocked_write_prefixes,
+        )
+        req = FileActionRequest(
+            operation=action.operation,
+            path=action.path,
+            content=action.content,
+            target_text=action.target_text,
+            replacement_text=action.replacement_text,
+            symbol=action.symbol,
+            offset_line=getattr(action, "offset_line", 1) or 1,
+            limit_lines=getattr(action, "limit_lines", 150) or 150,
+            start_line=action.start_line,
+            end_line=action.end_line,
+        )
+        res = manager.handle_file_action(req, conversation=conversation)
+        return WorkspaceFileObservation(
+            content=[TextContent(text=res.file_content or res.message)],
+            is_error=res.is_error,
+            success=res.success,
+            message=res.message,
+            file_content=res.file_content,
+            files=res.files,
+        )
+
+    # Legacy Fallback Seam below
     workspace_root = (
         base_dir
         or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
@@ -863,6 +921,27 @@ def execute_terminal_action(
     action: WorkspaceTerminalAction, conversation=None, base_dir: Optional[Path] = None
 ) -> WorkspaceTerminalObservation:
     """Execute terminal command safely inside workspace directory using parameterized execution."""
+    if is_hardened_sandbox_enabled():
+        workspace_root = (
+            base_dir
+            or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
+        )
+        manager = ToolSandboxManager(workspace_root=workspace_root)
+        req = TerminalActionRequest(
+            command=action.command,
+            timeout_seconds=action.timeout_seconds,
+        )
+        res = manager.handle_terminal_action(req, conversation=conversation)
+        return WorkspaceTerminalObservation(
+            content=[TextContent(text=res.stdout or res.stderr)],
+            exit_code=res.exit_code,
+            stdout=res.stdout,
+            stderr=res.stderr,
+            timed_out=res.timed_out,
+            is_error=res.is_error,
+        )
+
+    # Legacy Fallback Seam below
     workspace_root = (
         base_dir
         or Path(os.environ.get("WORKSPACE_PATH", str(DEFAULT_WORKSPACE_DIR))).resolve()
