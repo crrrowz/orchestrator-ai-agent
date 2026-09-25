@@ -56,6 +56,8 @@ DISALLOWED_OPERATORS: Set[str] = {
     "iwr",
     "curl",
     "wget",
+    "format",
+    "rmdir",
 }
 
 APPROVED_ROOT_COMMANDS: Set[str] = {
@@ -150,6 +152,11 @@ def sanitize_text_secrets(text: str) -> str:
     sanitized = re.sub(r"sk-ant-[a-zA-Z0-9_\-]{20,}", "[REDACTED_ANTHROPIC_KEY]", sanitized)
     sanitized = re.sub(r"sk-[a-zA-Z0-9_\-]{20,}", "[REDACTED_API_KEY]", sanitized)
     sanitized = re.sub(r"AIza[0-9A-Za-z\-_]{35}", "[REDACTED_GEMINI_KEY]", sanitized)
+    sanitized = re.sub(
+        r"ey[A-Za-z0-9\-_=]{20,}\.[A-Za-z0-9\-_=]{20,}\.?[A-Za-z0-9\-_=]*",
+        "[REDACTED_JWT_TOKEN]",
+        sanitized,
+    )
     sanitized = re.sub(
         r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+ PRIVATE KEY-----",
         "[REDACTED_PRIVATE_KEY]",

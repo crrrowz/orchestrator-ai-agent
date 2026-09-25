@@ -64,7 +64,7 @@ class CommandGrammarValidator:
                 rejection_reason="Empty command string.",
             )
 
-        # 1. Check for subshell expressions ($(...)) and backticks (``)
+        # 1. Check for unquoted shell operators, subshell expressions ($(...)), backticks (``), and redirections
         if "$(" in clean:
             return ValidatedCommand(
                 is_valid=False,
@@ -97,6 +97,32 @@ class CommandGrammarValidator:
                 pipeline_segments=(),
                 rejection_reason="Security policy violation: Chained commands or pipeline operator '&&' are not permitted.",
             )
+
+        # Check for unquoted redirection and chaining operators outside quotes
+        in_s = False
+        in_d = False
+        for c_idx, ch in enumerate(clean):
+            if ch == "'" and not in_d:
+                in_s = not in_s
+            elif ch == '"' and not in_s:
+                in_d = not in_d
+            elif not in_s and not in_d:
+                if ch == ";":
+                    return ValidatedCommand(
+                        is_valid=False,
+                        executable_path="",
+                        command_line_args=(),
+                        pipeline_segments=(),
+                        rejection_reason="Security policy violation: Chained commands or pipeline operator ';' are not permitted.",
+                    )
+                elif ch in (">", "<"):
+                    return ValidatedCommand(
+                        is_valid=False,
+                        executable_path="",
+                        command_line_args=(),
+                        pipeline_segments=(),
+                        rejection_reason="Security policy violation: Shell redirection operator is prohibited.",
+                    )
 
         # 2. Split pipeline on unquoted |
         raw_segments = cls._split_pipeline_segments(clean)
@@ -153,7 +179,7 @@ class CommandGrammarValidator:
 
             # Check disallowed dangerous command verbs
             if base_bin in DISALLOWED_OPERATORS or any(
-                tok.lower() in ("invoke-expression", "iex", "start-process", "invoke-webrequest", "iwr")
+                tok.lower() in ("invoke-expression", "iex", "start-process", "invoke-webrequest", "iwr", "format")
                 for tok in tokens
             ):
                 return ValidatedCommand(
@@ -163,6 +189,23 @@ class CommandGrammarValidator:
                     pipeline_segments=(),
                     rejection_reason=f"Security policy violation: Command or operator '{base_bin}' is prohibited.",
                 )
+
+            # Check for destructive recursive deletions (e.g. rm -rf, del /f /s)
+            if base_bin in ("rm", "del", "remove-item"):
+                lower_tokens = [t.lower() for t in tokens[1:]]
+                if (
+                    "-rf" in lower_tokens
+                    or "-fr" in lower_tokens
+                    or ("-r" in lower_tokens and "-f" in lower_tokens)
+                    or ("-recurse" in lower_tokens and "-force" in lower_tokens)
+                ):
+                    return ValidatedCommand(
+                        is_valid=False,
+                        executable_path="",
+                        command_line_args=(),
+                        pipeline_segments=(),
+                        rejection_reason="Security policy violation: Destructive command 'rm -rf' is prohibited.",
+                    )
 
             if idx == 0:
                 if (

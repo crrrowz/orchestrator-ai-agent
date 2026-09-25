@@ -89,6 +89,32 @@ class TerminalSandboxEngine:
 
         return env
 
+    @classmethod
+    def _kill_process_tree(cls, pid: int) -> None:
+        """Clean tree-kill on hung child processes across Windows NT and POSIX."""
+        if not pid:
+            return
+        is_windows = sys.platform == "win32" or os.name == "nt"
+        if is_windows:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=5,
+                )
+            except Exception:
+                pass
+        else:
+            try:
+                import signal
+
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except Exception:
+                try:
+                    os.kill(pid, 9)
+                except Exception:
+                    pass
+
     def execute(
         self, action: TerminalActionRequest, base_dir: Optional[Path] = None
     ) -> TerminalObservationResult:
@@ -159,20 +185,27 @@ class TerminalSandboxEngine:
             )
             exec_args = [resolved_bin, *validation.command_line_args]
 
+        timeout_sec = (
+            action.timeout_seconds
+            if (action.timeout_seconds and action.timeout_seconds > 0)
+            else 60
+        )
+        proc = None
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 exec_args,
                 cwd=str(target_root),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=action.timeout_seconds,
                 env=env,
                 shell=False,
             )
-            stdout_clean = sanitize_text_secrets(proc.stdout or "")
-            stderr_clean = sanitize_text_secrets(proc.stderr or "")
+            stdout_raw, stderr_raw = proc.communicate(timeout=timeout_sec)
+            stdout_clean = sanitize_text_secrets(stdout_raw or "")
+            stderr_clean = sanitize_text_secrets(stderr_raw or "")
 
             return TerminalObservationResult(
                 exit_code=proc.returncode,
@@ -182,35 +215,37 @@ class TerminalSandboxEngine:
                 is_error=(proc.returncode != 0),
             )
 
-        except subprocess.TimeoutExpired as te:
-            stdout_str = sanitize_text_secrets(
-                te.stdout
-                if isinstance(te.stdout, str)
-                else (
-                    te.stdout.decode("utf-8", errors="replace")
-                    if te.stdout
-                    else ""
-                )
-            )
-            stderr_str = sanitize_text_secrets(
-                te.stderr
-                if isinstance(te.stderr, str)
-                else (
-                    te.stderr.decode("utf-8", errors="replace")
-                    if te.stderr
-                    else ""
-                )
-            )
-            timeout_msg = f"Command timed out after {action.timeout_seconds} seconds."
+        except subprocess.TimeoutExpired:
+            if proc:
+                self._kill_process_tree(proc.pid)
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    stdout_raw, stderr_raw = proc.communicate(timeout=2)
+                except Exception:
+                    stdout_raw, stderr_raw = "", ""
+            else:
+                stdout_raw, stderr_raw = "", ""
+
+            stdout_clean = sanitize_text_secrets(stdout_raw or "")
+            stderr_clean = sanitize_text_secrets(stderr_raw or "")
+            timeout_msg = f"Command timed out after {timeout_sec} seconds."
             return TerminalObservationResult(
                 exit_code=-1,
-                stdout=stdout_str,
-                stderr=f"{timeout_msg}\n{stderr_str}".strip(),
+                stdout=stdout_clean,
+                stderr=f"{timeout_msg}\n{stderr_clean}".strip(),
                 timed_out=True,
                 is_error=True,
                 steering_directive="Execution timed out. Narrow test target (-k <name>) or increase timeout_seconds.",
             )
         except Exception as e:
+            if proc:
+                try:
+                    self._kill_process_tree(proc.pid)
+                except Exception:
+                    pass
             return TerminalObservationResult(
                 exit_code=1,
                 stdout="",

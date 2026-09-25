@@ -1,5 +1,38 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P9-01 - Tooling, Context Windows & Sandbox Hardening (P9 Specification Deployment)
+- **Plan Reference:** P12 Section 3.3 / P9 Full Specification
+- **Target Files & Symbols:**
+  - `orchestrator/tools/hardened/models.py` (`FileOperationType`, `ToolPermissionLevel`, `AgentExecutionScope`, `SymbolOutlineNode`, `VirtualFileView`, `FileActionRequest`, `FileObservationResult`, `PipelineSegment`, `ValidatedCommand`, `TerminalActionRequest`, `TerminalObservationResult`)
+  - `orchestrator/tools/hardened/virtualizer.py` (`WorkspaceFileVirtualizer`, recursive `_extract_symbol_nodes`, `_format_outline_text`, lossless `read_ast_symbol`, dual-window `read_windowed`, atomic `atomic_safe_write` with `py_compile` pre-write validation, `atomic_patch`)
+  - `orchestrator/tools/hardened/security.py` (`SENSITIVE_ENV_KEYWORDS`, `SENSITIVE_FILE_NAMES`, `SENSITIVE_FILE_EXTENSIONS`, `DISALLOWED_OPERATORS`, `APPROVED_ROOT_COMMANDS`, `APPROVED_PIPELINE_CMDLETS`, `PROHIBITED_DEVICE_NAMES`, `sanitize_text_secrets`, `is_sensitive_filepath`)
+  - `orchestrator/tools/hardened/grammar.py` (`CommandGrammarValidator`, pipeline tokenizer `_split_pipeline_segments`, safe PowerShell pipeline allowlist, strict ban on unquoted `;`, `&&`, `||`, redirect escapes `>`, `>>`, `<`, subshells `$()`, backticks, destructive `rm -rf`, `format`)
+  - `orchestrator/tools/hardened/sandbox.py` (`TerminalSandboxEngine`, parameterized subprocess isolation, cross-platform tree-kill `_kill_process_tree`, standard stream UTF-8 encoding normalization, environment variable secret stripping)
+  - `orchestrator/tools/hardened/manager.py` (`ToolSandboxManager`, master RBAC enforcer with `AgentExecutionScope`, workspace containment, sensitive file boundary shield)
+  - `orchestrator/tools/hardened/__init__.py` (Package exports)
+  - `orchestrator/tools/workspace_tools.py` (Finalized seam routing file & terminal tool actions to `ToolSandboxManager`)
+  - `orchestrator/config/migration_routing.json` (`use_hardened_sandbox: true`, `use_ast_virtualizer: true`)
+  - `tests/test_hardened_tooling_p9.py` (28 comprehensive unit and integration tests)
+- **Acceptance Criteria Verified:**
+  - AST virtualizer extracts full methods (>300 LOC) without legacy 250 LOC text clamping.
+  - Outline generation recursively indexes nested classes, methods, and functions with structural line/byte bounds.
+  - Dual-window pagination returning requested line boundaries, pagination hints, and AST outline metadata.
+  - Non-destructive patch application with pre-write syntax validation via `py_compile.compile` and `ast.parse`.
+  - Grammar validator allows safe PowerShell pipelines (`Get-Content | Select-String`, `dir | findstr`, `cat | grep`) resolving the legacy pipe contradiction while strictly blocking shell escape injection tokens (`;`, `&&`, `||`, `>`, `>>`, `<`, `$()`, backticks, `format`, `rm -rf`).
+  - Strict workspace containment rejecting path traversal attempts (`../../etc/passwd`, `..\..\Windows`).
+  - Sensitive file masking blocking `.env*`, `id_rsa*`, `credentials.json`, `*.pem`, `*.key` from read, write, edit, and append.
+  - Windows console UTF-8 standard stream decoding supporting Arabic, Asian characters, and symbols without `UnicodeDecodeError`.
+  - Process timeout boundary enforcement cleanly tree-killing hung child processes without hanging the test runner.
+  - Master RBAC enforcement validating operations against P5 `AgentExecutionScope`.
+- **Test Evidence:** `tests/test_hardened_tooling_p9.py` (28 passed), `tests/` total (428 passed) (Exit code: 0, Duration: 26.93s)
+- **PreFlight Status:** SYNTAX_CLEAN (`PreFlightGuard.check_syntax()` 100% clean)
+- **Baseline Invariant:** 400/400 PASSED + 28/28 PASSED = 428/428 PASSED (0 Regressions)
+- **PER 2.0 Score:** 100.0 (Classification: THRIVING)
+- **Checkpoint Tag:** `v0.10.0-tooling-hardened`
+- **Remaining Blockers / Next Eligible Bite:** Phase 10 (OpenHands Runtime Boundary & Integration Plan - P10 Specification)
+
+---
+
 ### Bite Record: BITE-P8-01 - Progress, Stagnation & Recovery Engine (P8 Specification Deployment)
 - **Plan Reference:** P12 Section 3.9, P8 Full Specification
 - **Target Files & Symbols:**

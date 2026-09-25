@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import os
+import py_compile
 import re
 import uuid
 from pathlib import Path
@@ -34,6 +35,119 @@ _HARDENED_APPEND_COUNTS: Dict[str, int] = {}
 def reset_hardened_append_counts() -> None:
     """Reset session append counters."""
     _HARDENED_APPEND_COUNTS.clear()
+
+
+def _format_function_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Format parameter signature of function or method."""
+    args: List[str] = []
+    for arg in node.args.args:
+        ann = ""
+        if arg.annotation:
+            try:
+                ann = f": {ast.unparse(arg.annotation)}"
+            except Exception:
+                ann = ""
+        args.append(f"{arg.arg}{ann}")
+    if node.args.vararg:
+        args.append(f"*{node.args.vararg.arg}")
+    for arg in node.args.kwonlyargs:
+        ann = ""
+        if arg.annotation:
+            try:
+                ann = f": {ast.unparse(arg.annotation)}"
+            except Exception:
+                ann = ""
+        args.append(f"{arg.arg}{ann}")
+    if node.args.kwarg:
+        args.append(f"**{node.args.kwarg.arg}")
+
+    ret_ann = ""
+    if getattr(node, "returns", None):
+        try:
+            ret_ann = f" -> {ast.unparse(node.returns)}"
+        except Exception:
+            ret_ann = ""
+
+    prefix = "async def " if isinstance(node, ast.AsyncFunctionDef) else "def "
+    return f"{prefix}{node.name}({', '.join(args)}){ret_ann}"
+
+
+def _extract_symbol_nodes(
+    body: Sequence[ast.AST], is_inside_class: bool = False
+) -> List[SymbolOutlineNode]:
+    """Recursively extract SymbolOutlineNodes for classes, methods, and functions."""
+    nodes: List[SymbolOutlineNode] = []
+    for item in body:
+        if isinstance(item, ast.ClassDef):
+            cls_doc = ast.get_docstring(item)
+            cls_summary = cls_doc.splitlines()[0] if cls_doc else None
+            children = _extract_symbol_nodes(item.body, is_inside_class=True)
+            bases_str = ""
+            if item.bases:
+                try:
+                    bases_str = f"({', '.join(ast.unparse(b) for b in item.bases)})"
+                except Exception:
+                    bases_str = ""
+            sig = f"class {item.name}{bases_str}"
+            start_ln = getattr(item, "lineno", 1)
+            end_ln = getattr(item, "end_lineno", start_ln)
+            nodes.append(
+                SymbolOutlineNode(
+                    name=item.name,
+                    symbol_type="class",
+                    start_line=start_ln,
+                    end_line=end_ln,
+                    signature=sig,
+                    docstring_summary=cls_summary,
+                    children=tuple(children),
+                )
+            )
+        elif isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            fn_doc = ast.get_docstring(item)
+            fn_summary = fn_doc.splitlines()[0] if fn_doc else None
+            fn_type = (
+                "async_function"
+                if isinstance(item, ast.AsyncFunctionDef)
+                else ("method" if is_inside_class else "function")
+            )
+            sig = _format_function_signature(item)
+            start_ln = getattr(item, "lineno", 1)
+            end_ln = getattr(item, "end_lineno", start_ln)
+            # Recursively extract any nested functions or classes inside this function
+            children = _extract_symbol_nodes(item.body, is_inside_class=False)
+            nodes.append(
+                SymbolOutlineNode(
+                    name=item.name,
+                    symbol_type=fn_type,
+                    start_line=start_ln,
+                    end_line=end_ln,
+                    signature=sig,
+                    docstring_summary=fn_summary,
+                    children=tuple(children),
+                )
+            )
+    return nodes
+
+
+def _format_outline_text(nodes: Sequence[SymbolOutlineNode], depth: int = 0) -> List[str]:
+    """Render human-readable outline with hierarchical indentation."""
+    lines: List[str] = []
+    indent = "  " * depth
+    for n in nodes:
+        if n.symbol_type == "class":
+            lines.append(f"{indent}Class: {n.name} (Lines {n.start_line}-{n.end_line})")
+            if n.docstring_summary:
+                lines.append(f'{indent}  Docstring: "{n.docstring_summary}"')
+            if n.children:
+                lines.extend(_format_outline_text(n.children, depth + 1))
+        else:
+            bullet = "•" if depth > 0 else "Function:"
+            lines.append(f"{indent}{bullet} {n.signature} (Lines {n.start_line}-{n.end_line})")
+            if n.docstring_summary:
+                lines.append(f'{indent}  Docstring: "{n.docstring_summary}"')
+            if n.children:
+                lines.extend(_format_outline_text(n.children, depth + 1))
+    return lines
 
 
 class WorkspaceFileVirtualizer:
@@ -101,81 +215,13 @@ class WorkspaceFileVirtualizer:
         total_lines = len(lines)
         module_doc = ast.get_docstring(tree) or "No module docstring."
 
-        outline_nodes: List[SymbolOutlineNode] = []
+        outline_nodes: List[SymbolOutlineNode] = _extract_symbol_nodes(tree.body, is_inside_class=False)
         outline_text_lines: List[str] = [
             f"File Outline: {file_path.name} ({total_lines} total lines)",
             f'Module Docstring: "{module_doc.splitlines()[0] if module_doc else "None"}"',
             "",
         ]
-
-        for node in tree.body:
-            if isinstance(node, ast.ClassDef):
-                methods: List[SymbolOutlineNode] = []
-                for item in node.body:
-                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        fn_type = (
-                            "async_function"
-                            if isinstance(item, ast.AsyncFunctionDef)
-                            else "method"
-                        )
-                        doc = ast.get_docstring(item)
-                        doc_summary = doc.splitlines()[0] if doc else None
-                        args = [arg.arg for arg in item.args.args]
-                        sig = f"{item.name}({', '.join(args)})"
-                        methods.append(
-                            SymbolOutlineNode(
-                                name=item.name,
-                                symbol_type=fn_type,
-                                start_line=item.lineno,
-                                end_line=getattr(item, "end_lineno", item.lineno),
-                                signature=sig,
-                                docstring_summary=doc_summary,
-                            )
-                        )
-                cls_doc = ast.get_docstring(node)
-                cls_summary = cls_doc.splitlines()[0] if cls_doc else None
-                cls_node = SymbolOutlineNode(
-                    name=node.name,
-                    symbol_type="class",
-                    start_line=node.lineno,
-                    end_line=getattr(node, "end_lineno", node.lineno),
-                    signature=f"class {node.name}",
-                    docstring_summary=cls_summary,
-                    children=tuple(methods),
-                )
-                outline_nodes.append(cls_node)
-                outline_text_lines.append(
-                    f"Class: {node.name} (Lines {cls_node.start_line}-{cls_node.end_line})"
-                )
-                if cls_summary:
-                    outline_text_lines.append(f'  Docstring: "{cls_summary}"')
-                for m in methods:
-                    outline_text_lines.append(
-                        f"  • {m.signature} (Lines {m.start_line}-{m.end_line})"
-                    )
-
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                fn_type = (
-                    "async_function"
-                    if isinstance(node, ast.AsyncFunctionDef)
-                    else "function"
-                )
-                doc = ast.get_docstring(node)
-                doc_summary = doc.splitlines()[0] if doc else None
-                args = [arg.arg for arg in node.args.args]
-                sig = f"{node.name}({', '.join(args)})"
-                fn_node = SymbolOutlineNode(
-                    name=node.name,
-                    symbol_type=fn_type,
-                    start_line=node.lineno,
-                    end_line=getattr(node, "end_lineno", node.lineno),
-                    signature=sig,
-                    docstring_summary=doc_summary,
-                )
-                outline_nodes.append(fn_node)
-                outline_text_lines.append(
-                    f"Function: {sig} (Lines {fn_node.start_line}-{fn_node.end_line})"
-                )
+        outline_text_lines.extend(_format_outline_text(outline_nodes))
 
         return "\n".join(outline_text_lines), tuple(outline_nodes), None
 
@@ -186,8 +232,9 @@ class WorkspaceFileVirtualizer:
         limit_lines: int = 150,
         start_line: Optional[int] = None,
         end_line: Optional[int] = None,
+        include_outline: bool = True,
     ) -> Tuple[Optional[VirtualFileView], Optional[str]]:
-        """Read deterministic line-bounded window with line numbers and pagination hints."""
+        """Read deterministic line-bounded window with line numbers, pagination, and outline metadata."""
         if not file_path.exists():
             return None, f"File '{file_path.name}' does not exist."
 
@@ -198,6 +245,11 @@ class WorkspaceFileVirtualizer:
 
         raw_lines = source.splitlines()
         total_lines = len(raw_lines)
+
+        outline_nodes: Optional[Tuple[SymbolOutlineNode, ...]] = None
+        if include_outline and file_path.suffix == ".py":
+            _, outline_tuple, _ = self.generate_outline(file_path)
+            outline_nodes = outline_tuple
 
         # If file is small, no offset/limit override, and no start/end lines given -> return clean unannotated content
         if (
@@ -217,6 +269,7 @@ class WorkspaceFileVirtualizer:
                 has_more_above=False,
                 has_more_below=False,
                 next_offset=None,
+                outline=outline_nodes,
             )
             return view, None
 
@@ -229,7 +282,7 @@ class WorkspaceFileVirtualizer:
             limit_lines = max(1, end_idx - start_idx)
         else:
             start_idx = max(0, offset_line - 1)
-            effective_limit = min(limit_lines, MAX_READ_LINES)
+            effective_limit = min(max(1, limit_lines), MAX_READ_LINES)
             end_idx = min(total_lines, start_idx + effective_limit)
 
         annotated_lines: List[str] = []
@@ -278,13 +331,17 @@ class WorkspaceFileVirtualizer:
             has_more_above=has_more_above,
             has_more_below=has_more_below,
             next_offset=next_offset,
+            outline=outline_nodes,
         )
         return view, None
 
     def read_ast_symbol(
-        self, file_path: Path, symbol_name: str
+        self,
+        file_path: Path,
+        symbol_name: str,
+        max_chars: Optional[int] = MAX_READ_CHARS,
     ) -> Tuple[Optional[str], Optional[int], Optional[int], Optional[str]]:
-        """Extract lossless full implementation of a class or method by qualified name."""
+        """Extract full implementation of a class or method by qualified name with zero truncation up to token budget."""
         if not file_path.exists():
             return None, None, None, f"File '{file_path.name}' does not exist."
 
@@ -303,18 +360,28 @@ class WorkspaceFileVirtualizer:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 all_symbols.append(node.name)
 
-        if "." in target:
-            cls_name, m_name = target.split(".", 1)
-            for node in tree.body:
-                if isinstance(node, ast.ClassDef) and node.name == cls_name:
-                    for sub in node.body:
-                        if (
-                            isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef))
-                            and sub.name == m_name
-                        ):
-                            match_node = sub
-                            break
+        # Multi-part qualified resolution (e.g. Outer.Inner.method or Class.method)
+        parts = [p.strip() for p in target.split(".") if p.strip()]
+        if len(parts) > 1:
+            current_nodes: Sequence[ast.AST] = tree.body
+            found_node: Optional[ast.AST] = None
+            for p in parts:
+                matched = False
+                for node in current_nodes:
+                    if (
+                        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                        and node.name == p
+                    ):
+                        found_node = node
+                        current_nodes = getattr(node, "body", [])
+                        matched = True
+                        break
+                if not matched:
+                    found_node = None
+                    break
+            match_node = found_node
         else:
+            # First check top-level body
             for node in tree.body:
                 if (
                     isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
@@ -322,6 +389,15 @@ class WorkspaceFileVirtualizer:
                 ):
                     match_node = node
                     break
+            # If not top-level, search all nodes via walk
+            if not match_node:
+                for node in ast.walk(tree):
+                    if (
+                        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                        and node.name == target
+                    ):
+                        match_node = node
+                        break
 
         if not match_node:
             avail_str = ", ".join(all_symbols[:15]) if all_symbols else "None"
@@ -342,13 +418,14 @@ class WorkspaceFileVirtualizer:
         ]
         annotated_content = "\n".join(annotated)
 
-        if len(annotated_content) > MAX_READ_CHARS:
-            cut_point = annotated_content.rfind("\n", 0, MAX_READ_CHARS)
-            if cut_point < MAX_READ_CHARS // 2:
-                cut_point = MAX_READ_CHARS
+        # Apply character ceiling only if max_chars is provided and content exceeds it
+        if max_chars is not None and len(annotated_content) > max_chars:
+            cut_point = annotated_content.rfind("\n", 0, max_chars)
+            if cut_point < max_chars // 2:
+                cut_point = max_chars
             annotated_content = (
                 annotated_content[:cut_point]
-                + f"\n\n[Governance Notice: Symbol output clamped at {MAX_READ_CHARS} chars to protect token budget.]"
+                + f"\n\n[Governance Notice: Symbol output clamped at {max_chars} chars to protect token budget.]"
             )
 
         return sanitize_text_secrets(annotated_content), start_ln, end_ln, None
@@ -445,6 +522,19 @@ class WorkspaceFileVirtualizer:
         tmp_path = file_path.parent / f".{file_path.name}.tmp_{uuid.uuid4().hex[:8]}"
         try:
             tmp_path.write_text(content_to_write, encoding="utf-8")
+            if file_path.suffix == ".py":
+                try:
+                    py_compile.compile(str(tmp_path), doraise=True)
+                except py_compile.PyCompileError as pe:
+                    if tmp_path.exists():
+                        try:
+                            tmp_path.unlink()
+                        except Exception:
+                            pass
+                    return (
+                        False,
+                        f"AST Integrity Violation: py_compile syntax error in {file_path.name}: {pe.msg}",
+                    )
             os.replace(tmp_path, file_path)
             return True, f"File '{file_path.name}' written successfully ({len(content_to_write)} chars)."
         except Exception as e:

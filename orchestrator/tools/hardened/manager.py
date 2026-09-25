@@ -47,6 +47,7 @@ class ToolSandboxManager:
         banned_tools: Optional[Set[str]] = None,
         forced_tools: Optional[Set[str]] = None,
         disallow_stubs: bool = True,
+        scope: Optional[Any] = None,
     ) -> None:
         self.workspace_root = workspace_root.resolve()
         self.persona_role = persona_role.lower()
@@ -55,6 +56,20 @@ class ToolSandboxManager:
         self.blocked_write_prefixes = tuple(blocked_write_prefixes or ())
         self.banned_tools = set(banned_tools or ())
         self.forced_tools = set(forced_tools or ())
+
+        if scope is not None:
+            raw_role = getattr(scope, "role", persona_role)
+            self.persona_role = str(getattr(raw_role, "value", raw_role)).lower()
+            file_perm = getattr(scope, "file_permission", None)
+            perm_val = str(getattr(file_perm, "value", file_perm or "")).lower()
+            if perm_val in ("denied", "read_only"):
+                self.read_only = True
+            if getattr(scope, "allowed_write_prefixes", None):
+                self.allowed_write_prefixes = tuple(scope.allowed_write_prefixes)
+            if getattr(scope, "blocked_write_prefixes", None):
+                self.blocked_write_prefixes = tuple(scope.blocked_write_prefixes)
+            if hasattr(scope, "allow_terminal") and not scope.allow_terminal:
+                self.banned_tools.add("workspace_terminal")
 
         self.file_virtualizer = WorkspaceFileVirtualizer(
             self.workspace_root, disallow_stubs=disallow_stubs

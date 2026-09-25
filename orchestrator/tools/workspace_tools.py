@@ -28,14 +28,16 @@ from orchestrator.tools.hardened.models import (
 
 
 def is_hardened_sandbox_enabled() -> bool:
-    """Check whether hardened sandbox routing is enabled via migration_routing.json."""
+    """Check whether hardened sandbox and AST virtualizer routing are enabled."""
     config_file = (
         Path(__file__).resolve().parent.parent / "config" / "migration_routing.json"
     )
     if config_file.exists():
         try:
             data = json.loads(config_file.read_text(encoding="utf-8"))
-            return bool(data.get("use_hardened_sandbox", True))
+            return bool(data.get("use_hardened_sandbox", True)) and bool(
+                data.get("use_ast_virtualizer", True)
+            )
         except Exception:
             return True
     return True

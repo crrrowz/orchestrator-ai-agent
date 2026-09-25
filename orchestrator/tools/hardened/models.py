@@ -27,6 +27,29 @@ class FileOperationType(str, enum.Enum):
     APPEND = "append"
 
 
+class ToolPermissionLevel(str, enum.Enum):
+    """Permission level governing file modifications under persona RBAC."""
+
+    DENIED = "denied"
+    READ_ONLY = "read_only"
+    RESTRICTED_WRITE = "restricted_write"
+    FULL_WRITE = "full_write"
+
+
+@dataclasses.dataclass(frozen=True)
+class AgentExecutionScope:
+    """Persona RBAC and execution constraint scope (P5 model)."""
+
+    role: str
+    file_permission: ToolPermissionLevel = ToolPermissionLevel.FULL_WRITE
+    allowed_write_prefixes: Tuple[str, ...] = dataclasses.field(default_factory=tuple)
+    blocked_write_prefixes: Tuple[str, ...] = dataclasses.field(default_factory=tuple)
+    allowed_terminal_commands: Tuple[str, ...] = dataclasses.field(default_factory=tuple)
+    blocked_terminal_commands: Tuple[str, ...] = dataclasses.field(default_factory=tuple)
+    max_turns_ceiling: int = 25
+    allow_terminal: bool = True
+
+
 @dataclasses.dataclass(frozen=True)
 class SymbolOutlineNode:
     """Represents a structural code symbol in the hierarchical file outline."""
@@ -38,6 +61,7 @@ class SymbolOutlineNode:
     signature: str
     docstring_summary: Optional[str] = None
     children: Tuple[SymbolOutlineNode, ...] = dataclasses.field(default_factory=tuple)
+    byte_span: Optional[Tuple[int, int]] = None
 
 
 @dataclasses.dataclass(frozen=True)

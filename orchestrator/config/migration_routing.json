@@ -1,5 +1,6 @@
 {
   "use_hardened_sandbox": true,
+  "use_ast_virtualizer": true,
   "use_clean_sdk_bridge": true,
   "use_guarded_fsm": true,
   "use_adaptive_governance": true,

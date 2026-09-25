@@ -10,6 +10,7 @@ from orchestrator.tools.hardened.manager import (
     matches_path_scope,
 )
 from orchestrator.tools.hardened.models import (
+    AgentExecutionScope,
     FileActionRequest,
     FileObservationResult,
     FileOperationType,
@@ -17,6 +18,7 @@ from orchestrator.tools.hardened.models import (
     SymbolOutlineNode,
     TerminalActionRequest,
     TerminalObservationResult,
+    ToolPermissionLevel,
     ValidatedCommand,
     VirtualFileView,
 )
@@ -44,6 +46,8 @@ __all__ = [
     "ToolSandboxManager",
     "matches_path_scope",
     "FileOperationType",
+    "ToolPermissionLevel",
+    "AgentExecutionScope",
     "SymbolOutlineNode",
     "VirtualFileView",
     "FileActionRequest",
