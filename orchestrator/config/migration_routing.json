@@ -1,6 +1,6 @@
 {
   "use_hardened_sandbox": true,
-  "use_clean_sdk_bridge": false,
+  "use_clean_sdk_bridge": true,
   "use_guarded_fsm": false,
   "canary_percentage": 0
 }

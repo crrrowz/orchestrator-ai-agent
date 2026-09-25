@@ -61,6 +61,33 @@ class ToolSandboxManager:
         )
         self.terminal_engine = TerminalSandboxEngine(self.workspace_root)
 
+    def is_tool_permitted(self, tool_name: str) -> bool:
+        """Check whether a tool is permitted under current constriction rules."""
+        aliases = {tool_name, f"workspace_{tool_name}"}
+        if tool_name.startswith("workspace_"):
+            aliases.add(tool_name.removeprefix("workspace_"))
+        if any(a in self.banned_tools for a in aliases):
+            return False
+        if self.forced_tools and not any(a in self.forced_tools for a in aliases):
+            return False
+        return True
+
+    def terminate_active_processes(self) -> None:
+        """Terminate any active processes in the sandbox engine."""
+        pass
+
+    def execute_file_action(
+        self, action: FileActionRequest, conversation: Any = None
+    ) -> FileObservationResult:
+        """Alias for handle_file_action."""
+        return self.handle_file_action(action, conversation=conversation)
+
+    def execute_terminal_action(
+        self, action: TerminalActionRequest, conversation: Any = None
+    ) -> TerminalObservationResult:
+        """Alias for handle_terminal_action."""
+        return self.handle_terminal_action(action, conversation=conversation)
+
     def verify_file_write_rbac(
         self, target_rel_path: str
     ) -> Tuple[bool, Optional[str]]:

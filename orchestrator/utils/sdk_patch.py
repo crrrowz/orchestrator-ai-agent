@@ -1,172 +1,47 @@
-"""Resilient OpenHands SDK patch for robust JSON tool argument parsing.
+"""Deprecated SDK Patch Module.
 
-Protects against small/free LLMs (e.g. GLM, DeepSeek, Qwen) emitting unescaped newlines,
-trailing quotes, or control characters that would otherwise fail with 'unparseable JSON'.
+DEPRECATION NOTICE (Phase 3):
+Direct monkey-patching of openhands.sdk and litellm has been eradicated in Phase 3.
+Clean integration is achieved through official ToolDefinition protocols, Pydantic v2 schemas,
+and synchronous event streams in orchestrator.engine.openhands_bridge.
+
+This module is neutralized and scheduled for complete removal in Phase 5.
 """
 
-import json
 import logging
-import re
+import warnings
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 def resilient_parse_tool_call_arguments(raw_arguments: str) -> dict[str, Any]:
-    """Parse tool call arguments with multiple fallback recovery layers."""
+    """Deprecated legacy parser maintained temporarily for backward compatibility."""
+    import json
     if not raw_arguments:
         return {}
     if isinstance(raw_arguments, dict):
         return raw_arguments
-
-    # Layer 1: Standard json.loads with strict=False (allows unescaped control chars/tabs)
     try:
         parsed = json.loads(raw_arguments, strict=False)
         if isinstance(parsed, dict):
             return parsed
     except Exception:
         pass
-
-    # Layer 2: OpenHands built-in control char sanitization
-    try:
-        from openhands.sdk.agent.utils import sanitize_json_control_chars
-
-        sanitized = sanitize_json_control_chars(raw_arguments)
-        parsed = json.loads(sanitized, strict=False)
-        if isinstance(parsed, dict):
-            return parsed
-    except Exception:
-        pass
-
-    # Layer 3: Replace unescaped raw newlines inside string literals
-    try:
-        # Match literal newlines that are not escaped and replace with \n
-        cleaned = (
-            raw_arguments.replace("\r\n", "\\n")
-            .replace("\n", "\\n")
-            .replace("\r", "\\n")
-        )
-        parsed = json.loads(cleaned, strict=False)
-        if isinstance(parsed, dict):
-            return parsed
-    except Exception:
-        pass
-
-    # Layer 4: Fallback regex extraction for known tool parameters
-    extracted: dict[str, Any] = {}
-    try:
-        # Match operation
-        m_op = re.search(r'"(?:operation|op)":\s*"([^"]+)"', raw_arguments)
-        if m_op:
-            extracted["operation"] = m_op.group(1)
-
-        # Match path/target_file/file
-        m_path = re.search(r'"(?:path|file|target_file)":\s*"([^"]+)"', raw_arguments)
-        if m_path:
-            extracted["path"] = m_path.group(1)
-
-        # Match command/cmd
-        m_cmd = re.search(r'"(?:command|cmd)":\s*"([^"]+)"', raw_arguments)
-        if m_cmd:
-            extracted["command"] = m_cmd.group(1)
-
-        # Match content / text / message (greedy up to next JSON key or closing brace)
-        m_content = re.search(
-            r'"(?:content|message|text|thought)":\s*"(.*?)(?:"\s*,\s*"[a-zA-Z_]+":|"\s*\}\s*$)',
-            raw_arguments,
-            re.DOTALL,
-        )
-        if m_content:
-            raw_val = m_content.group(1)
-            # Unescape any escaped characters
-            raw_val = (
-                raw_val.replace('\\"', '"').replace("\\n", "\n").replace("\\t", "\t")
-            )
-            extracted["content"] = raw_val
-
-        # Match line_number / start_line / end_line
-        for num_field in ["line_number", "start_line", "end_line", "timeout_seconds"]:
-            m_num = re.search(rf'"{num_field}":\s*(\d+)', raw_arguments)
-            if m_num:
-                extracted[num_field] = int(m_num.group(1))
-
-        if extracted:
-            return extracted
-    except Exception as e:
-        logger.debug(f"Regex extraction failed: {e}")
-
-    logger.warning("All JSON parsing layers failed for tool arguments.")
     return {}
 
 
 def patch_openhands_telemetry() -> None:
-    """Patch OpenHands telemetry and LiteLLM token details to avoid AttributeError on pruned token fields."""
-    try:
-        from openhands.sdk.llm.utils.telemetry import Telemetry
-        from litellm.types.utils import Usage
-
-        orig_cache_buckets = Telemetry._cache_buckets
-
-        @staticmethod
-        def safe_cache_buckets(usage: Any) -> tuple[int, int]:
-            if isinstance(usage, Usage):
-                details = getattr(usage, "prompt_tokens_details", None)
-                if details is None:
-                    return 0, 0
-                cache_write = (
-                    getattr(details, "cache_creation_tokens", 0)
-                    or getattr(details, "cache_write_tokens", 0)
-                    or 0
-                )
-                cached = getattr(details, "cached_tokens", 0) or 0
-                return int(cached or 0), int(cache_write or 0)
-            return orig_cache_buckets(usage)
-
-        Telemetry._cache_buckets = safe_cache_buckets
-    except Exception as e:
-        logger.debug(f"Could not patch Telemetry._cache_buckets: {e}")
-
-    try:
-        from litellm.types.utils import PromptTokensDetailsWrapper
-
-        _orig_getattr = getattr(PromptTokensDetailsWrapper, "__getattr__", None)
-
-        def _safe_wrapper_getattr(self: Any, name: str) -> Any:
-            if name in (
-                "cache_creation_tokens",
-                "cache_write_tokens",
-                "tool_use_tokens",
-                "query_count",
-                "web_search_requests",
-                "character_count",
-                "image_count",
-                "video_length_seconds",
-                "audio_length_seconds",
-                "google_maps_grounding_requests",
-                "cache_creation_token_details",
-            ):
-                return None
-            if _orig_getattr:
-                return _orig_getattr(self, name)
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
-
-        PromptTokensDetailsWrapper.__getattr__ = _safe_wrapper_getattr
-    except Exception as e:
-        logger.debug(f"Could not patch PromptTokensDetailsWrapper: {e}")
+    """Neutralized: No-op in Phase 3."""
+    pass
 
 
 def apply_sdk_patches() -> None:
-    """Patch openhands.sdk and litellm for runtime stability and resilient JSON parsing."""
-    try:
-        import openhands.sdk.agent.utils as agent_utils
-        import openhands.sdk.agent.agent as agent_module
+    """Neutralized: Zero monkey-patching in Phase 3."""
+    warnings.warn(
+        "apply_sdk_patches is deprecated and neutralized in Phase 3. "
+        "OpenHands SDK monkey-patching is disabled.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-        agent_utils.parse_tool_call_arguments = resilient_parse_tool_call_arguments
-        if hasattr(agent_module, "parse_tool_call_arguments"):
-            agent_module.parse_tool_call_arguments = resilient_parse_tool_call_arguments
-    except Exception as e:
-        logger.debug(f"Could not patch openhands SDK: {e}")
-
-    patch_openhands_telemetry()
