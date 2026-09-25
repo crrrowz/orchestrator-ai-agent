@@ -9,6 +9,23 @@ from orchestrator.context.injectors import (
 )
 from orchestrator.context.manager import ContextManager
 from orchestrator.context.prompt_builder import PromptBuilder
+from orchestrator.context.handoff import (
+    ContextTier,
+    ContextTierEnum,
+    HandoffType,
+    HandoffTypeEnum,
+    PersonaViewType,
+    FreshnessState,
+    CrossAgentHandoffPayload,
+    HandoffEnvelope,
+    RequiredSymbolSpec,
+    LineAnchoredFix,
+    DiagnosticTraceCompactor,
+    DiagnosticCompactor,
+    FreshnessValidator,
+    ContextSynthesizer,
+    CrossAgentContextManager,
+)
 
 __all__ = [
     "ContextManager",
@@ -18,4 +35,20 @@ __all__ = [
     "PlanInjector",
     "FilePathResolver",
     "PromptBuilder",
+    # P6 Handoff Mesh Exports
+    "ContextTier",
+    "ContextTierEnum",
+    "HandoffType",
+    "HandoffTypeEnum",
+    "PersonaViewType",
+    "FreshnessState",
+    "CrossAgentHandoffPayload",
+    "HandoffEnvelope",
+    "RequiredSymbolSpec",
+    "LineAnchoredFix",
+    "DiagnosticTraceCompactor",
+    "DiagnosticCompactor",
+    "FreshnessValidator",
+    "ContextSynthesizer",
+    "CrossAgentContextManager",
 ]

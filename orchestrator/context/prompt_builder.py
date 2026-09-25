@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import List, Optional
 
-from orchestrator.config import OrchestratorConfig
+from orchestrator.core.config import OrchestratorConfig
 from orchestrator.context.manager import ContextManager
 
 
