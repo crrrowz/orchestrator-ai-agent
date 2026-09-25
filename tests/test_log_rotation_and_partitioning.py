@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from orchestrator.telemetry import TelemetryRecorder
-from orchestrator.utils import SessionLogStore
+from orchestrator.ui.session_store import SessionLogStore
 
 
 def test_telemetry_recorder_auto_pruning(tmp_path: Path):

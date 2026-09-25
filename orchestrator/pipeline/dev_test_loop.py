@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from openhands.sdk import Conversation
 
 from orchestrator.agents import create_developer_agent, create_tester_agent
+from orchestrator.analysis.pytest_parser import PytestOutputParser, TestExecutionStatus
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import PipelineController
 from orchestrator.pipeline.base_pipeline import BasePipeline, PipelinePhase
@@ -14,10 +15,9 @@ from orchestrator.pipeline.checkpoint import (
     PipelineCheckpoint,
     PipelineCheckpointManager,
 )
-from orchestrator.analysis.pytest_parser import TestExecutionStatus
+from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.telemetry import get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
-from orchestrator.utils import ConsoleOutput, PytestOutputParser
 
 
 class DevTestLoop(BasePipeline):

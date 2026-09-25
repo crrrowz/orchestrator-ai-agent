@@ -1,7 +1,8 @@
 """Unit tests for quiet visualizer, session log store, and interactive log explorer."""
 
 from pathlib import Path
-from orchestrator.utils import SessionLogStore, InteractiveLogExplorer
+from orchestrator.ui.log_explorer import InteractiveLogExplorer
+from orchestrator.ui.session_store import SessionLogStore
 
 
 def test_session_log_store_add_and_save(tmp_path: Path):

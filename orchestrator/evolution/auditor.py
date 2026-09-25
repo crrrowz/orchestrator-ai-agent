@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from orchestrator.config import DEFAULT_DIAGNOSTICS_DIR
+from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.telemetry.schemas import DiagnosticReport
-from orchestrator.utils import ConsoleOutput
 
 
 class SystemAuditor:

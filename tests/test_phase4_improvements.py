@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from orchestrator.telemetry.recorder import TelemetryRecorder
-from orchestrator.utils.git_ops import GitOps
+from orchestrator.vcs.git_ops import GitOps
 
 
 def test_git_ops_create_task_branch(tmp_path: Path):

@@ -5,7 +5,7 @@ from pathlib import Path
 from rich.table import Table
 
 from orchestrator.config import OrchestratorConfig
-from orchestrator.utils.output import console
+from orchestrator.rendering.output import console
 
 
 @dataclass

@@ -4,7 +4,8 @@ from io import StringIO
 
 from orchestrator.config import OrchestratorConfig
 from orchestrator.control import HumanInterventionChannel
-from orchestrator.utils.visualizer import OrchestratorLiveVisualizer, SessionLogStore
+from orchestrator.ui.session_store import SessionLogStore
+from orchestrator.ui.visualizer import OrchestratorLiveVisualizer
 from rich.console import Console
 
 

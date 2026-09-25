@@ -13,6 +13,7 @@ from orchestrator.analysis.schemas import (
     AuditState,
     FindingValidator,
 )
+from orchestrator.analysis.graft_context import GraftContextProvider
 from orchestrator.config import OrchestratorConfig, SkillManager
 from orchestrator.control import (
     DynamicTokenGovernor,
@@ -22,13 +23,10 @@ from orchestrator.control import (
 from orchestrator.control.human_channel import set_active_channel
 from orchestrator.pipeline.audit_report_io import locate_and_normalize_report
 from orchestrator.pipeline.base_pipeline import BasePipeline
+from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
-from orchestrator.utils import (
-    ConsoleOutput,
-    OrchestratorLiveVisualizer,
-    SessionLogStore,
-)
-from orchestrator.utils.graft_context import GraftContextProvider
+from orchestrator.ui.session_store import SessionLogStore
+from orchestrator.ui.visualizer import OrchestratorLiveVisualizer
 
 
 class AuditPipeline(BasePipeline):

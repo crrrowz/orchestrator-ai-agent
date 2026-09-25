@@ -4,11 +4,11 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 
+from orchestrator.analysis.graft_context import GraftContextProvider
 from orchestrator.config import OrchestratorConfig
-from orchestrator.memory import ConversationStore
-from orchestrator.utils.git_ops import GitOps
-from orchestrator.utils.graft_context import GraftContextProvider
 from orchestrator.control.cost_estimator import CostEstimator
+from orchestrator.memory import ConversationStore
+from orchestrator.vcs.git_ops import GitOps
 
 
 def test_memory_stopword_filtering_and_min_score(tmp_path: Path):

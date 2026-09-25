@@ -4,7 +4,7 @@ from io import StringIO
 from rich.console import Console
 
 from orchestrator.config import ORCHESTRATOR_ROOT
-from orchestrator.utils.output import ConsoleOutput
+from orchestrator.rendering.output import ConsoleOutput
 
 
 def test_summary_table_renders_tokens_and_cost():

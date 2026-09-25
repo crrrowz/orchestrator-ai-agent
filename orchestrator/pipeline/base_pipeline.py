@@ -28,10 +28,12 @@ from orchestrator.control import (
     PipelineController,
     TokenPhase,
 )
+from orchestrator.analysis.graft_context import GraftContextProvider
 from orchestrator.guards.preflight import PreFlightGuard
 from orchestrator.memory import ConversationMemoryStore
 from orchestrator.pipeline.checkpoint import PipelineCheckpoint
 from orchestrator.pipeline.state_machine import PipelinePhase, PipelineStateMachine
+from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.skills import SkillResolver
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import (
@@ -39,14 +41,10 @@ from orchestrator.tools import (
     WorkspaceTerminalObservation,
     execute_terminal_action,
 )
-from orchestrator.utils import (
-    ConsoleOutput,
-    GitOps,
-    GraftContextProvider,
-    InteractiveLogExplorer,
-    OrchestratorLiveVisualizer,
-    SessionLogStore,
-)
+from orchestrator.ui.log_explorer import InteractiveLogExplorer
+from orchestrator.ui.session_store import SessionLogStore
+from orchestrator.ui.visualizer import OrchestratorLiveVisualizer
+from orchestrator.vcs.git_ops import GitOps
 
 
 @dataclass

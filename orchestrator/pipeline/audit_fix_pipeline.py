@@ -37,16 +37,14 @@ from orchestrator.pipeline.audit_report_io import (
 from orchestrator.pipeline.base_pipeline import BasePipeline
 
 
+from orchestrator.analysis.graft_context import GraftContextProvider
 from orchestrator.pipeline.iteration_state import StructuredIterationState
+from orchestrator.rendering.output import ConsoleOutput
 from orchestrator.telemetry import TelemetryRecorder, get_llm_usage
 from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
 from orchestrator.tools.workspace_tools import reset_append_counts
-from orchestrator.utils import (
-    ConsoleOutput,
-    GraftContextProvider,
-    OrchestratorLiveVisualizer,
-    SessionLogStore,
-)
+from orchestrator.ui.session_store import SessionLogStore
+from orchestrator.ui.visualizer import OrchestratorLiveVisualizer
 
 
 def _git_diff_stat(workspace: Path) -> str:

@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from orchestrator.adapters.base import ProjectAdapter
+from orchestrator.analysis.pytest_parser import PytestOutputParser
 from orchestrator.guards.preflight import PreFlightGuard
-from orchestrator.utils.pytest_parser import PytestOutputParser
 
 
 class PythonAdapter(ProjectAdapter):

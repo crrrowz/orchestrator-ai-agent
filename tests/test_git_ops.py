@@ -1,7 +1,7 @@
 """Tests for workspace Git operations."""
 
 from pathlib import Path
-from orchestrator.utils import GitOps
+from orchestrator.vcs.git_ops import GitOps
 
 
 def test_git_init_and_commit(tmp_path: Path):
