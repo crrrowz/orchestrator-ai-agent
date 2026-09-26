@@ -1,12 +1,17 @@
 {
+  "use_guarded_fsm": true,
+  "use_clean_sdk_bridge": true,
   "use_hardened_sandbox": true,
   "use_ast_virtualizer": true,
-  "use_clean_sdk_bridge": true,
-  "use_guarded_fsm": true,
   "use_adaptive_governance": true,
   "use_context_handoff_mesh": true,
   "use_deep_inspection_engine": true,
   "use_stagnation_recovery_engine": true,
   "use_benchmark_engine": true,
-  "canary_percentage": 0
+  "strangler_active": true,
+  "migration_phase": "PHASE_4_CANARY",
+  "canary_percentage": 100,
+  "fallback_to_legacy_on_error": true,
+  "circuit_breaker_error_threshold": 3,
+  "circuit_breaker_max_fcr": 0.0
 }

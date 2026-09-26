@@ -11,6 +11,13 @@ from .full_pipeline import FullPipeline
 from .milestone_dag import MilestoneParser, SubtaskMilestone
 from .reviewer_parser import ReviewerVerdict
 from .state_machine import PipelinePhase, PipelineStateMachine
+from .dispatcher import OrchestratorDispatcher, StranglerPipelineDispatcher
+from .migration_guard import (
+    CircuitBreakerStatus,
+    ExecutionPlane,
+    MigrationGuard,
+    MigrationRoutingConfig,
+)
 from .fsm import (
     CompletionDecision,
     CompletionStatus,
@@ -58,4 +65,10 @@ __all__ = [
     "CompletionDecision",
     "CompletionStatus",
     "evaluate_task_completion",
+    "OrchestratorDispatcher",
+    "StranglerPipelineDispatcher",
+    "MigrationGuard",
+    "ExecutionPlane",
+    "CircuitBreakerStatus",
+    "MigrationRoutingConfig",
 ]

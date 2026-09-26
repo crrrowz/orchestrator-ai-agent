@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from orchestrator.pipeline.fsm.engine import FSMContext
+# FSMContext is referenced by forward-ref string in checkpoint methods
 
 
 class MilestoneStateSnapshot(BaseModel):

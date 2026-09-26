@@ -9,8 +9,7 @@ from orchestrator.pipeline.fsm.events import EventType, PipelineEvent
 from orchestrator.pipeline.fsm.guards import FSMGuards
 from orchestrator.pipeline.fsm.states import FSMState
 
-if TYPE_CHECKING:
-    from orchestrator.pipeline.fsm.engine import FSMContext
+# FSMContext is referenced by forward-ref string in transition callables
 
 
 GuardCallable = Callable[["FSMContext", PipelineEvent], bool]

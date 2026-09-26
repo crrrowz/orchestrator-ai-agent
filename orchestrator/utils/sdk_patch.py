@@ -14,6 +14,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+warnings.warn(
+    "Importing from 'orchestrator.utils.sdk_patch' is deprecated and scheduled for removal. "
+    "Clean OpenHands SDK integration is handled by orchestrator.engine.openhands_bridge.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 def resilient_parse_tool_call_arguments(raw_arguments: str) -> dict[str, Any]:
     """Deprecated legacy parser maintained temporarily for backward compatibility."""

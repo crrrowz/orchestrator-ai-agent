@@ -15,8 +15,7 @@ from pydantic import BaseModel, Field
 from orchestrator.guards.preflight import PreFlightGuard
 from orchestrator.pipeline.fsm.events import PipelineEvent
 
-if TYPE_CHECKING:
-    from orchestrator.pipeline.fsm.engine import FSMContext
+# FSMContext is referenced by forward-ref string in guard methods
 
 
 class ImplementationState(str, Enum):

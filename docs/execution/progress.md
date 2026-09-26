@@ -1,5 +1,39 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P12-01 - Strangler Fig Migration & Final Pipeline Consolidation (P12 Specification Deployment)
+- **Plan Reference:** P12 Full Specification / P13 Hand-off Contract
+- **Target Files & Symbols:**
+  - `orchestrator/config/migration_routing.json` (Activated all modernized subsystems with `strangler_active: true`, `use_guarded_fsm: true`, `canary_percentage: 100`)
+  - `orchestrator/pipeline/migration_guard.py` (`ExecutionPlane`, `CircuitBreakerStatus`, `MigrationRoutingConfig`, `PlaneTelemetryRecord`, `MigrationGuard` singleton with dynamic reload, circuit breakers, and instant rollback)
+  - `orchestrator/pipeline/dispatcher.py` (`OrchestratorDispatcher`, `StranglerPipelineDispatcher` master entry point routing modes to `GuardedFSMEngine` or legacy fallback with conforming results)
+  - `orchestrator/orchestrator.py` (`Orchestrator.run_task` delegating unified CLI modes through `OrchestratorDispatcher`)
+  - `orchestrator/pipeline/dev_test_loop.py` (`DevTestLoop` preserved as compatibility shim delegating to `GuardedFSMEngine` or `_run_legacy`)
+  - `orchestrator/pipeline/full_pipeline.py` (`FullPipeline` preserved as compatibility shim delegating to `GuardedFSMEngine` or `_run_legacy`)
+  - `orchestrator/pipeline/audit_pipeline.py` (`AuditPipeline` preserved as compatibility shim delegating to `GuardedFSMEngine` or `_run_legacy`)
+  - `orchestrator/pipeline/audit_fix_pipeline.py` (`AuditFixPipeline` preserved as compatibility shim delegating to `GuardedFSMEngine` or `_run_legacy`)
+  - `orchestrator/pipeline/documentation_pipeline.py` (`DocumentationPipeline` preserved as compatibility shim delegating to `GuardedFSMEngine` or `_run_legacy`)
+  - `orchestrator/pipeline/audit_report_io.py` (`extract_audit_findings_list`, `extract_actionable_recommendations` unified to eradicate circular dependencies)
+  - `orchestrator/pipeline/fsm/context.py` (Extracted `FSMContext` cleanly decoupling FSM modules from circular type dependencies)
+  - `orchestrator/pipeline/fsm/checkpoint.py`, `engine.py`, `guards.py`, `transitions.py` (Updated to clean context imports)
+  - `orchestrator/pipeline/__init__.py` (Exposed dispatcher and migration guard exports)
+  - `orchestrator/utils/sdk_patch.py` (Neutralized with module-level `DeprecationWarning`)
+  - `tests/test_strangler_migration_p12.py` (18 comprehensive unit and integration tests)
+- **Acceptance Criteria Verified:**
+  - All 5 pipeline modes (`dev-test`, `full`, `audit`, `audit-fix`, `docs`) execute through `GuardedFSMEngine` under the active strangler seam.
+  - Legacy shims correctly pass parameters and return conforming result dictionaries (`status`, `success`, `run_id`, `report_id`, `tokens_consumed`, `plane`).
+  - Flag toggling in `migration_routing.json` safely alternates between execution paths without crashing.
+  - Automated circuit breaker trip-wires (TW-01 crash fallback, TW-02 consecutive failure trip, manual instant rollback) verified.
+  - Zero circular import dependencies verified across all modules via Tarjan's Strongly Connected Components (SCC) static analysis scanner (0 cycles).
+  - PreFlight syntax check remains 100% clean across the entire repository.
+- **Test Evidence:** `tests/test_strangler_migration_p12.py` (18 passed), `tests/` total (469 passed) (Exit code: 0, Duration: 31.58s)
+- **PreFlight Status:** SYNTAX_CLEAN (`PreFlightGuard.check_syntax()` 100% clean)
+- **Baseline Invariant:** 451/451 PASSED + 18/18 PASSED = 469/469 PASSED (0 Regressions)
+- **PER 2.0 Score:** 100.0 (Classification: THRIVING)
+- **Checkpoint Tag:** `v0.13.0-strangler-rollout`
+- **Remaining Blockers / Next Eligible Bite:** Phase 13 (Final ORAGAI Target Architecture Specification & Physical Repository Layout)
+
+---
+
 ### Bite Record: BITE-P11-01 - Autonomous Benchmark & Empirical Verification Engine (P11 Specification Deployment)
 - **Plan Reference:** P12 Section 3.12 / P11 Full Specification
 - **Target Files & Symbols:**
