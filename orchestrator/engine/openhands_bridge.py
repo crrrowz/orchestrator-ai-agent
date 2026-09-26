@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 import logging
+import os
 import re
 from pathlib import Path
 from typing import (
@@ -436,8 +437,12 @@ class SecretMaskingFilter:
         re.compile(
             r"(?i)(api[_-]?key|secret|token|password|auth|bearer)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]{8,})['\"]?"
         ),
+        re.compile(r"Bearer\s+([a-zA-Z0-9_\-\.=]{12,})", re.IGNORECASE),
         re.compile(r"ghp_[a-zA-Z0-9]{36}"),
+        re.compile(r"sk-ant-[a-zA-Z0-9_\-]{20,}"),
+        re.compile(r"sk-or-v1-[a-f0-9]{32,}"),
         re.compile(r"sk-[a-zA-Z0-9]{20,}"),
+        re.compile(r"AIza[0-9A-Za-z\-_]{35}"),
         re.compile(
             r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC )?PRIVATE KEY-----"
         ),
@@ -445,18 +450,34 @@ class SecretMaskingFilter:
 
     @classmethod
     def mask(cls, text: str) -> str:
-        """Apply regex mask filters across text."""
+        """Apply regex mask filters and environment variable redaction across text."""
         if not text:
             return text
         sanitized = str(text)
+
+        # 1. Mask active environment variables matching sensitive terms
+        for k, v in os.environ.items():
+            k_upper = k.upper()
+            if any(term in k_upper for term in ("KEY", "SECRET", "TOKEN", "PASSWORD", "AUTH", "BEARER", "CREDENTIAL")):
+                if v and len(v.strip()) >= 8 and v.strip() in sanitized:
+                    sanitized = sanitized.replace(v.strip(), f"[REDACTED_{k_upper}]")
+
+        # 2. Apply structured pattern masks
         for pattern in cls.PATTERNS:
             if "PRIVATE KEY" in pattern.pattern:
                 sanitized = pattern.sub("[REDACTED_PRIVATE_KEY]", sanitized)
-            elif "ghp_" in pattern.pattern or "sk-" in pattern.pattern:
+            elif "Bearer" in pattern.pattern:
+                sanitized = pattern.sub("Bearer [REDACTED_SECRET]", sanitized)
+            elif any(prefix in pattern.pattern for prefix in ("ghp_", "sk-", "AIza")):
                 sanitized = pattern.sub("[REDACTED_SECRET]", sanitized)
             else:
                 sanitized = pattern.sub(r"\1: [REDACTED_SECRET]", sanitized)
         return sanitized
+
+    @classmethod
+    def mask_text(cls, text: str) -> str:
+        """Alias for mask() conforming to P10 specification naming."""
+        return cls.mask(text)
 
 
 class OpenHandsTelemetryBridge:
@@ -467,17 +488,53 @@ class OpenHandsTelemetryBridge:
         log_store: Optional[Any] = None,
         visualizer: Optional[Any] = None,
         diagnostics_db: Optional[Any] = None,
+        telemetry_recorder: Optional[Any] = None,
+        role_name: str = "agent",
     ) -> None:
         self.store = log_store
         self.visualizer = visualizer
         self.db = diagnostics_db
+        self.recorder = telemetry_recorder
+        self.role_name = role_name
         self.mutated_files: Set[str] = set()
+        self.step_count: int = 0
+        self.prompt_tokens: int = 0
+        self.completion_tokens: int = 0
+        self.total_tokens: int = 0
+        self.estimated_cost_usd: float = 0.0
+
+    def update_token_metrics(
+        self,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: Optional[int] = None,
+        cost_usd: float = 0.0,
+    ) -> None:
+        """Update cumulative token metrics and estimated USD cost."""
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.total_tokens = (
+            total_tokens
+            if total_tokens is not None
+            else (prompt_tokens + completion_tokens)
+        )
+        self.estimated_cost_usd = cost_usd
 
     def on_event(self, event: Event) -> None:
         """Synchronously process SDK event on emission with secret masking."""
         event_name = type(event).__name__
 
-        if event_name == "ActionEvent":
+        if event_name == "TokenEvent":
+            prompt_ids = getattr(event, "prompt_token_ids", None) or []
+            resp_ids = getattr(event, "response_token_ids", None) or []
+            if prompt_ids:
+                self.prompt_tokens += len(prompt_ids)
+            if resp_ids:
+                self.completion_tokens += len(resp_ids)
+            self.total_tokens = self.prompt_tokens + self.completion_tokens
+
+        elif event_name == "ActionEvent":
+            self.step_count += 1
             action = getattr(event, "action", None)
             thought_raw = getattr(event, "thought", "") or getattr(
                 action, "thought", ""
@@ -567,6 +624,26 @@ class OpenHandsTelemetryBridge:
                     is_error=is_err,
                 )
 
+            if self.recorder and hasattr(self.recorder, "record_step"):
+                try:
+                    current_role = getattr(
+                        self.store, "current_role", self.role_name
+                    ) or self.role_name
+                    self.recorder.record_step(
+                        agent_role=current_role,
+                        action_type=tool_name or "observation",
+                        iteration=self.step_count,
+                        duration_seconds=0.0,
+                        success=not is_err,
+                        error_summary=error_msg if is_err else None,
+                        prompt_tokens=self.prompt_tokens,
+                        completion_tokens=self.completion_tokens,
+                        total_tokens=self.total_tokens,
+                        estimated_cost_usd=self.estimated_cost_usd,
+                    )
+                except Exception:
+                    pass
+
             if self.visualizer and hasattr(self.visualizer, "on_event"):
                 try:
                     self.visualizer.on_event(event)
@@ -585,6 +662,20 @@ class OpenHandsTelemetryBridge:
                     observation=detail,
                     is_error=True,
                 )
+
+            if self.recorder and hasattr(self.recorder, "record_incident"):
+                try:
+                    current_role = getattr(
+                        self.store, "current_role", self.role_name
+                    ) or self.role_name
+                    self.recorder.record_incident(
+                        step_name=current_role,
+                        incident_type=code,
+                        details=detail,
+                    )
+                except Exception:
+                    pass
+
             if self.visualizer and hasattr(self.visualizer, "on_event"):
                 try:
                     self.visualizer.on_event(event)
@@ -594,9 +685,9 @@ class OpenHandsTelemetryBridge:
         if self.db and hasattr(self.db, "log_incident"):
             try:
                 role = (
-                    getattr(self.store, "current_role", "agent")
+                    getattr(self.store, "current_role", self.role_name)
                     if self.store
-                    else "agent"
+                    else self.role_name
                 )
                 self.db.log_incident(
                     severity="INFO",
@@ -621,6 +712,7 @@ class SDKToolAdapter:
     def create_tools_for_persona(
         sandbox_manager: Any,
         role_name: str,
+        scope: Optional[Any] = None,
     ) -> List[ToolDefinition[Any, Any]]:
         """Instantiate hardened tools configured with persona RBAC and constrictions."""
         tools: List[ToolDefinition[Any, Any]] = []
@@ -631,14 +723,18 @@ class SDKToolAdapter:
         )
         tools.extend(file_tools)
 
-        # 2. Hardened Workspace Terminal Tool (Conditionally included based on role and constrictions)
-        if hasattr(sandbox_manager, "is_tool_permitted"):
-            if sandbox_manager.is_tool_permitted("workspace_terminal") or sandbox_manager.is_tool_permitted("terminal"):
-                terminal_tools = HardenedWorkspaceTerminalTool.create(
-                    sandbox_manager=sandbox_manager
-                )
-                tools.extend(terminal_tools)
-        else:
+        # 2. Hardened Workspace Terminal Tool (Conditionally included based on role, scope, and constrictions)
+        terminal_permitted = True
+        if scope is not None and hasattr(scope, "allow_terminal"):
+            terminal_permitted = bool(scope.allow_terminal)
+
+        if terminal_permitted and hasattr(sandbox_manager, "is_tool_permitted"):
+            terminal_permitted = bool(
+                sandbox_manager.is_tool_permitted("workspace_terminal")
+                or sandbox_manager.is_tool_permitted("terminal")
+            )
+
+        if terminal_permitted:
             terminal_tools = HardenedWorkspaceTerminalTool.create(
                 sandbox_manager=sandbox_manager
             )
@@ -649,6 +745,71 @@ class SDKToolAdapter:
 
 class SDKAgentFactory:
     """Creates configured OpenHands Agent instances per persona without monkey-patching."""
+
+    @staticmethod
+    def get_default_scope_for_role(
+        role_name: str,
+        config: Optional[Any] = None,
+    ) -> Any:
+        """Return standardized AgentExecutionScope for canonical persona roles."""
+        from orchestrator.tools.hardened.models import (
+            AgentExecutionScope,
+            ToolPermissionLevel,
+        )
+
+        norm_role = role_name.strip().lower()
+        if norm_role == "architect":
+            allowed_prefixes = ("PLAN.md", "docs/")
+            if config and hasattr(config, "allowed_write_prefixes_architect"):
+                allowed_prefixes = tuple(config.allowed_write_prefixes_architect)
+            return AgentExecutionScope(
+                role="architect",
+                file_permission=ToolPermissionLevel.RESTRICTED_WRITE,
+                allowed_write_prefixes=allowed_prefixes,
+                max_turns_ceiling=20,
+                allow_terminal=True,
+            )
+        elif norm_role == "tester":
+            return AgentExecutionScope(
+                role="tester",
+                file_permission=ToolPermissionLevel.RESTRICTED_WRITE,
+                allowed_write_prefixes=("tests/",),
+                max_turns_ceiling=25,
+                allow_terminal=True,
+            )
+        elif norm_role == "reviewer":
+            return AgentExecutionScope(
+                role="reviewer",
+                file_permission=ToolPermissionLevel.READ_ONLY,
+                allowed_write_prefixes=("docs/code_review.md", "docs/review/"),
+                max_turns_ceiling=15,
+                allow_terminal=True,
+            )
+        elif norm_role == "auditor":
+            allowed_prefixes = ("docs/", ".oragai/")
+            if config and hasattr(config, "allowed_write_prefixes_auditor"):
+                allowed_prefixes = tuple(config.allowed_write_prefixes_auditor)
+            return AgentExecutionScope(
+                role="auditor",
+                file_permission=ToolPermissionLevel.RESTRICTED_WRITE,
+                allowed_write_prefixes=allowed_prefixes,
+                max_turns_ceiling=20,
+                allow_terminal=True,
+            )
+        elif norm_role == "remediation":
+            return AgentExecutionScope(
+                role="remediation",
+                file_permission=ToolPermissionLevel.FULL_WRITE,
+                max_turns_ceiling=25,
+                allow_terminal=True,
+            )
+        else:  # developer and fallback
+            return AgentExecutionScope(
+                role="developer",
+                file_permission=ToolPermissionLevel.FULL_WRITE,
+                max_turns_ceiling=30,
+                allow_terminal=True,
+            )
 
     @staticmethod
     def create_agent(
@@ -692,6 +853,56 @@ class SDKAgentFactory:
             system_prompt=system_prompt,
             include_default_tools=default_tools_list,
             tool_concurrency_limit=1,
+        )
+
+    @classmethod
+    def create_persona_agent(
+        cls,
+        config: Any,
+        llm_manager: Any,
+        role_name: str,
+        prompt_view: Union[PromptView, str],
+        sandbox_manager: Optional[Any] = None,
+        scope: Optional[Any] = None,
+        workspace_path: Optional[Path] = None,
+    ) -> Agent:
+        """Standardized persona agent construction injecting AgentExecutionScope and prompt views."""
+        from orchestrator.tools.hardened.manager import ToolSandboxManager
+
+        resolved_scope = scope or cls.get_default_scope_for_role(role_name, config)
+        mgr = sandbox_manager
+        if mgr is None and workspace_path is not None:
+            mgr = ToolSandboxManager(
+                workspace_root=workspace_path,
+                scope=resolved_scope,
+            )
+
+        tools = (
+            SDKToolAdapter.create_tools_for_persona(
+                sandbox_manager=mgr,
+                role_name=role_name,
+                scope=resolved_scope,
+            )
+            if mgr is not None
+            else []
+        )
+
+        system_prompt = (
+            prompt_view.tier0_system_prompt
+            if isinstance(prompt_view, PromptView)
+            else (
+                getattr(prompt_view, "tier0_system_prompt", None)
+                or f"You are a helpful software engineer acting as {role_name}."
+            )
+        )
+
+        return cls.create_agent(
+            config=config,
+            llm_manager=llm_manager,
+            role_name=role_name,
+            system_prompt=system_prompt,
+            tools=tools,
+            include_default_tools=[],
         )
 
 
@@ -994,12 +1205,14 @@ class OpenHandsRuntimeBridge:
         log_store: Optional[Any] = None,
         visualizer: Optional[Any] = None,
         diagnostics_db: Optional[Any] = None,
+        telemetry_recorder: Optional[Any] = None,
     ) -> None:
         self.config = config
         self.llm_manager = llm_manager
         self.log_store = log_store
         self.visualizer = visualizer
         self.diagnostics_db = diagnostics_db
+        self.telemetry_recorder = telemetry_recorder
 
     def execute_bounded_turn(
         self,
@@ -1021,33 +1234,23 @@ class OpenHandsRuntimeBridge:
             log_store=self.log_store,
             visualizer=self.visualizer,
             diagnostics_db=self.diagnostics_db,
-        )
-
-        # 2. Build Hardened Tools
-        tools = SDKToolAdapter.create_tools_for_persona(
-            sandbox_manager=sandbox_manager,
+            telemetry_recorder=self.telemetry_recorder,
             role_name=role_name,
         )
 
-        # 3. Instantiate Agent
-        system_prompt = (
-            prompt_view.tier0_system_prompt
-            if isinstance(prompt_view, PromptView)
-            else (
-                getattr(prompt_view, "tier0_system_prompt", None)
-                or f"You are a helpful software engineer acting as {role_name}."
-            )
-        )
-
-        agent = SDKAgentFactory.create_agent(
+        # 2. Build Agent via SDKAgentFactory
+        scope = getattr(sandbox_manager, "scope", None)
+        agent = SDKAgentFactory.create_persona_agent(
             config=self.config,
             llm_manager=self.llm_manager,
             role_name=role_name,
-            system_prompt=system_prompt,
-            tools=tools,
+            prompt_view=prompt_view,
+            sandbox_manager=sandbox_manager,
+            scope=scope,
+            workspace_path=workspace_path,
         )
 
-        # 4. Run Ephemeral Bounded Session
+        # 3. Run Ephemeral Bounded Session
         outcome = SDKSessionRunner.run_turn(
             agent=agent,
             workspace_path=workspace_path,

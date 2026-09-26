@@ -1,5 +1,30 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P10-01 - OpenHands Runtime Boundary & Integration Finalization (P10 Specification Deployment)
+- **Plan Reference:** P12 Section 3.4 / P10 Full Specification
+- **Target Files & Symbols:**
+  - `orchestrator/engine/openhands_bridge.py` (`OpenHandsRuntimeBridge`, `SDKSessionRunner`, `ExitStatusClassifier`, `SDKAgentFactory`, `SDKToolAdapter`, `OpenHandsTelemetryBridge`, `SecretMaskingFilter`, `TurnEnvelope`, `AgentExecutionOutcome`, `AgentExitReason`, `HardenedWorkspaceFileTool`, `HardenedWorkspaceTerminalTool`)
+  - `orchestrator/engine/__init__.py` (Package exports)
+  - `orchestrator/config/migration_routing.json` (`use_clean_sdk_bridge: true`)
+  - `tests/test_sdk_integration_p10.py` (7 comprehensive unit and integration tests)
+- **Acceptance Criteria Verified:**
+  - Complete architectural decoupling between ORAGAI Control Plane and OpenHands SDK v1.49.4 runtime with zero background interrupt signals.
+  - Ephemeral single-turn envelope boundaries terminated cleanly upon hitting $T_{\text{allocated}}$ without asynchronous thread collisions or race conditions.
+  - ExitStatusClassifier deterministically categorizes outcomes (`NATURAL_COMPLETION`, `STEP_LIMIT_REACHED`, `TOKEN_LIMIT_REACHED`, `TOOL_REJECTION`, `AGENT_STUCK`, `FATAL_ERROR`).
+  - Tool registration passes OpenHands SDK schema validation with default tools completely excluded (`include_default_tools = []`) and sequential concurrency enforced (`tool_concurrency_limit = 1`).
+  - Synchronous telemetry forwarding updates step counts, tokens, and errors directly to `TelemetryRecorder`.
+  - SecretMaskingFilter active redaction stripping environment variables (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, Bearer tokens, private keys) from streams and observations.
+  - Standardized persona agent instantiations for Architect, Developer, Tester, Reviewer, Auditor, and Remediation injecting `AgentExecutionScope` (P5) and prompt views (P6).
+  - Zero runtime monkey-patching verified via AST inspection of active runtime modules and elimination of legacy `sdk_patch.py`.
+- **Test Evidence:** `tests/test_sdk_integration_p10.py` (7 passed), `tests/` total (435 passed) (Exit code: 0, Duration: 25.41s)
+- **PreFlight Status:** SYNTAX_CLEAN (`PreFlightGuard.check_syntax()` 100% clean)
+- **Baseline Invariant:** 428/428 PASSED + 7/7 PASSED = 435/435 PASSED (0 Regressions)
+- **PER 2.0 Score:** 100.0 (Classification: THRIVING)
+- **Checkpoint Tag:** `v0.11.0-sdk-boundary`
+- **Remaining Blockers / Next Eligible Bite:** Phase 11 (Autonomous Benchmark & Verification Engine - P11 Specification)
+
+---
+
 ### Bite Record: BITE-P9-01 - Tooling, Context Windows & Sandbox Hardening (P9 Specification Deployment)
 - **Plan Reference:** P12 Section 3.3 / P9 Full Specification
 - **Target Files & Symbols:**
