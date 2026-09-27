@@ -90,3 +90,7 @@ class ReviewerVerdict:
             return cls(approved=True, verdict="APPROVED", raw_text=clean_text)
 
         return cls(approved=False, verdict="REJECTED", raw_text=clean_text)
+
+
+# Convenience alias for P13 Hexagonal Workstream
+ReviewerOutputParser = ReviewerVerdict

@@ -135,3 +135,7 @@ class AuditFixOrchestrator:
             self.rollback_file(finding.file_path, backup)
             self.record_attempt(finding, False)
             return False
+
+
+# Alias for P13 Hexagonal Workstream
+AuditFixer = AuditFixOrchestrator

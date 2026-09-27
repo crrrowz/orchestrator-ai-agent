@@ -89,6 +89,10 @@ class PersonaViewType(str, Enum):
     AUDITOR_VIEW = "AUDITOR_VIEW"
 
 
+# Convenience alias
+PersonaRole = PersonaViewType
+
+
 PersonaViewTypeEnum = PersonaViewType
 
 
