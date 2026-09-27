@@ -174,12 +174,23 @@ class WorkspaceFileVirtualizer:
                 )
 
         clean = re.sub(r"^[/\\]*workspace[/\\]+", "", clean)
-        raw = Path(clean)
 
-        if raw.is_absolute() or clean.startswith("/") or clean.startswith("\\"):
+        # Reject Windows drive letter paths (e.g. C:\Windows...) across all platforms
+        if re.match(r"^[a-zA-Z]:", clean):
+            return (
+                False,
+                self.workspace_root,
+                f"Access denied: path '{relative_or_abs_path}' escapes workspace directory '{self.workspace_root}'.",
+            )
+
+        # Normalize backslashes to forward slashes for cross-platform traversal resolution
+        normalized_clean = clean.replace("\\", "/")
+        raw = Path(normalized_clean)
+
+        if raw.is_absolute() or normalized_clean.startswith("/"):
             resolved = raw.resolve()
         else:
-            resolved = (self.workspace_root / clean).resolve()
+            resolved = (self.workspace_root / normalized_clean).resolve()
 
         try:
             resolved.relative_to(self.workspace_root)

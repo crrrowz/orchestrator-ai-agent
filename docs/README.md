@@ -66,8 +66,10 @@
 │   ├── tools/               # RBAC workspace file and parameterized terminal tools
 │   ├── ui/                  # SessionLogStore, OrchestratorLiveVisualizer, InteractiveLogExplorer
 │   └── vcs/                 # GitOps isolation, branching, diffs, checkpointing
-├── tests/                   # Comprehensive Test Modules (232 Passing Tests)
-├── docs/                    # Operational and architectural documentation
+├── tests/                   # Comprehensive Test Modules (469 Passing Tests)
+├── docs/                    # Operational and architectural documentation (DOCKER_GUIDE.md, etc.)
+├── Dockerfile               # Multi-stage container definition (Dev & Prod)
+├── docker-compose.yml       # Dev environment, CLI runner, and test container services
 └── pyproject.toml           # Project dependencies & build configuration
 ```
 
@@ -75,36 +77,57 @@
 
 ## 🚀 Quick Start
 
-### 1. Requirements
+ORAGAI can be run either via **Docker** (recommended for isolated, reproducible Linux execution) or **locally** using Python and `uv`.
+
+---
+
+### 🐳 1. Getting Started with Docker (Recommended)
+
+ORAGAI provides first-class Docker support for both **Local Docker Engines** (Docker Desktop on Windows/macOS/Linux) and **Remote Docker Engines** (Debian VM / Remote Server via SSH Context).
+
+#### Quick Commands
+```bash
+# 1. Configure environment secrets
+cp .env.example .env
+
+# 2. Build the development image (dependencies pre-cached)
+docker build --target development -t oragai:dev .
+
+# 3. Verify configuration offline (0 API tokens consumed)
+docker run --rm --env-file .env oragai:dev python -m orchestrator.main --check-config
+
+# 4. Run test suite inside Linux container
+docker run --rm oragai:dev pytest tests/ -v
+
+# 5. Execute an orchestration task
+docker run --rm -it --env-file .env oragai:dev python -m orchestrator.main "Build a rate limiter" --mode dev-test
+```
+
+> 📖 **Comprehensive Docker Documentation:**  
+> For in-depth architectural details, Local vs Remote VM workflows, live bind-mounting, Docker Compose, Dev Containers, context switching, and dangling image cleanup (`dangling=true`), see the complete **[Docker Architecture & Operations Guide](DOCKER_GUIDE.md)**.
+
+---
+
+### 💻 2. Local Installation (Without Docker)
+
+If you prefer to run directly on your host machine without containers:
+
+#### Requirements
 - Python `3.12+`
 - `uv` (recommended) or `pip`
 - Git
-
-### 2. Installation & Configuration
 
 ```bash
 # Install dependencies with uv
 uv sync
 
-# Configure environment
-cp .env.example .env
-```
-
-Provide your API key in `.env`:
-```env
-OPENROUTER_API_KEY=sk-or-v1-...
-```
-
-### 3. Verification & Execution
-
-```bash
-# Verify setup offline (0 API tokens consumed)
+# Verify configuration offline
 uv run python -m orchestrator.main --check-config
 
-# Run test suite (232 unit & integration tests)
+# Run test suite
 uv run python -m pytest tests/ -q
 
-# Execute a software engineering task
+# Execute an orchestration task
 uv run python -m orchestrator.main "Build a rate limiter" --mode dev-test
 ```
 
@@ -130,16 +153,20 @@ uv run python -m orchestrator.main "Build a rate limiter" --mode dev-test
 
 ## 🧪 Testing & Verification
 
-The test suite contains **232 automated tests** covering:
+The test suite contains **469 automated tests** covering:
 - OpenHands SDK tool protocol compliance (`WorkspaceFileTool`, `WorkspaceTerminalTool`).
 - Circuit breaker state machines and semantic failure deduplication.
 - Dynamic token governance and phase allocation (`TokenPhase`).
 - Cognitive Sentinel supervision, AST guarding, and self-healing.
 - Project log rotation and multi-workspace partitioning.
-- Cross-platform Windows subprocess execution & launcher trampoline crash auto-healing.
+- Cross-platform Windows & Linux subprocess execution and sandbox path virtualization.
 
 ```bash
+# Inside Docker (Recommended)
+docker run --rm oragai:dev pytest tests/ -v
+
+# Or locally with uv
 uv run python -m pytest tests/ -v
 ```
 
-All 232 tests pass deterministically.
+All 469 tests pass deterministically across Linux containers and Windows.

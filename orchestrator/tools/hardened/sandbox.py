@@ -7,6 +7,7 @@ standard streams and deterministic timeout killers.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -154,16 +155,30 @@ class TerminalSandboxEngine:
         env = self.build_sanitized_environment()
 
         # 3. Assemble execution arguments
-        if validation.is_powershell_pipeline and is_windows:
-            exec_args = [
-                "powershell.exe",
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                clean_cmd,
-            ]
+        if validation.is_powershell_pipeline:
+            pwsh_bin = shutil.which("powershell.exe") if is_windows else (shutil.which("pwsh") or shutil.which("powershell"))
+            if pwsh_bin:
+                exec_args = [
+                    pwsh_bin,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    clean_cmd,
+                ]
+            else:
+                # POSIX fallback: translate common PowerShell inspection pipelines
+                m = re.match(
+                    r'^\s*Get-Content\s+([^\s|]+)\s*\|\s*Select-String\s+-Pattern\s+["\']?([^"\']+)["\']?\s*$',
+                    clean_cmd,
+                    re.IGNORECASE,
+                )
+                if m:
+                    target_file, pattern = m.group(1), m.group(2)
+                    exec_args = ["grep", "-E", pattern, target_file]
+                else:
+                    exec_args = ["sh", "-c", clean_cmd]
         elif validation.executable_path in ("pytest", "ruff", "mypy"):
             exec_args = [
                 sys.executable,

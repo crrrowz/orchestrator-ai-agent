@@ -1,0 +1,35 @@
+{
+  "name": "ORAGAI Development Environment",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "target": "development"
+  },
+  "workspaceFolder": "/workspace/orchestrator-ai-agent",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/orchestrator-ai-agent,type=bind",
+  "mounts": [
+    "source=oragai-dev-venv,target=/workspace/orchestrator-ai-agent/.venv,type=volume",
+    "source=oragai-uv-cache,target=/root/.cache/uv,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "editor.formatOnSave": true,
+        "files.trimTrailingWhitespace": true,
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": [
+          "tests"
+        ]
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
+      ]
+    }
+  },
+  "postCreateCommand": "uv sync",
+  "remoteUser": "root"
+}

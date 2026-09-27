@@ -1,0 +1,75 @@
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Dev Container: Continuous interactive development & IDE attachment
+  # ----------------------------------------------------------------------------
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: oragai-dev
+    restart: unless-stopped
+    working_dir: /workspace/orchestrator-ai-agent
+    volumes:
+      # Mount host source code into container for live development
+      - .:/workspace/orchestrator-ai-agent
+      # Volume isolation for .venv: prevents host (Windows) venv from overriding container (Linux) venv
+      - venv-isolation:/workspace/orchestrator-ai-agent/.venv
+      # Cache uv downloads and wheels across container rebuilds
+      - uv-cache:/root/.cache/uv
+    env_file:
+      - path: .env
+        required: false
+    stdin_open: true
+    tty: true
+    command: ["sleep", "infinity"]
+
+  # ----------------------------------------------------------------------------
+  # 2. CLI Runner: Execute orchestrator commands seamlessly
+  # Usage:
+  #   docker compose run --rm cli --check-config
+  #   docker compose run --rm cli --mode audit
+  #   docker compose run --rm cli "Task description" --estimate
+  # ----------------------------------------------------------------------------
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    working_dir: /workspace/orchestrator-ai-agent
+    volumes:
+      - .:/workspace/orchestrator-ai-agent
+      - venv-isolation:/workspace/orchestrator-ai-agent/.venv
+      - uv-cache:/root/.cache/uv
+    env_file:
+      - path: .env
+        required: false
+    entrypoint: ["python", "-m", "orchestrator.main"]
+
+  # ----------------------------------------------------------------------------
+  # 3. Test Runner: Execute full pytest test suite inside Linux environment
+  # Usage:
+  #   docker compose run --rm test
+  #   docker compose run --rm test tests/test_phase14_improvements.py
+  # ----------------------------------------------------------------------------
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    working_dir: /workspace/orchestrator-ai-agent
+    volumes:
+      - .:/workspace/orchestrator-ai-agent
+      - venv-isolation:/workspace/orchestrator-ai-agent/.venv
+      - uv-cache:/root/.cache/uv
+    env_file:
+      - path: .env
+        required: false
+    entrypoint: ["pytest"]
+    command: ["tests/", "-v"]
+
+volumes:
+  uv-cache:
+    name: oragai-uv-cache
+  venv-isolation:
+    name: oragai-venv-isolation

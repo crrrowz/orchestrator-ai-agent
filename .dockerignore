@@ -1,0 +1,49 @@
+# ==========================================
+# Docker Ignore Rules for ORAGAI Workspace
+# ==========================================
+
+# Host Python Virtual Environments (crucial on Windows to prevent DLL/binary conflicts)
+.venv/
+venv/
+ENV/
+env/
+
+# Git metadata
+.git/
+.gitignore
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build and Distribution Artifacts
+dist/
+build/
+*.egg-info/
+
+# Environment Variables & Secrets (prevent leaking into Docker layers)
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor Directories
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project Temporary Logs & State
+.kilo/
+PowerShellHistory.txt
+*.log
+.orchestrator_state.json
+
+# Local Workspace Outputs & Sandboxes
+workspace/
+sandbox_demo/
