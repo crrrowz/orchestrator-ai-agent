@@ -1248,6 +1248,12 @@ class SDKSessionRunner:
         except Exception:
             pass
 
+        if telemetry_bridge and telemetry_bridge.visualizer and hasattr(telemetry_bridge.visualizer, "close"):
+            try:
+                telemetry_bridge.visualizer.close(success=outcome.success)
+            except Exception:
+                pass
+
         return outcome
 
 
@@ -1284,22 +1290,7 @@ class OpenHandsRuntimeBridge:
         sandbox_manager: Any,
     ) -> AgentExecutionOutcome:
         """Execute a single bounded turn for the specified persona."""
-        if self.log_store and hasattr(self.log_store, "set_agent_context"):
-            self.log_store.set_agent_context(
-                role=role_name,
-                phase=role_name,
-            )
-
-        # 1. Create Telemetry Bridge
-        telemetry_bridge = OpenHandsTelemetryBridge(
-            log_store=self.log_store,
-            visualizer=self.visualizer,
-            diagnostics_db=self.diagnostics_db,
-            telemetry_recorder=self.telemetry_recorder,
-            role_name=role_name,
-        )
-
-        # 2. Build Agent via SDKAgentFactory
+        # 1. Build Agent via SDKAgentFactory
         scope = getattr(sandbox_manager, "scope", None)
         agent = SDKAgentFactory.create_persona_agent(
             config=self.config,
@@ -1309,6 +1300,26 @@ class OpenHandsRuntimeBridge:
             sandbox_manager=sandbox_manager,
             scope=scope,
             workspace_path=workspace_path,
+        )
+
+        llm_instance = getattr(agent, "llm", None)
+        model_name = getattr(llm_instance, "model", "") if llm_instance else ""
+
+        if self.log_store and hasattr(self.log_store, "set_agent_context"):
+            self.log_store.set_agent_context(
+                role=role_name,
+                phase=role_name,
+                model=model_name,
+                llm=llm_instance,
+            )
+
+        # 2. Create Telemetry Bridge
+        telemetry_bridge = OpenHandsTelemetryBridge(
+            log_store=self.log_store,
+            visualizer=self.visualizer,
+            diagnostics_db=self.diagnostics_db,
+            telemetry_recorder=self.telemetry_recorder,
+            role_name=role_name,
         )
 
         # 3. Run Ephemeral Bounded Session

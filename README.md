@@ -101,7 +101,7 @@ cd orchestrator-ai-agent
 uv sync
 
 # Or with pip
-pip install -e .
+uv pip install -e .
 ```
 
 ### Configure Secrets
@@ -111,47 +111,23 @@ cp .env.example .env
 # Edit .env and insert your preferred provider API key (OpenRouter, Gemini, OpenAI, etc.)
 ```
 
-### Run with Single-Command Universal Launcher (`oragai`)
-
-ORAGAI includes direct zero-setup universal launchers (`oragai.cmd` on Windows CMD, `oragai.ps1` on PowerShell, and `./oragai` on Linux/macOS) designed with a **2-Tier execution architecture**:
-1. **Tier 1 (Native Python)**: Instantly detects your local `.venv` (or system Python) and executes directly with native disk I/O, live diagnostics logging, and zero container overhead.
-2. **Tier 2 (Universal Docker Fallback)**: Automatically falls back to Docker if no Python virtual environment is found, mounting `./workspace` portably and injecting `.env`.
-
-```bash
-# 1. Zero-Token Connectivity & Config Check
-./oragai --check-config       # Linux/macOS
-.\oragai --check-config       # Windows PowerShell / CMD
-
-# 2. Fast MVP Development & Testing
-./oragai "Build a Sliding Window RateLimiter class with unit tests" --mode dev-test
-
-# 3. Full 4-Agent Pipeline (Architect -> Dev -> Test -> Review)
-./oragai "Design and implement an OAuth2 token validation service" --mode full
-
-# 4. Codebase Forensic Audit
-./oragai --mode audit
-
-# 5. Codebase Audit & Auto-Remediation Loop
-./oragai --mode audit-fix
-```
-
 ### Python CLI Direct (Native Python Environment)
 
 ```bash
 # Verify environment and model connectivity (0 tokens)
-python -m orchestrator.main --check-config
+uv run python -m orchestrator.main --check-config
 
 # Execute a TDD development task
-python -m orchestrator.main "Build a Sliding Window RateLimiter class with unit tests" --mode dev-test
+uv run python -m orchestrator.main "Build a Sliding Window RateLimiter class with unit tests" --mode dev-test
 
 # Run full 4-agent architectural pipeline
-python -m orchestrator.main "Design and implement an OAuth2 token validation service" --mode full
+uv run python -m orchestrator.main "Design and implement an OAuth2 token validation service" --mode full
 
 # Run deep codebase security & architecture audit
-python -m orchestrator.main --mode audit
+uv run python -m orchestrator.main --mode audit
 
 # Run automated audit and fix remediation loop
-python -m orchestrator.main --mode audit-fix
+uv run python -m orchestrator.main --mode audit-fix
 ```
 
 ### Python Programmatic API

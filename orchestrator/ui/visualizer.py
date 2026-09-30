@@ -156,12 +156,12 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 for a in args:
                     if isinstance(a, str):
                         cleaned = (
-                            a.replace("▶", ">")
-                            .replace("🪙", "$")
-                            .replace("⏱", "")
-                            .replace("💭", "*")
-                            .replace("✓", "[OK]")
-                            .replace("✗", "[ERR]")
+                            a.replace(" ▶ ", ">")
+                            .replace(" 🪙 ", "$")
+                            .replace(" ⏱ ", "")
+                            .replace(" 💭 ", "*")
+                            .replace(" ✓ ", "[OK]")
+                            .replace(" ✗ ", "[ERR]")
                             .encode("ascii", errors="replace")
                             .decode("ascii")
                         )
@@ -230,7 +230,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                     cost = getattr(
                         self.store.current_llm.metrics, "accumulated_cost", 0.0
                     )
-                    tokens_str = f" [cyan]🪙 {total_tok:,} tok[/cyan]"
+                    tokens_str = f" [cyan]🪙   {total_tok:,} tok[/cyan]"
                     if cost > 0:
                         tokens_str += f" [dim](${cost:.4f})[/dim]"
 

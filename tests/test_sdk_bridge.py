@@ -603,6 +603,8 @@ def test_openhands_runtime_bridge_facade_execution(tmp_path: Path):
         assert mock_run.called
         assert mock_run.call_args[1]["role_name"] == "developer"
         assert mock_run.call_args[1]["workspace_path"] == tmp_path
+        assert store.current_model == "gpt-4o"
+        assert store.current_llm == llm_instance
 
 
 def test_migration_routing_flag_active():
