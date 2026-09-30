@@ -3,7 +3,7 @@
 > **Autonomous Multi-Agent Orchestration & Self-Healing Engineering.**  
 > *(Orchestrated Resilient Autonomous Generative AI)*
 
-**ORAGAI** is a high-performance, autonomous multi-agent software engineering framework powered by the **OpenHands Software Agent SDK** (`openhands-sdk v1.49.4`), `.agents/skills/` specification, and zero-token codebase intelligence (via Graft).
+**ORAGAI** is a high-performance, autonomous multi-agent software engineering framework powered by the **OpenHands Software Agent SDK** (`openhands-sdk >=1.49.0`), `.agents/skills/` specification, and zero-token codebase intelligence (via Graft).
 
 ---
 
@@ -37,7 +37,7 @@
                                       ▼
  ┌──────────────────────────────────────────────────────────────────────────────────┐
  │                      COGNITIVE SENTINEL & SRE MESH                               │
- │ ASTGuard (<15ms), SelfHealingEngine, CloudResilienceMesh, SQLite WAL Diagnostics │
+ │ ASTGuard, SelfHealingEngine, CloudResilienceMesh, SQLite WAL Diagnostics │
  └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -48,29 +48,39 @@
 ```text
 .
 ├── orchestrator/
-│   ├── adapters/            # Polyglot Project Adapters (Python, Node, Generic)
+│   ├── adapters/            # Polyglot Project Adapters (Python, Node, Generic) + VCS/Runtime/Sandbox/Storage
 │   ├── agents/              # Role Agent Factories (Architect, Developer, Tester, Reviewer, Auditor, Documentation)
-│   ├── analysis/            # Pytest parsing, Graft context, Finding validators
+│   ├── analysis/            # Pytest parsing, Graft context, Finding validators, Deep inspection engine
+│   ├── benchmarks/          # Autonomous benchmark engine (BenchmarkRunner, Evaluator, Catalog)
 │   ├── cli/                 # CLI handlers, argparse routing, interactive wizard
-│   ├── config/              # Pydantic schemas, cascading JSON/.env loaders
-│   ├── context/             # ContextManager, prompt builder, modular injectors
-│   ├── control/             # TokenGovernor, BudgetGuard, HumanInterventionChannel
+│   ├── config/              # Pydantic schemas, cascading JSON/.env loaders, migration routing
+│   ├── context/             # ContextManager, prompt builder, modular injectors, cross-agent handoff mesh
+│   ├── control/             # TokenGovernor, BudgetGuard, HumanInterventionChannel, adaptive governance, recovery
 │   ├── core/                # Config, constants, exceptions, typing protocols
+│   ├── diagnostics/         # DiagnosticsManager: unified dashboard, search, report rotation
+│   ├── domain/              # Pure domain models (TaskTruth, Evidence, Audit, Recovery, Context)
+│   ├── engine/              # OpenHands SDK runtime bridge (SDKAgentFactory, PromptView, TurnEnvelope)
+│   ├── evolution/           # SystemAuditor: offline self-evolution analysis
+│   ├── governance/          # Guarded FSM engine, completion gates, stagnation recovery, resource governance
 │   ├── guards/              # Zero-token preflight syntax & importability guards
 │   ├── llm/                 # LLMManager, factory, pricing, model normalization
 │   ├── memory/              # Cross-run persistent conversation memory
-│   ├── pipeline/            # 5 Pipelines (DevTestLoop, FullPipeline, AuditPipeline, AuditFixPipeline, DocumentationPipeline)
+│   ├── pipeline/            # 5 Pipelines + FSM, checkpoint, dispatcher, strangler migration guard
+│   ├── ports/               # Hexagonal architecture ports (driving: CLI, FSM, Lifecycle; driven: Runtime, VCS, Tools)
 │   ├── rendering/           # Rich diff renderer, terminal styling, report generators
 │   ├── sentinel/            # Cognitive Sentinel: ASTGuard, SelfHealing, CloudMesh, DiagnosticsDB
 │   ├── skills/              # Skill manager, compressor, resolver, registry
-│   ├── tools/               # RBAC workspace file and parameterized terminal tools
+│   ├── telemetry/           # TelemetryRecorder, execution schemas, FIFO report management
+│   ├── tools/               # RBAC workspace file and parameterized terminal tools + hardened sandbox
 │   ├── ui/                  # SessionLogStore, OrchestratorLiveVisualizer, InteractiveLogExplorer
-│   └── vcs/                 # GitOps isolation, branching, diffs, checkpointing
-├── tests/                   # Comprehensive Test Modules (469 Passing Tests)
-├── docs/                    # Operational and architectural documentation (DOCKER_GUIDE.md, etc.)
-├── Dockerfile               # Multi-stage container definition (Dev & Prod)
+│   ├── utils/               # Shared utilities (git_ops, graft_context, output, pytest_parser, sdk_patch)
+│   ├── vcs/                 # GitOps isolation, branching, diffs, checkpointing
+│   └── workstreams/         # Micro-TDD loop, Milestone DAG, Context synthesis, Audit workstream, Review parsing
+├── tests/                   # Comprehensive Test Suite (~458 test functions across 50 modules)
+├── docs/                    # Operational and architectural documentation
+├── Dockerfile               # Multi-stage container definition (Dev & Prod, Python 3.13-slim base)
 ├── docker-compose.yml       # Dev environment, CLI runner, and test container services
-└── pyproject.toml           # Project dependencies & build configuration
+└── pyproject.toml           # Project dependencies & build configuration (Python >=3.12)
 ```
 
 ---
@@ -153,7 +163,7 @@ uv run python -m orchestrator.main "Build a rate limiter" --mode dev-test
 
 ## 🧪 Testing & Verification
 
-The test suite contains **469 automated tests** covering:
+The test suite contains **~458 automated test functions** across 50 test modules covering:
 - OpenHands SDK tool protocol compliance (`WorkspaceFileTool`, `WorkspaceTerminalTool`).
 - Circuit breaker state machines and semantic failure deduplication.
 - Dynamic token governance and phase allocation (`TokenPhase`).
@@ -169,4 +179,4 @@ docker run --rm oragai:dev pytest tests/ -v
 uv run python -m pytest tests/ -v
 ```
 
-All 469 tests pass deterministically across Linux containers and Windows.
+All tests pass deterministically across Linux containers and Windows.

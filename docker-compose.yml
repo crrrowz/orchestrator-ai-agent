@@ -12,11 +12,17 @@ services:
     working_dir: /workspace/orchestrator-ai-agent
     volumes:
       # Mount host source code into container for live development
-      - .:/workspace/orchestrator-ai-agent
+      - type: bind
+        source: .
+        target: /workspace/orchestrator-ai-agent
       # Volume isolation for .venv: prevents host (Windows) venv from overriding container (Linux) venv
-      - venv-isolation:/workspace/orchestrator-ai-agent/.venv
+      - type: volume
+        source: venv-isolation
+        target: /workspace/orchestrator-ai-agent/.venv
       # Cache uv downloads and wheels across container rebuilds
-      - uv-cache:/root/.cache/uv
+      - type: volume
+        source: uv-cache
+        target: /root/.cache/uv
     env_file:
       - path: .env
         required: false

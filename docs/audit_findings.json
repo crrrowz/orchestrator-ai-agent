@@ -1,9 +1,0 @@
-{
-  "status": "AUDIT_COMPLETED",
-  "summary": "Audit completed: 0 actionable finding(s) verified.",
-  "findings": [],
-  "total_files_scanned": 149,
-  "total_loc": 23631,
-  "clean_static": true,
-  "timestamp": "2026-09-24 09:30:00 UTC"
-}

@@ -2,7 +2,8 @@
 
 > **ORAGAI: Autonomous Multi-Agent Orchestration & Self-Healing Engineering.**  
 > **Document Classification**: Enterprise Architecture & Runtime Specification  
-> **Target Version**: `1.0.0`  
+> **Package Version**: `0.1.0`  
+> **Config Schema Version**: `1.0.0`  
 > **Schema Definition**: `orchestrator/config/config_schema.json`  
 > **Configuration Source**: `orchestrator.config.json`
 
@@ -52,16 +53,16 @@ The Multi-Agent Orchestrator adopts a strict **4-Tier Priority Cascade**. Settin
 | `execution.auto_commit` | `AUTO_COMMIT` | `bool` | `true` | `orchestrator/config/__init__.py:56` | Automatically records a clean git commit on verified task completion. | Commits unfinished work if verification gates are disabled. |
 | `execution.auto_chain_audit` | `AUTO_CHAIN_AUDIT` | `bool` | `true` | `orchestrator/config/__init__.py:88` | Automatically runs audit pass following dev-test completion. | Adds extra execution step and tokens to simple dev tasks. |
 | `execution.workspace_path` | `WORKSPACE_PATH` | `str` | `./workspace` | `orchestrator/config/__init__.py:36` | Target working directory isolated from orchestrator codebase. | Misconfigured relative path may target unintended directory. |
-| `agents.architect.model` | `ARCHITECT_MODEL` | `str` | `qwen3.8-27b:free` | `orchestrator/config/__init__.py:160` | Decomposes complex specs into milestone DAGs and `PLAN.md`. | Free-tier models may occasionally hallucinate file boundaries. |
+| `agents.architect.model` | `ARCHITECT_MODEL` | `str` | `qwen3.8-27b:free` (if `OPENROUTER_API_KEY` set) / `claude-sonnet-4-5` (fallback) | `orchestrator/core/config.py` | Decomposes complex specs into milestone DAGs and `PLAN.md`. | Free-tier models may occasionally hallucinate file boundaries. |
 | `agents.architect.temperature` | - | `float` | `0.3` | `orchestrator/config/__init__.py:165` | Balances architectural exploration with deterministic structure. | High values (>0.7) degrade Markdown milestone parsing accuracy. |
 | `agents.architect.skills` | - | `list[str]` | `[decomposition, contract, graft]` | `orchestrator/config/__init__.py:166` | Injects architectural standards and codebase map. | Unnecessary skills consume token context. |
-| `agents.developer.model` | `DEVELOPER_MODEL` | `str` | `qwen3.8-27b:free` | `orchestrator/config/__init__.py:115` | Core implementation engine generating idiomatic code. | Weaker models require more iterations to pass tests. |
+| `agents.developer.model` | `DEVELOPER_MODEL` | `str` | `qwen3.8-27b:free` (if `OPENROUTER_API_KEY` set) / `claude-sonnet-4-5` (fallback) | `orchestrator/core/config.py` | Core implementation engine generating idiomatic code. | Weaker models require more iterations to pass tests. |
 | `agents.developer.temperature` | - | `float` | `0.2` | `orchestrator/config/__init__.py:121` | Deterministic, bug-free code generation. | Very low temperature may struggle to break out of syntax ruts. |
 | `agents.developer.skills` | - | `list[str]` | `[clean-python, debugging, docker, graft]` | `orchestrator/config/__init__.py:122` | Enforces zero-stub standards, systematic debugging, containerization. | Extra skills increase prompt token baseline. |
-| `agents.tester.model` | `TESTER_MODEL` | `str` | `qwen3.8-27b:free` | `orchestrator/config/__init__.py:133` | Rigorous pytest test case generation and execution. | Hallucinated mock fixtures if model is low quality. |
+| `agents.tester.model` | `TESTER_MODEL` | `str` | `qwen3.8-27b:free` (if `OPENROUTER_API_KEY` set) / `gpt-4o-mini` (fallback) | `orchestrator/core/config.py` | Rigorous pytest test case generation and execution. | Hallucinated mock fixtures if model is low quality. |
 | `agents.tester.temperature` | - | `float` | `0.0` | `orchestrator/config/__init__.py:139` | Strictly deterministic test assertions without random variability. | None; test generation requires zero stochastic hallucination. |
 | `agents.tester.skills` | - | `list[str]` | `[pytest-rigorous-testing]` | `orchestrator/config/__init__.py:140` | Enforces pytest isolation, edge cases, deterministic fixtures. | None. |
-| `agents.reviewer.model` | `REVIEWER_MODEL` | `str` | `gemini-2.0-flash-exp:free` | `orchestrator/config/__init__.py:146` | Uncompromising security and code review with structured JSON output. | Overly strict models might reject valid minor style variations. |
+| `agents.reviewer.model` | `REVIEWER_MODEL` | `str` | `gemini-2.0-flash-exp:free` (if `OPENROUTER_API_KEY` set) / `gpt-4o` (fallback) | `orchestrator/core/config.py` | Uncompromising security and code review with structured JSON output. | Overly strict models might reject valid minor style variations. |
 | `agents.reviewer.temperature` | - | `float` | `0.1` | `orchestrator/config/__init__.py:152` | Deterministic JSON verdict (`APPROVED` / `REJECTED`). | High values risk malformed JSON output. |
 | `agents.reviewer.skills` | - | `list[str]` | `[code-review, security-audit]` | `orchestrator/config/__init__.py:153` | Checks OWASP, secret leaks, boundary integrity, adherence to plan. | High token overhead if skills are uncompressed. |
 | `sentinel.enabled` | `ENABLE_COGNITIVE_SENTINEL` | `bool` | `true` | `orchestrator/core/config.py:110` | Enables Cognitive Sentinel supervision, zero-token AST guards, and SQLite incident tracking. | None; operates as zero-overhead in-memory gatekeeper. |

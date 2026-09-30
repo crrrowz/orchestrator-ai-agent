@@ -60,7 +60,7 @@ Autonomous technical authoring engine.
 ### `CognitiveSentinelSupervisor` (ICognitiveSentinel)
 Singleton digital supervisor intercepting file writes, terminal commands, cloud API calls, and runtime anomalies.
 - `intercept_file_write(file_path: Path, content: str) -> Tuple[bool, str, Optional[str]]`
-  Validates Python AST before disk write; auto-repairs missing imports or syntax colons in <15ms.
+  Validates Python AST before disk write; auto-repairs missing imports or syntax colons.
 - `intercept_terminal_command(command: str) -> Tuple[bool, str, str]`
   Translates disallowed UNIX commands on Windows (e.g., `ls` -> `dir`, `cat` -> `type`, `grep` -> `findstr`).
 - `handle_runtime_error(exc: Exception, context: dict) -> CognitiveIncident`
@@ -116,3 +116,72 @@ Thread-safe human-in-the-loop communication channel supporting interactive appro
 - `SessionLogStore`: Thread-safe project-partitioned execution log store (`diagnostics/logs/<project_slug>/`).
 - `OrchestratorLiveVisualizer`: Real-time streaming status panel showing active agent, role, model, elapsed time, token metrics, and Sentinel SRE radar.
 - `InteractiveLogExplorer`: Keyboard-driven collapsible TUI log viewer (`uv run python -m orchestrator.main --logs`).
+
+---
+
+## 7. Domain Models (`orchestrator.domain`)
+
+Pure Pydantic domain models with no framework dependencies.
+
+- `TaskTruthGraph`: Requirement-driven task truth model with `RequirementCategory`, `ImplementationState`, `VerificationState`, `AcceptanceCriterion`, `Requirement`, `TaskMilestone`.
+- `EvidenceReference`: Cryptographic evidence references with `EvidenceType` (PYTEST_EXECUTION, AST_PREFLIGHT, LINTER_OUTPUT, SECURITY_AUDIT, DIFF_VERIFICATION, USER_SIGN_OFF).
+- `VerifiedAuditFinding` / `FindingDAG`: Structured audit findings with `FindingCategory`, `FindingSeverity`.
+- `HandoffEnvelope`: Sealed cross-agent context transfer envelopes with `ContextTier` and `HandoffType`.
+- `RecoveryDecision` / `VelocityVector`: 4-D progress velocity tracking for stagnation recovery.
+
+---
+
+## 8. Hexagonal Architecture Ports (`orchestrator.ports`)
+
+### Driving Ports (`orchestrator.ports.driving`)
+- `CLIControllerPort`: CLI interaction boundary.
+- `FSMTriggerPort`: FSM state transition triggers.
+- `LifecycleControllerPort`: Pipeline lifecycle control.
+- `WorkstreamDispatchPort`: Workstream dispatch interface.
+
+### Driven Ports (`orchestrator.ports.driven`)
+- `AgentRuntimePort`: Agent execution abstraction with `AgentExecutionOutcome`.
+- `VCSPort`: Version control system operations.
+- `ToolExecutionPort`: Tool execution interface.
+- `TelemetryStoragePort`: Telemetry persistence.
+- `RollbackControllerPort`: Workspace rollback control.
+
+---
+
+## 9. Governance & FSM (`orchestrator.governance`)
+
+### `GuardedFSMEngine`
+State machine with guard predicates for pipeline lifecycle orchestration.
+- **Legacy FSM States** (`PipelinePhase`, 12 states): INIT, ARCHITECT, DEVELOP, PREFLIGHT, TEST, FIX, REVIEW, HUMAN_GATE, COMMIT, COMPLETED, FAILED, ABORTED.
+- **Guarded FSM States** (`FSMState`, 11 states): INIT, PREFLIGHT, PLANNING, IMPLEMENTATION, VERIFICATION, RESOLUTION, REVIEW, BLOCKED, AMBIGUOUS, COMPLETED, FAILED, ABORTED.
+- `CompletionGate`: Verification gate with `verify_mandatory_criteria_satisfied()`.
+- `SemanticProgressTracker`: Stagnation detection via `ProgressVelocityMetrics` and `OscillationDetector`.
+- `RecoveryOrchestrator` / `StrategyMutator`: Adaptive recovery with mutation strategies (PROMPT_SPECIALIZATION, MILESTONE_SPLITTING, PERSONA_REPLACEMENT, HUMAN_ESCALATION).
+
+---
+
+## 10. Workstreams (`orchestrator.workstreams`)
+
+- `MicroTDDLoop`: Red-Green-Blue TDD cycle with `RedPhaseTestGenerator`, `GreenPhaseDispatcher`, `BluePhaseRefactorEngine`.
+- `MilestoneDependencyResolver` / `MilestoneDAGDispatcher`: DAG-based milestone decomposition and dispatch.
+- `ContextSynthesizer`: Cross-agent context synthesis with `ASTAwareContextClamper`.
+- `StaticAnalysisScanner` / `CHICalculator`: Codebase Health Index computation.
+- `ReviewerOutputParser` / `DiffVerifier`: Reviewer verdict parsing and diff verification.
+
+---
+
+## 11. Benchmark Engine (`orchestrator.benchmarks`)
+
+- `BenchmarkRunner`: Ephemeral sandbox provisioning for isolated task evaluation.
+- `EmpiricalEvaluator`: Metrics: TCR (Task Completion Rate), FCR (False Completion Rate), RCR (Requirement Coverage Rate), PEI (Process Efficiency Index), PER (Progress Efficiency Ratio), CHI_DELTA.
+- `BenchmarkCatalog`: Predefined benchmark task specifications with `BenchmarkSuiteType`, `BenchmarkTaskTier`, `BenchmarkDomain`.
+
+---
+
+## 12. Diagnostics (`orchestrator.diagnostics`)
+
+- `DiagnosticsManager`: Unified dashboard aggregating reports, memory, sentinel, and logs.
+  - `get_overview() -> Dict`: Aggregated metrics.
+  - `render_dashboard()`: Rich CLI dashboard.
+  - `search(query)`: Full-text search across diagnostics.
+  - `clean(max_retained_reports, max_retained_memories) -> Dict[str, int]`: FIFO pruning.
