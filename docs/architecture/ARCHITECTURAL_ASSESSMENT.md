@@ -36,7 +36,7 @@ A comprehensive 360-degree forensic audit of the **ORAGAI** repository was condu
 ### 2.1 Package & Subsystem Layout
 
 ```text
-D:\files\Contracted projects\IdeaProjects\orchestrator-ai-agent\
+orchestrator-ai-agent/
 ├── orchestrator/
 │   ├── adapters/          # Polyglot workspace drivers (PythonAdapter, NodeAdapter, GenericAdapter)
 │   ├── agents/            # Specialized Agent Factories (Architect, Developer, Tester, Reviewer, Auditor, Docs)

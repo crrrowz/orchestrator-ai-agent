@@ -9,6 +9,39 @@
 
 ---
 
+## 📂 The Core JSON Configuration Files (`orchestrator/config/`)
+
+The `orchestrator/config/` directory houses the three foundational JSON specifications that govern the entire ORAGAI runtime:
+
+```text
+orchestrator/config/
+├── orchestrator.config.json    # 🎯 Primary Declarative Runtime Configuration
+├── config_schema.json          # 📐 JSON Schema (Draft-07) Validation & IDE Autocomplete Contract
+└── migration_routing.json      # 🔀 Strangler Fig Feature-Flag & Canary Migration Router
+```
+
+### 1. `orchestrator.config.json` — Master Declarative Runtime Config
+- **Role**: Serves as the primary source of truth (Tier 2 in priority cascade) for orchestrator behavior when not overridden by CLI flags.
+- **Why it matters**: 
+  - Centralizes execution limits (`max_iterations`, `max_budget_usd`, `max_tokens_budget`).
+  - Defines agent role assignments, temperatures, and required skills.
+  - Enforces RBAC directory write scopes (`blocked_write_prefixes_developer`, `allowed_write_prefixes_architect`).
+  - Configures SRE telemetry, memory scoring thresholds, and diff rendering parameters.
+
+### 2. `config_schema.json` — Structural Integrity & IDE Integration
+- **Role**: Formal JSON Schema (Draft-07) specification for all configuration fields.
+- **Why it matters**:
+  - **Zero-Token Static Validation**: Validates user-provided configuration files before runtime, failing fast on typos or out-of-bound values.
+  - **IDE Autocomplete & Tooltips**: Provides instant hover documentation, type constraints, and autocomplete in VS Code, JetBrains, and Cursor when editing `orchestrator.config.json` via `$schema`.
+
+### 3. `migration_routing.json` — Strangler Fig Canary Routing
+- **Role**: Governs the zero-regression architectural migration from procedural pipelines to hexagonal engines.
+- **Why it matters**:
+  - Contains dynamic boolean feature flags for all 10 core subsystems (`use_guarded_fsm`, `use_clean_sdk_bridge`, `use_hardened_sandbox`, `use_ast_virtualizer`, `use_adaptive_governance`, `use_context_handoff_mesh`, `use_deep_inspection_engine`, `use_stagnation_recovery_engine`, `use_benchmark_engine`, `use_polyglot_mesh`).
+  - Controls canary deployment traffic (`canary_percentage: 100`) and automatic fallback to legacy procedural execution if errors exceed `circuit_breaker_error_threshold`.
+
+---
+
 ## 🏛️ Configuration Architecture & Cascading Priority
 
 The Multi-Agent Orchestrator adopts a strict **4-Tier Priority Cascade**. Settings defined higher in the cascade supersede those defined below them.

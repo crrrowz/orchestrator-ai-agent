@@ -32,7 +32,7 @@ RUN uv venv /opt/venv --python /usr/local/bin/python
 
 # Step 1: Copy dependency specifications for Docker layer caching
 COPY pyproject.toml uv.lock ./
-COPY docs/README.md ./docs/README.md
+COPY README.md ./README.md
 
 # Step 2: Pre-install dependencies into /opt/venv (cached layer)
 RUN uv sync --frozen --no-install-project

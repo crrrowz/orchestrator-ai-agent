@@ -1,7 +1,7 @@
 
 ---
 name: oragai-incremental-execution
-description: "Graft-aware, evidence-driven incremental execution and governance engine for ORAGAI. Executes the canonical P1-P14 architecture across independent conversations using atomic architectural bites, persistent execution state, Graft topology intelligence, contract-first verification, RBAC sandboxing, AST virtualization, regression protection, zero-token preflight checks, evidence gates, and safe recovery."
+description: "Graft-aware, evidence-driven incremental execution and governance engine for ORAGAI. Executes the active target architecture (P15-P18) across independent conversations using atomic architectural bites, persistent execution state, Graft topology intelligence, contract-first verification, RBAC sandboxing, AST virtualization, regression protection, zero-token preflight checks, evidence gates, and safe recovery."
 triggers:
   - oragai-dev
   - execute-plan
@@ -18,15 +18,15 @@ triggers:
 This skill serves as the deterministic execution, coordination, and governance engine for **ORAGAI**.
 
 It does NOT replace:
-* Canonical plans in `docs/plans/P0-P14`[cite: 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14]
-* Approved Architectural Decision Records (ADRs)[cite: 2]
-* Graft Codebase Topology Engine[cite: 2]
-* GitOps Repository Isolation[cite: 2]
-* Project test infrastructure (244 baseline invariant tests)[cite: 2]
+* Canonical target plans in `docs/plans/` (P15 through P18)
+* Approved Architectural Decision Records (ADRs)
+* Graft Codebase Topology Engine
+* GitOps Repository Isolation
+* Project test infrastructure (520 baseline invariant tests)
 
-Its explicit responsibility is to transform approved architectural plans into bounded, cryptographically verified, and independently executable **Atomic Bites** across stateless agent conversations[cite: 1, 8].
+Its explicit responsibility is to transform approved architectural plans into bounded, cryptographically verified, and independently executable **Atomic Bites** across stateless agent conversations.
 
-A conversation is ephemeral; the repository, Git history, `TaskTruthGraph`, and cryptographic evidence are permanent[cite: 3, 4, 7].
+A conversation is ephemeral; the repository, Git history, `TaskTruthGraph`, and cryptographic evidence are permanent.
 
 ---
 
@@ -34,16 +34,16 @@ A conversation is ephemeral; the repository, Git history, `TaskTruthGraph`, and 
 
 When determining implementation scope and verifying completion, adhere strictly to this precedence:
 
-1. `docs/plans/P0-P14` — Canonical architectural intent and invariants[cite: 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14].
-2. Current repository code — Implementation ground-truth[cite: 2].
-3. Existing test suites — Behavioral contracts (244 passing baseline)[cite: 2].
-4. `TaskTruthGraph` & Persistent execution state (`.orchestrator_state.json` / `docs/execution/`) — Active requirements and milestone DAG[cite: 3, 5].
-5. Cryptographic Evidence Packages (`CanonicalEvidence`, SHA-256 digests) — Previously proven facts[cite: 4, 8].
-6. Git working tree & Checkpoint commits — Verified historical states[cite: 5, 10].
-7. Graft Engine — Structural relationships, call graphs, and blast-radius topology[cite: 2].
-8. Agent reasoning — Transient execution assistance only[cite: 2].
+1. `docs/plans/` (Active Target Plans P15-P18) — Canonical architectural intent and invariants.
+2. Current repository code — Implementation ground-truth.
+3. Existing test suites — Behavioral contracts (520 passing baseline).
+4. `TaskTruthGraph` & Persistent execution state (`.orchestrator_state.json` / `docs/execution/`) — Active requirements and milestone DAG.
+5. Cryptographic Evidence Packages (`CanonicalEvidence`, SHA-256 digests) — Previously proven facts.
+6. Git working tree & Checkpoint commits — Verified historical states.
+7. Graft Engine — Structural relationships, call graphs, and blast-radius topology.
+8. Agent reasoning — Transient execution assistance only.
 
-The agent MUST NOT treat conversational context, LLM assumptions, or unverified claims as authoritative[cite: 2, 4].
+The agent MUST NOT treat conversational context, LLM assumptions, or unverified claims as authoritative.
 
 ---
 
@@ -51,15 +51,15 @@ The agent MUST NOT treat conversational context, LLM assumptions, or unverified 
 
 Every execution session MUST strictly satisfy these non-negotiable system invariants:
 
-1. **The 244-Test Invariant Gate:** Existing baseline tests must remain 100% passing (`244 passed`). A single regression halts execution immediately[cite: 2, 13, 14].
-2. **False Completion Barrier ($FCR \equiv 0.000$):** An Atomic Bite or task MUST NEVER be marked `COMPLETED` based merely on process exit code `0` or conversation step exhaustion without deterministic evidence satisfying all mandatory Acceptance Criteria[cite: 2, 4, 13].
+1. **The 520-Test Invariant Gate:** Existing baseline tests must remain 100% passing (`520 passed`). A single regression halts execution immediately.
+2. **False Completion Barrier ($FCR \equiv 0.000$):** An Atomic Bite or task MUST NEVER be marked `COMPLETED` based merely on process exit code `0` or conversation step exhaustion without deterministic evidence satisfying all mandatory Acceptance Criteria.
 3. **Strict Persona RBAC Sandboxing:** 
-   * `Developer` role is STRICTLY FORBIDDEN from modifying `tests/`[cite: 2, 7].
-   * `Tester` role is STRICTLY FORBIDDEN from modifying production source code outside `tests/`[cite: 2, 7].
-   * `Architect` and `Reviewer` roles are strictly read-only for production code[cite: 2, 7].
-4. **Zero-Stub Invariant:** Production implementations must NEVER contain `# TODO`, `# FIXME`, `pass`, `...`, or `raise NotImplementedError` in public interfaces. Stubs cause immediate rejection by `ASTGuard`[cite: 2, 7].
-5. **No Monkey-Patching (`sdk_patch.py` Banned):** All OpenHands SDK integrations must strictly use official public extension points (`ToolDefinition`, `ToolExecutor`, `EventStream`)[cite: 12].
-6. **Cross-Conversation Recovery:** Every bite must be fully recoverable from repository state alone without requiring previous chat transcripts[cite: 7, 8].
+   * `Developer` role is STRICTLY FORBIDDEN from modifying `tests/`.
+   * `Tester` role is STRICTLY FORBIDDEN from modifying production source code outside `tests/`.
+   * `Architect` and `Reviewer` roles are strictly read-only for production code.
+4. **Zero-Stub Invariant:** Production implementations must NEVER contain `# TODO`, `# FIXME`, `pass`, `...`, or `raise NotImplementedError` in public interfaces. Stubs cause immediate rejection by `ASTGuard`.
+5. **No Monkey-Patching (`sdk_patch.py` Banned):** All OpenHands SDK integrations must strictly use official public extension points (`ToolDefinition`, `ToolExecutor`, `EventStream`).
+6. **Cross-Conversation Recovery:** Every bite must be fully recoverable from repository state alone without requiring previous chat transcripts.
 
 ---
 

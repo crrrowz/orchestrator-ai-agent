@@ -1,9 +1,38 @@
 [project]
 name = "oragai"
 version = "0.1.0"
-description = "ORAGAI: Autonomous Multi-Agent Orchestration & Self-Healing Engineering"
-readme = "docs/README.md"
+description = "Production-grade autonomous multi-agent orchestration framework with guarded FSM lifecycle & self-healing SRE mesh."
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
+authors = [
+    { name = "ORAGAI Contributors" }
+]
+keywords = [
+    "ai-agents",
+    "multi-agent",
+    "orchestrator",
+    "autonomous-coding",
+    "llm",
+    "self-healing",
+    "ast-guard",
+    "tdd",
+    "openhands",
+    "sre"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "openhands-sdk>=1.49.0",
     "python-dotenv>=1.0.0",
@@ -12,6 +41,15 @@ dependencies = [
     "pydantic>=2.7.0",
     "httpx>=0.27.0",
 ]
+
+[project.scripts]
+oragai = "orchestrator.cli.app:main"
+
+[project.urls]
+Homepage = "https://github.com/crrrowz/orchestrator-ai-agent"
+Repository = "https://github.com/crrrowz/orchestrator-ai-agent"
+Issues = "https://github.com/crrrowz/orchestrator-ai-agent/issues"
+Documentation = "https://github.com/crrrowz/orchestrator-ai-agent/tree/main/docs"
 
 [build-system]
 requires = ["hatchling"]
