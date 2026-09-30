@@ -979,3 +979,350 @@ def test_fsm_guard_prevents_premature_completion(tmp_path: Path):
     assert FSMGuards.guard_can_complete(ctx, ev) is True
     assert FSMGuards.guard_can_enter_review(ctx, ev) is True
 
+
+def test_fsm_fails_when_llm_manager_missing_during_implementation(tmp_path: Path):
+    """TASK-001: Verify FSM emits CRITICAL_ERROR and reaches FAILED when LLMManager is absent."""
+    config = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        workspace_path=tmp_path,
+        config=config,
+        profile=get_profile(PipelineMode.DEV_TEST),
+    )
+    engine.llm_manager = None
+    engine.context.llm_manager = None
+    engine.runtime_bridge = None
+
+    # Force starting state to IMPLEMENTATION
+    engine.context.current_state = FSMState.IMPLEMENTATION
+
+    ev = engine._handle_implementation()
+    assert ev.event_type == EventType.CRITICAL_ERROR
+    assert "LLMManager or RuntimeBridge unavailable" in (ev.error_message or "")
+
+    # Processing this event should transition directly to FAILED
+    res = engine.process_event(ev)
+    assert res.success is True
+    assert res.current_state == FSMState.FAILED
+
+
+def test_fsm_fails_when_bridge_returns_fatal_error(tmp_path: Path):
+    """TASK-001: Verify FSM emits CRITICAL_ERROR when SDK runtime bridge returns FATAL_ERROR."""
+    config = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        workspace_path=tmp_path,
+        config=config,
+        profile=get_profile(PipelineMode.DEV_TEST),
+    )
+    engine.llm_manager = MagicMock()
+    mock_bridge = MagicMock()
+    mock_bridge.execute_bounded_turn.return_value = BridgeAgentOutcome(
+        role="developer",
+        exit_reason=AgentExitReason.FATAL_ERROR,
+        completed_naturally=False,
+        iterations_executed=0,
+        max_iterations_allocated=15,
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+        cost_usd=0.0,
+        error_message="Fatal unrecoverable LLM crash: ConnectionRefused",
+        mutated_files=tuple(),
+        final_thought=None,
+    )
+    engine.runtime_bridge = mock_bridge
+    engine.context.current_state = FSMState.IMPLEMENTATION
+
+    ev = engine._handle_implementation()
+    assert ev.event_type == EventType.CRITICAL_ERROR
+    assert "Fatal unrecoverable LLM crash" in (ev.error_message or "")
+
+    res = engine.process_event(ev)
+    assert res.success is True
+    assert res.current_state == FSMState.FAILED
+
+
+def test_guard_can_enter_verification_validates_outcomes(tmp_path: Path):
+    """TASK-002: Verify guard_can_enter_verification allows valid yields and rejects fatal/empty/aborted ones."""
+    ctx = FSMContext(
+        workspace_path=tmp_path,
+        config=OrchestratorConfig(workspace_path=tmp_path),
+        profile=get_profile(PipelineMode.DEV_TEST),
+        current_state=FSMState.IMPLEMENTATION,
+    )
+
+    # 1. Invalid event type
+    wrong_ev = PipelineEvent(
+        event_type=EventType.PREFLIGHT_PASSED,
+        source_phase=FSMState.IMPLEMENTATION,
+        execution_outcome=AgentExecutionOutcome.NATURAL_COMPLETION,
+    )
+    assert FSMGuards.guard_can_enter_verification(ctx, wrong_ev) is False
+
+    # 2. None execution outcome
+    none_outcome_ev = PipelineEvent(
+        event_type=EventType.AGENT_YIELDED,
+        source_phase=FSMState.IMPLEMENTATION,
+        execution_outcome=None,
+    )
+    assert FSMGuards.guard_can_enter_verification(ctx, none_outcome_ev) is False
+
+    # 3. FATAL_ERROR outcome
+    fatal_ev = PipelineEvent(
+        event_type=EventType.AGENT_YIELDED,
+        source_phase=FSMState.IMPLEMENTATION,
+        execution_outcome=AgentExecutionOutcome.FATAL_ERROR,
+    )
+    assert FSMGuards.guard_can_enter_verification(ctx, fatal_ev) is False
+
+    # 4. ABORTED outcome
+    aborted_ev = PipelineEvent(
+        event_type=EventType.AGENT_YIELDED,
+        source_phase=FSMState.IMPLEMENTATION,
+        execution_outcome=AgentExecutionOutcome.ABORTED,
+    )
+    assert FSMGuards.guard_can_enter_verification(ctx, aborted_ev) is False
+
+    # 5. Valid outcomes
+    for valid_outcome in (
+        AgentExecutionOutcome.NATURAL_COMPLETION,
+        AgentExecutionOutcome.STEP_LIMIT_REACHED,
+        AgentExecutionOutcome.TOKEN_LIMIT_REACHED,
+        AgentExecutionOutcome.TOOL_ERROR,
+        AgentExecutionOutcome.STAGNANT_DIFF,
+        AgentExecutionOutcome.TOOL_REJECTION,
+        AgentExecutionOutcome.AGENT_STUCK,
+    ):
+        valid_ev = PipelineEvent(
+            event_type=EventType.AGENT_YIELDED,
+            source_phase=FSMState.IMPLEMENTATION,
+            execution_outcome=valid_outcome,
+        )
+        assert FSMGuards.guard_can_enter_verification(ctx, valid_ev) is True
+
+
+def test_verification_rejects_completion_when_test_res_is_none(tmp_path: Path):
+    """TASK-003: Verify _handle_verification yields INCOMPLETE (not COMPLETE) when test_res is None."""
+    src_file = tmp_path / "main.py"
+    src_file.write_text("print('hello world')\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+    engine.context.current_state = FSMState.VERIFICATION
+    engine.context.adapter = None  # No test adapter -> test_res is None
+    engine.context.task_truth_graph = None
+
+    ev = engine._handle_verification()
+    assert ev.event_type == EventType.VERIFICATION_COMPLETED
+    assert engine.context.last_verification_decision is not None
+    assert engine.context.last_verification_decision.status == CompletionStatus.INCOMPLETE
+    assert engine.context.last_verification_decision.is_complete is False
+    assert "No test results or verification evidence" in engine.context.last_verification_decision.blocking_reasons[0]
+
+    # Guard check for completion should strictly fail
+    assert FSMGuards.guard_can_complete(engine.context, ev) is False
+
+
+def test_terminal_state_handlers_do_not_emit_start_task(tmp_path: Path):
+    """TASK-004: Verify terminal state handlers emit terminal events, not START_TASK."""
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+
+    completed_ev = engine._handle_completed()
+    assert completed_ev.event_type != EventType.START_TASK
+    assert completed_ev.source_phase == FSMState.COMPLETED
+
+    failed_ev = engine._handle_failed()
+    assert failed_ev.event_type != EventType.START_TASK
+    assert failed_ev.source_phase == FSMState.FAILED
+
+
+def test_headless_blocked_state_finalizes_cleanly(tmp_path: Path):
+    """TASK-004: Verify entering BLOCKED without interactive human channel finalizes with blocked=True."""
+    src_file = tmp_path / "main.py"
+    src_file.write_text("print('test')\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+    # Directly transition to BLOCKED
+    engine.context.current_state = FSMState.BLOCKED
+    engine.context.metadata["blocking_reason"] = "Missing required API credentials."
+
+    result = engine.run("Task that blocks")
+    assert result["success"] is False
+    assert result["blocked"] is True
+    assert result["status"] == "BLOCKED"
+    assert "Missing required API credentials." in result["error_message"]
+
+
+def test_global_iteration_budget_exhaustion(tmp_path: Path):
+    """TASK-005: Verify global iteration budget ceiling stops execution across milestones."""
+    src_file = tmp_path / "main.py"
+    src_file.write_text("print('test')\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    profile = get_profile(PipelineMode.DEV_TEST)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=profile,
+        workspace_path=tmp_path,
+    )
+    # Set context on resolution state with total_iterations hitting max_total_iterations
+    engine.context.current_state = FSMState.RESOLUTION
+    engine.context.iteration_count = 0  # Per-milestone count is fresh
+    engine.context.total_iterations = profile.max_total_iterations  # Global exhausted
+
+    ev = engine._handle_resolution()
+    assert ev.event_type == EventType.RETRIES_EXHAUSTED
+    assert "Global iteration ceiling" in (ev.error_message or "")
+
+    res = engine.process_event(ev)
+    assert res.success is True
+    assert res.current_state == FSMState.FAILED
+
+
+def test_workspace_hash_ignores_runtime_artifacts(tmp_path: Path):
+    """TASK-006: Verify compute_workspace_hash ignores logs, diagnostic db, and cache directories."""
+    src_file = tmp_path / "app.py"
+    src_file.write_text("print('core app')\n", encoding="utf-8")
+
+    initial_hash = FSMCheckpointManager.compute_workspace_hash(tmp_path)
+
+    # Create logs and diagnostic db
+    (tmp_path / "app.log").write_text("2026-09-30 INFO test log\n", encoding="utf-8")
+    (tmp_path / "diagnostics.db").write_bytes(b"\x00\x01\x02\x03sqlite header fake")
+    (tmp_path / ".coverage").write_text("coverage metadata", encoding="utf-8")
+    cache_dir = tmp_path / ".pytest_cache"
+    cache_dir.mkdir()
+    (cache_dir / "cache.json").write_text("{}", encoding="utf-8")
+
+    after_hash = FSMCheckpointManager.compute_workspace_hash(tmp_path)
+    assert initial_hash == after_hash
+
+
+def test_stagnation_counter_increments_without_test_adapter(tmp_path: Path):
+    """TASK-006: Verify stagnation counter increments when workspace hash is unchanged even if test_res is None."""
+    src_file = tmp_path / "app.py"
+    src_file.write_text("print('core app')\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+    engine.context.adapter = None  # No test adapter
+    engine.context.task_truth_graph = None
+
+    # First verification
+    ev1 = engine._handle_verification()
+    assert engine.context.stagnation_counter == 0
+
+    # Second verification without code changes
+    ev2 = engine._handle_verification()
+    assert engine.context.stagnation_counter == 1
+
+    # Third verification without code changes
+    ev3 = engine._handle_verification()
+    assert engine.context.stagnation_counter == 2
+
+
+def test_fsm_engine_wall_clock_timeout(tmp_path: Path):
+    """TASK-007: Verify GuardedFSMEngine halts when wall-clock timeout is exceeded."""
+    import time
+
+    src_file = tmp_path / "app.py"
+    src_file.write_text("print('app')\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+
+    def slow_implementation():
+        time.sleep(0.05)
+        return PipelineEvent(
+            event_type=EventType.AGENT_YIELDED,
+            source_phase=FSMState.IMPLEMENTATION,
+            execution_outcome=AgentExecutionOutcome.NATURAL_COMPLETION,
+        )
+
+    engine._handle_implementation = slow_implementation
+
+    result = engine.run("Hanging task", timeout_seconds=0.01)
+    assert result["success"] is False
+    assert result["timed_out"] is True
+    assert result["status"] == "FAILED"
+    assert "wall-clock timeout" in (result["error_message"] or "")
+
+
+def test_resume_from_failed_checkpoint_allows_recovery(tmp_path: Path):
+    """TASK-009: Verify resuming from a FAILED checkpoint resets state to PREFLIGHT/IMPLEMENTATION and executes."""
+    src_file = tmp_path / "app.py"
+    src_file.write_text("print('app')\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+    # Save a FAILED checkpoint
+    engine.context.current_state = FSMState.FAILED
+    engine.context.state_history = [FSMState.INIT, FSMState.PREFLIGHT, FSMState.IMPLEMENTATION, FSMState.FAILED]
+    engine.context.task_description = "Recovery Task"
+    FSMCheckpointManager.save_checkpoint(engine.context)
+
+    # Setup mocked successful engine for resume run
+    resume_engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+    mock_outcome = BridgeAgentOutcome(
+        role="developer",
+        exit_reason=AgentExitReason.NATURAL_COMPLETION,
+        completed_naturally=True,
+        iterations_executed=1,
+        max_iterations_allocated=8,
+        prompt_tokens=100,
+        completion_tokens=50,
+        total_tokens=150,
+        cost_usd=0.001,
+        error_message=None,
+        mutated_files=tuple(),
+        final_thought="Success",
+    )
+    resume_engine.runtime_bridge = MagicMock()
+    resume_engine.runtime_bridge.execute_bounded_turn.return_value = mock_outcome
+
+    mock_adapter = MagicMock()
+    mock_adapter.run_tests.return_value = MagicMock(passed=True, stdout="1 passed")
+    resume_engine.context.adapter = mock_adapter
+
+    # Run with resume=True
+    res = resume_engine.run("Recovery Task", resume=True)
+    assert res["success"] is True
+    assert res["status"] == "COMPLETED"
+    assert FSMState.PREFLIGHT.value in res["state_history"]
+
+
+
+
+
+
+
+

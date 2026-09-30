@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -116,7 +117,8 @@ class GuardedFSMEngine:
             try:
                 from orchestrator.llm.manager import LLMManager
                 self.llm_manager = LLMManager(config=self.config)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Could not auto-initialize LLMManager: {e}")
                 self.llm_manager = None
 
         self.runtime_bridge = OpenHandsRuntimeBridge(
@@ -246,10 +248,20 @@ class GuardedFSMEngine:
         )
 
     def run(
-        self, task_description: str, resume: bool = False
+        self,
+        task_description: str,
+        resume: bool = False,
+        timeout_seconds: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Execute full event-driven lifecycle to terminal conclusion."""
         self.context.task_description = task_description
+        start_time = time.monotonic()
+        active_timeout = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else getattr(self.config, "pipeline_timeout_seconds", None)
+            or getattr(self.profile, "timeout_seconds", 1800)
+        )
 
         # Check for resume
         if resume:
@@ -267,6 +279,25 @@ class GuardedFSMEngine:
 
         # Main Event-Driven Orchestration Loop
         while not self.is_terminal():
+            # Check wall-clock timeout
+            if active_timeout and (time.monotonic() - start_time > active_timeout):
+                logger.error(
+                    f"Pipeline execution exceeded wall-clock timeout of {active_timeout}s. Halting."
+                )
+                self.context.metadata["timed_out"] = True
+                self.context.metadata["blocking_reason"] = f"Pipeline execution exceeded wall-clock timeout of {active_timeout}s."
+                self.process_event(
+                    PipelineEvent(
+                        event_type=EventType.CRITICAL_ERROR,
+                        source_phase=self.context.current_state,
+                        error_message=f"Pipeline execution exceeded wall-clock timeout of {active_timeout}s.",
+                    )
+                )
+                if not self.is_terminal():
+                    self.context.current_state = FSMState.FAILED
+                    self.context.state_history.append(FSMState.FAILED)
+                break
+
             # Check controller abort signal
             if self.controller and not self.controller.check_should_continue():
                 self.process_event(
@@ -290,9 +321,13 @@ class GuardedFSMEngine:
                     )
                     continue
                 else:
+                    block_reason = (
+                        self.context.metadata.get("blocking_reason")
+                        or f"Awaiting human intervention or external resolution at state {self.context.current_state.value}."
+                    )
+                    self.context.metadata["blocking_reason"] = block_reason
                     logger.info(
-                        f"Execution halted at non-terminal state {self.context.current_state.value}; "
-                        "awaiting human intervention or external resolution."
+                        f"Execution halted at non-terminal state {self.context.current_state.value}: {block_reason}"
                     )
                     break
 
@@ -488,6 +523,12 @@ class GuardedFSMEngine:
                 sandbox_manager=self.sandbox_manager,
             )
             self._accumulate_outcome(outcome, phase=ResourcePhase.PLANNING)
+            if outcome and outcome.exit_reason == AgentExitReason.FATAL_ERROR:
+                return PipelineEvent(
+                    event_type=EventType.CRITICAL_ERROR,
+                    source_phase=FSMState.PLANNING,
+                    error_message=outcome.error_message or "Architect turn failed with fatal error.",
+                )
             if plan_file.exists():
                 plan_content = plan_file.read_text(encoding="utf-8")
 
@@ -593,6 +634,19 @@ class GuardedFSMEngine:
                 sandbox_manager=self.sandbox_manager,
             )
             self._accumulate_outcome(outcome, phase=ResourcePhase.IMPLEMENTATION)
+        elif not self.llm_manager or not self.runtime_bridge:
+            return PipelineEvent(
+                event_type=EventType.CRITICAL_ERROR,
+                source_phase=FSMState.IMPLEMENTATION,
+                error_message="LLMManager or RuntimeBridge unavailable during implementation phase.",
+            )
+
+        if outcome and outcome.exit_reason == AgentExitReason.FATAL_ERROR:
+            return PipelineEvent(
+                event_type=EventType.CRITICAL_ERROR,
+                source_phase=FSMState.IMPLEMENTATION,
+                error_message=outcome.error_message or "Developer turn failed with fatal error.",
+            )
 
         exec_outcome = AgentExecutionOutcome.NATURAL_COMPLETION
         if outcome and outcome.exit_reason:
@@ -623,18 +677,24 @@ class GuardedFSMEngine:
             except Exception as ex:
                 logger.warning(f"Test runner error: {ex}")
 
-        # 3. Check Workspace SHA-256 Stagnation
-        current_hash = FSMCheckpointManager.compute_workspace_hash(
-            self.workspace_path
+        # Check if previous agent turn was incomplete or hit iteration limit
+        last_outcome = self.context.last_outcome
+        agent_incomplete = (
+            last_outcome is not None
+            and (
+                not last_outcome.completed_naturally
+                or last_outcome.exit_reason in (
+                    AgentExitReason.STEP_LIMIT_REACHED,
+                    AgentExitReason.TOKEN_LIMIT_REACHED,
+                    AgentExitReason.AGENT_STUCK,
+                    AgentExitReason.FATAL_ERROR,
+                    AgentExitReason.TOOL_REJECTION,
+                    AgentExitReason.ABORTED,
+                )
+            )
         )
-        self.context.current_workspace_hash = current_hash
-        if self.context.last_workspace_hash == current_hash and test_res and not test_res.passed:
-            self.context.stagnation_counter += 1
-        else:
-            self.context.stagnation_counter = 0
-        self.context.last_workspace_hash = current_hash
 
-        # 4. Evaluate Canonical Task Completion
+        # 3. Evaluate Canonical Task Completion
         decision = evaluate_task_completion(
             self.context.task_truth_graph, self.workspace_path
         )
@@ -651,6 +711,18 @@ class GuardedFSMEngine:
                     status=CompletionStatus.FAILED,
                     violated_invariants=[preflight_msg],
                     blocking_reasons=[f"Syntax Error: {preflight_msg}"],
+                )
+            elif agent_incomplete and last_outcome is not None:
+                err_msg = (
+                    last_outcome.error_message
+                    or f"Agent reached iteration or resource limit ({last_outcome.exit_reason.value if hasattr(last_outcome.exit_reason, 'value') else last_outcome.exit_reason})."
+                )
+                decision = CompletionDecision(
+                    status=CompletionStatus.FAILED,
+                    failed_criteria=[
+                        f"Developer agent did not complete naturally: {last_outcome.exit_reason.value if hasattr(last_outcome.exit_reason, 'value') else last_outcome.exit_reason}"
+                    ],
+                    blocking_reasons=[err_msg],
                 )
             elif test_res and not test_res.passed:
                 err_detail = ""
@@ -682,13 +754,41 @@ class GuardedFSMEngine:
                     status=CompletionStatus.COMPLETE,
                     satisfied_requirements=["Task Execution", "All Tests Passed"],
                 )
-            else:
+            elif self.profile.mode in (PipelineMode.AUDIT, PipelineMode.DOCS) and self.context.mutated_files:
                 decision = CompletionDecision(
                     status=CompletionStatus.COMPLETE,
-                    satisfied_requirements=["Syntax clean", "All milestones completed"],
+                    satisfied_requirements=["Syntax clean", f"{self.profile.mode.value} execution verified"],
                 )
+            else:
+                decision = CompletionDecision(
+                    status=CompletionStatus.INCOMPLETE,
+                    blocking_reasons=["No test results or verification evidence produced for completion."],
+                )
+        elif agent_incomplete and last_outcome is not None:
+            err_msg = (
+                last_outcome.error_message
+                or f"Agent reached iteration or resource limit ({last_outcome.exit_reason.value if hasattr(last_outcome.exit_reason, 'value') else last_outcome.exit_reason})."
+            )
+            decision = CompletionDecision(
+                status=CompletionStatus.FAILED,
+                failed_criteria=[
+                    f"Developer agent did not complete naturally: {last_outcome.exit_reason.value if hasattr(last_outcome.exit_reason, 'value') else last_outcome.exit_reason}"
+                ],
+                blocking_reasons=[err_msg],
+            )
 
         self.context.last_verification_decision = decision
+
+        # 4. Check Workspace SHA-256 Stagnation
+        current_hash = FSMCheckpointManager.compute_workspace_hash(
+            self.workspace_path
+        )
+        self.context.current_workspace_hash = current_hash
+        if self.context.last_workspace_hash == current_hash and not decision.is_complete:
+            self.context.stagnation_counter += 1
+        else:
+            self.context.stagnation_counter = 0
+        self.context.last_workspace_hash = current_hash
 
         return PipelineEvent(
             event_type=EventType.VERIFICATION_COMPLETED,
@@ -699,7 +799,16 @@ class GuardedFSMEngine:
     def _handle_resolution(self) -> PipelineEvent:
         """Triage verification failure, increment retries, and route remediation."""
         self.context.iteration_count += 1
+        self.context.total_iterations += 1
         max_fix = self.profile.max_fix_iterations
+        max_total = getattr(self.profile, "max_total_iterations", 25)
+
+        if self.context.total_iterations >= max_total:
+            return PipelineEvent(
+                event_type=EventType.RETRIES_EXHAUSTED,
+                source_phase=FSMState.RESOLUTION,
+                error_message=f"Global iteration ceiling ({max_total}) exhausted across milestones.",
+            )
 
         if self.context.iteration_count >= max_fix:
             return PipelineEvent(
@@ -763,6 +872,12 @@ class GuardedFSMEngine:
                 sandbox_manager=self.sandbox_manager,
             )
             self._accumulate_outcome(outcome, phase=ResourcePhase.REVIEW)
+            if outcome and outcome.exit_reason == AgentExitReason.FATAL_ERROR:
+                return PipelineEvent(
+                    event_type=EventType.CRITICAL_ERROR,
+                    source_phase=FSMState.REVIEW,
+                    error_message=outcome.error_message or "Reviewer turn failed with fatal error.",
+                )
             verdict = ReviewerVerdict.parse(outcome.final_thought or "APPROVED")
 
         self.context.review_verdict = verdict
@@ -788,19 +903,19 @@ class GuardedFSMEngine:
                 pass
         FSMCheckpointManager.clear_checkpoint(self.workspace_path)
         return PipelineEvent(
-            event_type=EventType.START_TASK, source_phase=FSMState.COMPLETED
+            event_type=EventType.VERIFICATION_COMPLETED, source_phase=FSMState.COMPLETED
         )
 
     def _handle_failed(self) -> PipelineEvent:
         """Handle terminal failure."""
         return PipelineEvent(
-            event_type=EventType.START_TASK, source_phase=FSMState.FAILED
+            event_type=EventType.CRITICAL_ERROR, source_phase=FSMState.FAILED
         )
 
     def _handle_blocked(self) -> PipelineEvent:
         """Handle blocked execution."""
         return PipelineEvent(
-            event_type=EventType.START_TASK, source_phase=FSMState.BLOCKED
+            event_type=EventType.HUMAN_INTERVENTION_REQUIRED, source_phase=FSMState.BLOCKED
         )
 
     def _handle_ambiguous(self) -> PipelineEvent:
@@ -850,16 +965,30 @@ class GuardedFSMEngine:
         """Restore FSMContext from a serialized FSMCheckpoint."""
         self.context.run_id = checkpoint.run_id
         self.context.iteration_count = checkpoint.iteration_count
+        self.context.total_iterations = getattr(checkpoint, "total_iterations", checkpoint.iteration_count)
         self.context.total_tokens_consumed = checkpoint.total_tokens_consumed
         self.context.total_cost_usd = checkpoint.total_cost_usd
         self.context.metadata = checkpoint.metadata or {}
 
         try:
             target_st = FSMState(checkpoint.current_state)
+            if target_st in (FSMState.FAILED, FSMState.ABORTED):
+                # When resuming after failure or abort, reset to a runnable state for retry/recovery
+                if checkpoint.milestones:
+                    target_st = FSMState.IMPLEMENTATION
+                elif getattr(self.profile, "enable_planning", False):
+                    target_st = FSMState.PLANNING
+                else:
+                    target_st = FSMState.PREFLIGHT
+                logger.info(
+                    f"Resuming failed/aborted checkpoint: resetting state from {checkpoint.current_state} to {target_st.value} for recovery attempt."
+                )
             self.context.current_state = target_st
             self.context.state_history = [
                 FSMState(s) for s in checkpoint.state_history
             ]
+            if not self.context.state_history or self.context.state_history[-1] != target_st:
+                self.context.state_history.append(target_st)
         except Exception:
             self.context.current_state = FSMState.INIT
 
@@ -870,8 +999,21 @@ class GuardedFSMEngine:
     def _finalize_run_result(self) -> Dict[str, Any]:
         """Synthesize final execution dictionary."""
         is_success = self.context.current_state == FSMState.COMPLETED
+        is_blocked = self.context.current_state in (FSMState.BLOCKED, FSMState.AMBIGUOUS)
+        is_timed_out = bool(self.context.metadata.get("timed_out", False))
+        error_msg = None
+        if self.context.metadata.get("blocking_reason"):
+            error_msg = self.context.metadata["blocking_reason"]
+        elif (
+            self.context.last_verification_decision
+            and self.context.last_verification_decision.blocking_reasons
+        ):
+            error_msg = self.context.last_verification_decision.blocking_reasons[0]
+
         return {
             "success": is_success,
+            "blocked": is_blocked,
+            "timed_out": is_timed_out,
             "status": self.context.current_state.value,
             "run_id": self.context.run_id,
             "iterations": self.context.iteration_count,
@@ -879,8 +1021,5 @@ class GuardedFSMEngine:
             "tokens_consumed": self.context.total_tokens_consumed,
             "cost_usd": self.context.total_cost_usd,
             "mutated_files": list(self.context.mutated_files),
-            "error_message": self.context.last_verification_decision.blocking_reasons[0]
-            if self.context.last_verification_decision
-            and self.context.last_verification_decision.blocking_reasons
-            else None,
+            "error_message": error_msg,
         }

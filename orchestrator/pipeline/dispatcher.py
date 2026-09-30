@@ -102,7 +102,8 @@ class OrchestratorDispatcher:
                     log_store=log_store,
                     visualizer=visualizer,
                 )
-                raw_res = engine.run(task_description=task)
+                resume_flag = bool(kwargs.get("resume", False) or checkpoint is not None)
+                raw_res = engine.run(task_description=task, resume=resume_flag)
                 duration = time.perf_counter() - t0
 
                 # Synthesize conforming result dictionary
@@ -112,12 +113,23 @@ class OrchestratorDispatcher:
                     mode=clean_mode,
                 )
 
-                self.guard.record_success(
-                    plane=ExecutionPlane.MODERN_GUARDED_FSM,
-                    task_id=conforming_res.get("run_id", ""),
-                    mode=clean_mode,
-                    duration_seconds=duration,
-                )
+                if conforming_res.get("success", False):
+                    self.guard.record_success(
+                        plane=ExecutionPlane.MODERN_GUARDED_FSM,
+                        task_id=conforming_res.get("run_id", ""),
+                        mode=clean_mode,
+                        duration_seconds=duration,
+                    )
+                else:
+                    self.guard.record_failure(
+                        plane=ExecutionPlane.MODERN_GUARDED_FSM,
+                        error=conforming_res.get("error_message")
+                        or conforming_res.get("status")
+                        or "FSM Run Failed",
+                        task_id=conforming_res.get("run_id", ""),
+                        mode=clean_mode,
+                        duration_seconds=duration,
+                    )
                 return conforming_res
 
             except Exception as ex:
@@ -214,13 +226,25 @@ class OrchestratorDispatcher:
                 mode=mode,
             )
 
-            self.guard.record_success(
-                plane=ExecutionPlane.LEGACY_FALLBACK,
-                task_id=conforming_res.get("run_id", ""),
-                mode=mode,
-                duration_seconds=duration,
-                fallback_triggered=fallback,
-            )
+            if conforming_res.get("success", False):
+                self.guard.record_success(
+                    plane=ExecutionPlane.LEGACY_FALLBACK,
+                    task_id=conforming_res.get("run_id", ""),
+                    mode=mode,
+                    duration_seconds=duration,
+                    fallback_triggered=fallback,
+                )
+            else:
+                self.guard.record_failure(
+                    plane=ExecutionPlane.LEGACY_FALLBACK,
+                    error=conforming_res.get("error_message")
+                    or conforming_res.get("status")
+                    or "Legacy Run Failed",
+                    task_id=conforming_res.get("run_id", ""),
+                    mode=mode,
+                    duration_seconds=duration,
+                    fallback_triggered=fallback,
+                )
             return conforming_res
 
         except Exception as ex:

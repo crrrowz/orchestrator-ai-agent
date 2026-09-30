@@ -32,6 +32,7 @@ class LifecycleProfile:
     enable_review: bool = True
     enable_git_commit: bool = True
     max_fix_iterations: int = 5
+    max_total_iterations: int = 25
     default_agent_turn_limit: int = 8
 
 
@@ -54,6 +55,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
         enable_review=False,
         enable_git_commit=True,
         max_fix_iterations=3,
+        max_total_iterations=15,
         default_agent_turn_limit=8,
     ),
     PipelineMode.FULL: LifecycleProfile(
@@ -76,6 +78,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
         enable_review=True,
         enable_git_commit=True,
         max_fix_iterations=5,
+        max_total_iterations=30,
         default_agent_turn_limit=30,
     ),
     PipelineMode.AUDIT: LifecycleProfile(
@@ -93,6 +96,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
         enable_review=False,
         enable_git_commit=False,
         max_fix_iterations=1,
+        max_total_iterations=5,
         default_agent_turn_limit=15,
     ),
     PipelineMode.AUDIT_FIX: LifecycleProfile(
@@ -112,6 +116,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
         enable_review=False,
         enable_git_commit=True,
         max_fix_iterations=4,
+        max_total_iterations=20,
         default_agent_turn_limit=8,
     ),
     PipelineMode.DOCS: LifecycleProfile(
@@ -129,6 +134,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
         enable_review=False,
         enable_git_commit=True,
         max_fix_iterations=2,
+        max_total_iterations=10,
         default_agent_turn_limit=8,
     ),
 }

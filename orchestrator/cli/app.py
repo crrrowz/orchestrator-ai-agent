@@ -391,17 +391,30 @@ def main() -> None:
     cp = None
     if args.resume:
         from orchestrator.pipeline.checkpoint import PipelineCheckpointManager
+        from orchestrator.pipeline.fsm.checkpoint import FSMCheckpointManager
 
         target_ws = resolve_workspace_dir(args.workspace, config.workspace_path)
-        cp = PipelineCheckpointManager.load(target_ws)
-        if cp:
+        fsm_cp = FSMCheckpointManager.load_checkpoint(target_ws)
+        legacy_cp = PipelineCheckpointManager.load(target_ws)
+
+        if fsm_cp:
             ConsoleOutput.banner(
-                "Resuming Pipeline Execution",
-                f"Phase: {cp.current_phase} | Run: {cp.run_id}",
+                "Resuming FSM Pipeline Execution",
+                f"State: {fsm_cp.current_state} | Run: {fsm_cp.run_id}",
             )
-            task = cp.task
-            mode = cp.mode
+            task = fsm_cp.task_description
+            mode = fsm_cp.profile_name
             workspace = target_ws
+            cp = fsm_cp
+        elif legacy_cp:
+            ConsoleOutput.banner(
+                "Resuming Legacy Pipeline Execution",
+                f"Phase: {legacy_cp.current_phase} | Run: {legacy_cp.run_id}",
+            )
+            task = legacy_cp.task
+            mode = legacy_cp.mode
+            workspace = target_ws
+            cp = legacy_cp
         else:
             ConsoleOutput.warning(
                 f"No checkpoint file found at {target_ws}. Starting fresh."

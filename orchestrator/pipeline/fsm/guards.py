@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from orchestrator.guards.preflight import PreFlightGuard
-from orchestrator.pipeline.fsm.events import PipelineEvent
+from orchestrator.pipeline.fsm.events import (
+    AgentExecutionOutcome,
+    EventType,
+    PipelineEvent,
+)
 
 # FSMContext is referenced by forward-ref string in guard methods
 
@@ -349,6 +353,15 @@ class FSMGuards:
         context: "FSMContext", event: PipelineEvent
     ) -> bool:
         """Verify that implementation phase yielded cleanly or reached step budget."""
+        if event.event_type != EventType.AGENT_YIELDED:
+            return False
+        if event.execution_outcome is None:
+            return False
+        if event.execution_outcome in (
+            AgentExecutionOutcome.FATAL_ERROR,
+            AgentExecutionOutcome.ABORTED,
+        ):
+            return False
         return True
 
     @staticmethod

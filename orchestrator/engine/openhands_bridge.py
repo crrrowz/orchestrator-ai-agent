@@ -982,6 +982,7 @@ class ExitStatusClassifier:
         initial_tokens: int,
         token_ceiling: int,
         mutated_files: Sequence[str],
+        execution_exception: Optional[Exception] = None,
     ) -> AgentExecutionOutcome:
         """Classify state and event stream of a finished or halted turn."""
         state = getattr(conv, "state", None)
@@ -1010,7 +1011,25 @@ class ExitStatusClassifier:
                 if final_thought:
                     break
 
-        # 3. Check for Fatal ConversationErrorEvent or Security Violations
+        # 3. Check for Fatal Execution Exception
+        if execution_exception is not None:
+            return AgentExecutionOutcome(
+                role=role,
+                exit_reason=AgentExitReason.FATAL_ERROR,
+                completed_naturally=False,
+                iterations_executed=len([e for e in events if type(e).__name__ == "ActionEvent"]),
+                max_iterations_allocated=max_turns,
+                prompt_tokens=pt,
+                completion_tokens=ct,
+                total_tokens=total_tokens,
+                cost_usd=0.0,
+                error_message=f"Runtime crash in agent execution: {execution_exception}",
+                mutated_files=tuple(mutated_files),
+                final_thought=final_thought,
+                handoff_payload=None,
+            )
+
+        # 4. Check for Fatal ConversationErrorEvent or Security Violations
         latest_error_event = next(
             (ev for ev in reversed(events) if type(ev).__name__ == "ConversationErrorEvent"),
             None,
@@ -1224,9 +1243,11 @@ class SDKSessionRunner:
         conv.send_message(compiled_prompt)
 
         # 4. Synchronous Execution
+        execution_exception: Optional[Exception] = None
         try:
             conv.run()
         except Exception as e:
+            execution_exception = e
             logger.error(
                 f"Execution error in {role_name} turn: {e}",
                 exc_info=True,
@@ -1240,6 +1261,7 @@ class SDKSessionRunner:
             initial_tokens=initial_tokens,
             token_ceiling=token_ceiling,
             mutated_files=list(telemetry_bridge.mutated_files),
+            execution_exception=execution_exception,
         )
 
         # 6. Ephemeral Teardown

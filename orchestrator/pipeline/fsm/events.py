@@ -56,6 +56,10 @@ class AgentExecutionOutcome(str, Enum):
     TOOL_ERROR = "TOOL_ERROR"
     STAGNANT_DIFF = "STAGNANT_DIFF"
     INTERRUPTED = "INTERRUPTED"
+    FATAL_ERROR = "FATAL_ERROR"
+    TOOL_REJECTION = "TOOL_REJECTION"
+    AGENT_STUCK = "AGENT_STUCK"
+    ABORTED = "ABORTED"
 
 
 @dataclass(frozen=True)

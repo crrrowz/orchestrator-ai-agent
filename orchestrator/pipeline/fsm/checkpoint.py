@@ -36,6 +36,7 @@ class FSMCheckpoint(BaseModel):
     task_truth_graph_json: Optional[str] = None
     workspace_root_hash: str
     iteration_count: int = 1
+    total_iterations: int = 0
     total_cost_usd: float = 0.0
     total_tokens_consumed: int = 0
     saved_at: datetime = Field(
@@ -53,7 +54,7 @@ class FSMCheckpointManager:
     def compute_workspace_hash(cls, workspace_path: Path) -> str:
         """Calculate composite SHA-256 digest of all source files in workspace."""
         hasher = hashlib.sha256()
-        ignored = {
+        ignored_dirs = {
             "__pycache__",
             ".venv",
             "venv",
@@ -63,15 +64,43 @@ class FSMCheckpointManager:
             ".git",
             ".pytest_cache",
             ".ruff_cache",
+            ".mypy_cache",
+            ".coverage",
+            "htmlcov",
+            ".oragai_logs",
+            ".diagnostics",
+        }
+        ignored_extensions = (
+            ".pyc",
+            ".pyo",
+            ".log",
+            ".db",
+            ".sqlite",
+            ".sqlite3",
+            ".coverage",
+        )
+        ignored_files = {
             cls.FILENAME,
+            "diagnostics.db",
+            "coverage.xml",
+            ".coverage",
         }
 
         files_to_hash: List[Path] = []
         if workspace_path.exists() and workspace_path.is_dir():
             for root, dirs, files in os.walk(workspace_path):
-                dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if d not in ignored_dirs
+                    and not (d.startswith(".") and d not in (".github", ".agents"))
+                ]
                 for f in sorted(files):
-                    if f != cls.FILENAME and not f.endswith((".pyc", ".pyo")):
+                    if (
+                        f not in ignored_files
+                        and not f.endswith(ignored_extensions)
+                        and not f.startswith(".orchestrator_")
+                    ):
                         files_to_hash.append(Path(root) / f)
 
         for fp in sorted(files_to_hash):
@@ -135,6 +164,7 @@ class FSMCheckpointManager:
             task_truth_graph_json=graph_json,
             workspace_root_hash=ws_hash,
             iteration_count=context.iteration_count,
+            total_iterations=getattr(context, "total_iterations", context.iteration_count),
             total_cost_usd=context.total_cost_usd,
             total_tokens_consumed=context.total_tokens_consumed,
             metadata=dict(context.metadata),

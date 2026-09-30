@@ -7,6 +7,7 @@ Specification: docs/plans/P12_STRANGLER_FIG_MIGRATION_AND_SAFE_ROLLOUT_PLAN.md
 from __future__ import annotations
 
 import json
+import time
 import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -444,3 +445,31 @@ def test_preflight_syntax_clean_workspace():
     """PreFlight syntax check must remain 100% clean across all repository files."""
     is_clean, err_msg = PreFlightGuard.check_syntax(Path("."), auto_heal=False)
     assert is_clean is True, f"PreFlight syntax check failed: {err_msg}"
+
+
+def test_migration_guard_singleton_reset_and_cooldown():
+    """TASK-008: Verify reset_instance, reset, and circuit breaker cooldown recovery."""
+    guard = MigrationGuard.get_instance()
+    guard.trip_circuit_breaker("Test trip")
+    assert guard.circuit_status == CircuitBreakerStatus.OPEN
+    assert guard.should_route_to_modern("dev-test") is False
+
+    # Verify reset clears in-memory state
+    guard.reset()
+    assert guard.circuit_status == CircuitBreakerStatus.CLOSED
+    assert len(guard.telemetry_records) == 0
+
+    # Trip again and simulate cooldown expiry
+    guard.trip_circuit_breaker("Cooldown test trip")
+    guard._circuit_tripped_at = time.time() - 120.0  # 2 minutes ago
+    guard.config.circuit_breaker_cooldown_seconds = 60.0
+
+    # Should transition to HALF_OPEN and allow routing
+    assert guard.should_route_to_modern("dev-test") is True
+    assert guard.circuit_status == CircuitBreakerStatus.HALF_OPEN
+
+    # Reset instance
+    MigrationGuard.reset_instance()
+    fresh_guard = MigrationGuard.get_instance()
+    assert fresh_guard is not guard
+

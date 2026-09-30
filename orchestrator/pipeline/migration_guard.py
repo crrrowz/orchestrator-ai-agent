@@ -56,6 +56,7 @@ class MigrationRoutingConfig(BaseModel):
     fallback_to_legacy_on_error: bool = True
     circuit_breaker_error_threshold: int = Field(default=3, ge=1)
     circuit_breaker_max_fcr: float = Field(default=0.000, ge=0.0, le=1.0)
+    circuit_breaker_cooldown_seconds: float = Field(default=60.0, ge=0.0)
 
 
 class PlaneTelemetryRecord(BaseModel):
@@ -91,6 +92,7 @@ class MigrationGuard:
         self.consecutive_errors: int = 0
         self.telemetry_records: List[PlaneTelemetryRecord] = []
         self._circuit_trip_reason: Optional[str] = None
+        self._circuit_tripped_at: Optional[float] = None
 
     @classmethod
     def get_instance(cls, config_path: Optional[Path] = None) -> MigrationGuard:
@@ -98,6 +100,19 @@ class MigrationGuard:
         if cls._instance is None:
             cls._instance = cls(config_path=config_path)
         return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset global singleton instance for test isolation and clean restart."""
+        cls._instance = None
+
+    def reset(self) -> None:
+        """Reset in-memory circuit breaker and telemetry state."""
+        self.circuit_status = CircuitBreakerStatus.CLOSED
+        self.consecutive_errors = 0
+        self._circuit_trip_reason = None
+        self._circuit_tripped_at = None
+        self.telemetry_records.clear()
 
     def load_config(self) -> MigrationRoutingConfig:
         """Load configuration from disk or return default model."""
@@ -157,11 +172,19 @@ class MigrationGuard:
 
         # 1. Check Circuit Breaker
         if self.circuit_status == CircuitBreakerStatus.OPEN:
-            logger.warning(
-                "Circuit breaker is OPEN (Reason: %s). Forcing LEGACY_FALLBACK route.",
-                self._circuit_trip_reason,
-            )
-            return False
+            cooldown = getattr(self.config, "circuit_breaker_cooldown_seconds", 60.0)
+            if self._circuit_tripped_at and (time.time() - self._circuit_tripped_at >= cooldown):
+                logger.info(
+                    "Circuit breaker cooldown (%.1fs) expired. Transitioning OPEN -> HALF_OPEN for probe canary.",
+                    cooldown,
+                )
+                self.circuit_status = CircuitBreakerStatus.HALF_OPEN
+            else:
+                logger.warning(
+                    "Circuit breaker is OPEN (Reason: %s). Forcing LEGACY_FALLBACK route.",
+                    self._circuit_trip_reason,
+                )
+                return False
 
         # 2. Check Global Flags
         if not self.config.strangler_active:
@@ -276,6 +299,7 @@ class MigrationGuard:
         """Instantly trip circuit breaker to OPEN state, diverting all traffic to legacy."""
         self.circuit_status = CircuitBreakerStatus.OPEN
         self._circuit_trip_reason = reason
+        self._circuit_tripped_at = time.time()
         logger.critical(
             "CIRCUIT BREAKER TRIPPED -> OPEN. Reason: %s. All routes forced to LEGACY.",
             reason,
@@ -286,6 +310,7 @@ class MigrationGuard:
         self.circuit_status = CircuitBreakerStatus.CLOSED
         self.consecutive_errors = 0
         self._circuit_trip_reason = None
+        self._circuit_tripped_at = None
         logger.info("Circuit breaker manually reset to CLOSED.")
 
     def execute_instant_rollback(

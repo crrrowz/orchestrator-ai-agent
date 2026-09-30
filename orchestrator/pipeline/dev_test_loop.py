@@ -183,22 +183,37 @@ class DevTestLoop(BasePipeline):
                     extra_instructions="Ensure full implementation, type safety, and adhere to clean-python-architecture.",
                 )
                 dev_conv.send_message(self.human_channel.inject_into_prompt(dev_prompt))
-                self._run_conv(dev_conv, "Developer")
+                run_res_dev = self._run_conv(dev_conv, "Developer")
                 duration_dev = time.perf_counter() - t0
                 curr_diff = self.git.get_diff() or self.git.get_status()
                 u_dev = get_llm_usage(developer_agent.llm)
+                is_dev_success = bool(run_res_dev and run_res_dev.completed)
                 recorder.record_step(
                     "developer",
                     "initial_implementation",
                     1,
                     duration_dev,
-                    True,
+                    is_dev_success,
                     curr_diff,
                     prompt_tokens=u_dev["prompt_tokens"],
                     completion_tokens=u_dev["completion_tokens"],
                     total_tokens=u_dev["total_tokens"],
                     estimated_cost_usd=u_dev["estimated_cost_usd"],
                 )
+                if not is_dev_success:
+                    err_msg = getattr(run_res_dev, "error_message", None) or "Developer agent reached iteration limit or failed."
+                    ConsoleOutput.error(f"Developer failed: {err_msg}")
+                    log_store.add_step(err_msg, is_error=True)
+                    diag_report = recorder.finalize(completed_successfully=False)
+                    log_store.save_to_file()
+                    return {
+                        "status": "FAILED",
+                        "success": False,
+                        "error_message": err_msg,
+                        "iterations": 1,
+                        "report_id": diag_report.report_id,
+                    }
+
                 ConsoleOutput.success(
                     f"Developer completed implementation phase (Tokens: {u_dev['total_tokens']:,}, Cost: ${u_dev['estimated_cost_usd']:.4f})."
                 )

@@ -150,6 +150,8 @@ class PRReviewGate:
                     cwd=self.root_dir,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     check=False
                 )
                 if res.returncode == 0 and res.stdout.strip():
@@ -166,6 +168,8 @@ class PRReviewGate:
                 cwd=self.root_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False
             )
             if res.returncode == 0 and res.stdout.strip():
@@ -292,35 +296,46 @@ class PRReviewGate:
         """Runs ruff and pytest to catch runtime logic bugs."""
         # 1. Ruff Lint
         try:
+            print("[1/3] Running ruff lint checks...", flush=True)
             res = subprocess.run(
                 ["uv", "run", "ruff", "check", "--output-format=json", "orchestrator/"],
                 cwd=self.root_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
                 check=False
             )
             if res.stdout.strip():
-                findings = json.loads(res.stdout)
-                for f in findings[:10]:
-                    self.issues.append(DRIssue(
-                        category="LINT",
-                        severity="MEDIUM",
-                        file_path=f.get("filename", ""),
-                        line=f.get("location", {}).get("row", 1),
-                        message=f"[{f.get('code')}] {f.get('message')}",
-                        remediation="Run `uv run ruff check --fix .` to resolve formatting and lint defects."
-                    ))
+                try:
+                    findings = json.loads(res.stdout)
+                    for f in findings[:10]:
+                        self.issues.append(DRIssue(
+                            category="LINT",
+                            severity="MEDIUM",
+                            file_path=f.get("filename", ""),
+                            line=f.get("location", {}).get("row", 1),
+                            message=f"[{f.get('code')}] {f.get('message')}",
+                            remediation="Run `uv run ruff check --fix .` to resolve formatting and lint defects."
+                        ))
+                except Exception:
+                    pass
         except Exception:
             pass
 
         # 2. Pytest execution
         try:
+            print("[2/3] Running pytest suite verification...", flush=True)
             cmd = ["pytest", "tests/", "-q", "--tb=line"] if os.environ.get("VIRTUAL_ENV") else ["uv", "run", "pytest", "tests/", "-q", "--tb=line"]
             res = subprocess.run(
                 cmd,
                 cwd=self.root_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
                 check=False
             )
             # Only record issue if there are actual failures in the output
@@ -495,6 +510,7 @@ For any identified defect, edge case, race condition, or architectural breach, p
 
         self.run_tests_and_linting()
 
+        print("[3/3] Running AI architecture review pass...", flush=True)
         # Run AI Deep Review on the diff
         diff = self.get_git_diff()
         self.run_ai_review(diff)
@@ -510,12 +526,21 @@ For any identified defect, edge case, race condition, or architectural breach, p
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     gate = PRReviewGate()
     report = gate.execute_gate()
     md_output = report.to_markdown()
 
     # Output to stdout
-    print(md_output)
+    try:
+        print(md_output)
+    except UnicodeEncodeError:
+        print(md_output.encode("ascii", errors="replace").decode("ascii"))
 
     # Save to file for GitHub Action comment step
     report_file = Path("pr_review_report.md")

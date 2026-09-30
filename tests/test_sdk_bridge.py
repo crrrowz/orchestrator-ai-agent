@@ -460,6 +460,26 @@ def test_exit_status_classifier_stuck_and_fatal_error():
     assert outcome_err.exit_reason == AgentExitReason.FATAL_ERROR
     assert "quota exceeded" in (outcome_err.error_message or "")
 
+    # 3. Direct Execution Exception
+    conv_crashed = DummyConversation(
+        state=DummyConvState(
+            execution_status=None,
+            events=[],
+        )
+    )
+    outcome_crash = ExitStatusClassifier.classify(
+        conv=conv_crashed,
+        role="developer",
+        max_turns=10,
+        initial_tokens=0,
+        token_ceiling=50_000,
+        mutated_files=[],
+        execution_exception=RuntimeError("SDK Internal Connection Reset"),
+    )
+    assert outcome_crash.exit_reason == AgentExitReason.FATAL_ERROR
+    assert outcome_crash.completed_naturally is False
+    assert "SDK Internal Connection Reset" in (outcome_crash.error_message or "")
+
 
 # ==============================================================================
 # 6. SECRET MASKING & TELEMETRY BRIDGE (TEST-P10-10 & TEST-P10-11)

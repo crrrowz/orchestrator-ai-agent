@@ -42,6 +42,7 @@ class FSMContext:
     active_milestone_id: Optional[str] = None
     active_milestone_index: int = 0
     iteration_count: int = 0
+    total_iterations: int = 0
     stagnation_counter: int = 0
     last_workspace_hash: Optional[str] = None
     current_workspace_hash: Optional[str] = None
