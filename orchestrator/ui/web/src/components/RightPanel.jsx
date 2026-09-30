@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Terminal, 
   Settings, 
@@ -13,32 +13,64 @@ import {
   Sliders, 
   ShieldCheck, 
   FolderLock, 
-  Cpu 
+  Cpu, 
+  Globe2, 
+  Edit3,
+  FileCode,
+  Search,
+  Copy,
+  BookOpen,
+  Download,
+  Upload,
+  ArrowDownCircle,
+  HelpCircle,
+  Zap,
+  Filter
 } from 'lucide-react';
+import LiveDiffViewer from './LiveDiffViewer';
+import LiveTokenGauge from './LiveTokenGauge';
 
 export default function RightPanel({
   logs,
   onClearLogs,
   selectedAgent,
+  globalConfig,
   onUpdateAgent,
   onBindSkill,
   onRemoveSkill,
+  onAddVariable,
+  onUpdateVariable,
+  onDeleteVariable,
   onVerifyAudit,
+  loopConfig,
+  isRunning,
+  onExportPipeline,
+  onImportPipeline,
   lang
 }) {
-  const [activeTab, setActiveTab] = useState('inspector'); // 'inspector' | 'skills' | 'variables' | 'telemetry'
-  const [graftSymbol, setGraftSymbol] = useState('CoreEngine.dispatch');
-  const [graftOutput, setGraftOutput] = useState(null);
+  const [activeTab, setActiveTab] = useState('inspector'); // 'inspector' | 'skills' | 'variables' | 'diffs' | 'telemetry'
   const [newSkillInput, setNewSkillInput] = useState('');
+  
+  // Variable state & search
+  const [newVarKey, setNewVarKey] = useState('');
+  const [newVarVal, setNewVarVal] = useState('');
+  const [varSearchQuery, setVarSearchQuery] = useState('');
 
-  const handleQueryGraft = () => {
-    setGraftOutput({
-      symbol: graftSymbol,
-      inbound: ['CoreEngine.dispatch', 'OrchestratorFSM.step', 'AgentEngine.call'],
-      outbound: ['ModelEngine.call', 'EventEngine.publish', 'VerificationEngine.audit'],
-      blast: 'Contained [0 circular references, zero regression risk]'
-    });
-  };
+  // Telemetry Log Filters & Search
+  const [logFilter, setLogFilter] = useState('ALL'); // 'ALL' | 'INFO' | 'WARN' | 'ERROR' | 'EXEC'
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [logsCopied, setLogsCopied] = useState(false);
+  const terminalEndRef = useRef(null);
+
+  // Skill detail inspection modal/drawer
+  const [inspectedSkill, setInspectedSkill] = useState(null);
+
+  useEffect(() => {
+    if (autoScroll && terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, autoScroll, activeTab]);
 
   const handleAddCustomSkill = () => {
     if (!selectedAgent || !newSkillInput.trim()) return;
@@ -48,53 +80,148 @@ export default function RightPanel({
     setNewSkillInput('');
   };
 
+  const handleAddNewVariable = (e) => {
+    e.preventDefault();
+    if (!newVarKey.trim()) return;
+    if (onAddVariable) {
+      onAddVariable(selectedAgent.role, newVarKey.trim(), newVarVal);
+    }
+    setNewVarKey('');
+    setNewVarVal('');
+  };
+
+  const handleApplyPreset = (key, val) => {
+    if (onAddVariable && selectedAgent) {
+      onAddVariable(selectedAgent.role, key, val);
+    }
+  };
+
+  const handleCopyLogs = () => {
+    const raw = logs.map(l => `[${l.time}] ${l.text}`).join('\n');
+    navigator.clipboard.writeText(raw);
+    setLogsCopied(true);
+    setTimeout(() => setLogsCopied(false), 2000);
+  };
+
+  const agentVariables = selectedAgent?.variables || {};
+  const filteredVariables = Object.entries(agentVariables).filter(([k, v]) => 
+    k.toLowerCase().includes(varSearchQuery.toLowerCase()) || 
+    String(v).toLowerCase().includes(varSearchQuery.toLowerCase())
+  );
+
+  const filteredLogs = logs.filter(l => {
+    if (logSearchQuery && !l.text.toLowerCase().includes(logSearchQuery.toLowerCase())) {
+      return false;
+    }
+    if (logFilter === 'ERROR') return l.text.includes('❌') || l.text.includes('Error') || l.text.includes('FAIL');
+    if (logFilter === 'WARN') return l.text.includes('⚠️') || l.text.includes('Warning') || l.text.includes('halted');
+    if (logFilter === 'EXEC') return l.text.includes('⚡') || l.text.includes('executing') || l.text.includes('Cycle');
+    if (logFilter === 'INFO') return l.text.includes('🔄') || l.text.includes('🌐') || l.text.includes('Status');
+    return true;
+  });
+
+  const skillDocsCatalog = {
+    'clean-python-architecture': {
+      title: 'Clean Python 3.12+ Architecture',
+      version: 'v2.4.0',
+      description: 'Enforces idiomatic Python 3.12+, strict type hints, dependency injection, modular cohesion, and zero placeholder/stub code.',
+      rules: ['Strictly zero stubs or pass statements', 'Type-checked with mypy/ruff', 'Isolated container injection'],
+      tools: ['workspace_file', 'terminal_exec', 'python_runner']
+    },
+    'pytest-rigorous-testing': {
+      title: 'Pytest Rigorous Testing Protocol',
+      version: 'v1.9.0',
+      description: 'Senior testing protocol: isolates unit tests, covers edge-cases, asserts boundary conditions, and prevents regressions.',
+      rules: ['Hermetic test isolation', 'No network/mock leaks', 'Minimum 85% branch coverage'],
+      tools: ['pytest_runner', 'terminal_exec', 'coverage_tool']
+    },
+    'security-audit-hardening': {
+      title: 'Security Audit & Defensive Hardening',
+      version: 'v3.1.0',
+      description: 'Comprehensive security audit protocol preventing OWASP Top 10 vulnerabilities, command injection, and path traversal.',
+      rules: ['Path sanitization on all I/O', 'Secrets leak prevention', 'AST validation'],
+      tools: ['ast_scanner', 'ruff_check', 'evidence_gate']
+    },
+    'architectural-decomposition': {
+      title: 'Architectural Decomposition & Specs',
+      version: 'v2.1.0',
+      description: 'Senior Architect methodology for decomposing complex requirements into formal specifications, dependency trees, and implementation phases.',
+      rules: ['Output strictly into PLAN.md', 'Explicit DAG dependency graphs', 'Bounded sub-modules'],
+      tools: ['workspace_file', 'graft_map', 'terminal_read']
+    },
+    'graft-architecture-intelligence': {
+      title: 'Graft Architecture Intelligence',
+      version: 'v1.0.0',
+      description: 'Codebase intelligence and wiring graph navigation via Graft CLI. Zero-token repository orientation, clusters, API skeletons, blast radius, and call graphs.',
+      rules: ['Zero-token footprint', 'Accurate symbol blast radius calculation', 'Detect circular references'],
+      tools: ['graft_map', 'graft_blast']
+    }
+  };
+
   return (
-    <aside className="w-96 bg-surface border-s border-subtle flex flex-col z-20 overflow-hidden select-none">
+    <aside className="w-96 bg-[#0c111c] border-s border-[#1e273a] flex flex-col z-20 overflow-hidden select-none">
       {/* Top Tabs */}
-      <div className="flex border-b border-subtle bg-surface/90">
+      <div className="flex border-b border-[#1e273a] bg-[#0f1523]">
         <button
           onClick={() => setActiveTab('inspector')}
-          className={`flex-1 py-2.5 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-3 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1 ${
             activeTab === 'inspector'
-              ? 'text-cyan-400 border-cyan-400 bg-card'
-              : 'text-text-secondary border-transparent hover:text-white'
+              ? 'text-cyan-400 border-cyan-400 bg-[#141c2e]'
+              : 'text-gray-400 border-transparent hover:text-white'
           }`}
+          title="Agent Configuration"
         >
           <Settings className="w-3.5 h-3.5" />
-          <span>{lang === 'ar' ? 'إعدادات الوكيل' : 'Agent Config'}</span>
+          <span>{lang === 'ar' ? 'الإعدادات' : 'Config'}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('skills')}
-          className={`flex-1 py-2.5 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-3 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1 ${
             activeTab === 'skills'
-              ? 'text-purple-400 border-purple-400 bg-card'
-              : 'text-text-secondary border-transparent hover:text-white'
+              ? 'text-purple-400 border-purple-400 bg-[#141c2e]'
+              : 'text-gray-400 border-transparent hover:text-white'
           }`}
+          title="Agent Skills"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>{lang === 'ar' ? 'مهارات الوكيل' : 'Agent Skills'}</span>
+          <span>{lang === 'ar' ? 'المهارات' : 'Skills'}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('variables')}
-          className={`flex-1 py-2.5 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-3 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1 ${
             activeTab === 'variables'
-              ? 'text-indigo-400 border-indigo-400 bg-card'
-              : 'text-text-secondary border-transparent hover:text-white'
+              ? 'text-indigo-400 border-indigo-400 bg-[#141c2e]'
+              : 'text-gray-400 border-transparent hover:text-white'
           }`}
+          title="Agent Variables"
         >
           <FolderLock className="w-3.5 h-3.5" />
           <span>{lang === 'ar' ? 'المتغيرات' : 'Variables'}</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('telemetry')}
-          className={`flex-1 py-2.5 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1.5 ${
-            activeTab === 'telemetry'
-              ? 'text-emerald-400 border-emerald-400 bg-card'
-              : 'text-text-secondary border-transparent hover:text-white'
+          onClick={() => setActiveTab('diffs')}
+          className={`flex-1 py-3 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1 ${
+            activeTab === 'diffs'
+              ? 'text-amber-400 border-amber-400 bg-[#141c2e]'
+              : 'text-gray-400 border-transparent hover:text-white'
           }`}
+          title="Live Code Diffs"
+        >
+          <FileCode className="w-3.5 h-3.5" />
+          <span>{lang === 'ar' ? 'الـ Diff' : 'Diffs'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('telemetry')}
+          className={`flex-1 py-3 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1 ${
+            activeTab === 'telemetry'
+              ? 'text-emerald-400 border-emerald-400 bg-[#141c2e]'
+              : 'text-gray-400 border-transparent hover:text-white'
+          }`}
+          title="Live Logs & Telemetry"
         >
           <Terminal className="w-3.5 h-3.5" />
           <span>{lang === 'ar' ? 'السجلات' : 'Logs'}</span>
@@ -107,23 +234,23 @@ export default function RightPanel({
           {selectedAgent ? (
             <>
               {/* Agent Identity Banner */}
-              <div className="p-3 bg-card rounded-lg border border-subtle flex items-center justify-between">
+              <div className="p-3 bg-[#141c2e] rounded-xl border border-[#232f48] flex items-center justify-between shadow-sm">
                 <div>
                   <h3 className="text-sm font-bold text-white">
                     {lang === 'ar' ? selectedAgent.titleAr : selectedAgent.title}
                   </h3>
-                  <span className="text-[10px] text-text-muted font-mono">
+                  <span className="text-[10px] text-gray-400 font-mono">
                     role: {selectedAgent.role}
                   </span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${selectedAgent.badge}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${selectedAgent.badge}`}>
                   {selectedAgent.category}
                 </span>
               </div>
 
               {/* Title Name Edit */}
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
+                <label className="text-[10px] uppercase font-bold text-gray-400">
                   {lang === 'ar' ? 'اسم الوكيل' : 'Agent Display Name'}
                 </label>
                 <input
@@ -133,33 +260,39 @@ export default function RightPanel({
                     const key = lang === 'ar' ? 'titleAr' : 'title';
                     onUpdateAgent(selectedAgent.role, { [key]: e.target.value });
                   }}
-                  className="bg-card border border-subtle focus:border-cyan-400 rounded-md px-2.5 py-1.5 text-xs text-white outline-none"
+                  className="bg-[#0f1523] border border-[#232f48] focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs text-white outline-none"
                 />
               </div>
 
-              {/* Model Selection */}
+              {/* Model Selection with Global Fallback Option */}
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
-                  {lang === 'ar' ? 'نموذج الذكاء الاصطناعي (LLM Model)' : 'LLM Model Override'}
-                </label>
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] uppercase font-bold text-gray-400">
+                    {lang === 'ar' ? 'نموذج الذكاء الاصطناعي (LLM Model)' : 'LLM Model'}
+                  </label>
+                  <span className="text-[9px] font-mono text-indigo-300">
+                    {globalConfig?.model ? `Global: ${globalConfig.model.split('/').pop()}` : ''}
+                  </span>
+                </div>
                 <select
                   value={selectedAgent.model}
                   onChange={(e) => onUpdateAgent(selectedAgent.role, { model: e.target.value })}
-                  className="bg-card border border-subtle focus:border-cyan-400 rounded-md px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                  className="bg-[#0f1523] border border-[#232f48] focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs text-white outline-none font-mono"
                 >
                   <option value="Claude 3.7 Sonnet">Claude 3.7 Sonnet (Anthropic)</option>
                   <option value="Gemini 2.5 Pro">Google Gemini 2.5 Pro</option>
                   <option value="GPT-4o">OpenAI GPT-4o</option>
                   <option value="openrouter/qwen/qwen3.8-27b:free">Qwen 3.8 27B Free (OpenRouter)</option>
                   <option value="openrouter/google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash Free (OpenRouter)</option>
-                  <option value="OmniRoute Dynamic Router">OmniRoute Dynamic Router</option>
+                  <option value="groq/llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option>
+                  <option value="OmniRoute Dynamic Router">OmniRoute Dynamic Fallback Router</option>
                 </select>
               </div>
 
               {/* Temperature Slider */}
-              <div className="flex flex-col gap-1 bg-[#07090e] p-2.5 rounded-lg border border-subtle/60">
+              <div className="flex flex-col gap-1 bg-[#070a12] p-3 rounded-xl border border-[#1e273a]">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-[10px] uppercase font-bold text-text-secondary">
+                  <span className="text-[10px] uppercase font-bold text-gray-400">
                     {lang === 'ar' ? 'درجة الحرارة (Temperature)' : 'Temperature'}
                   </span>
                   <span className="font-mono text-cyan-300 font-bold">{selectedAgent.temperature}</span>
@@ -177,7 +310,7 @@ export default function RightPanel({
 
               {/* Max Steps */}
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
+                <label className="text-[10px] uppercase font-bold text-gray-400">
                   {lang === 'ar' ? 'الحد الأقصى للخطوات (Max Steps)' : 'Max Execution Steps'}
                 </label>
                 <input
@@ -186,13 +319,13 @@ export default function RightPanel({
                   max="50"
                   value={selectedAgent.maxSteps}
                   onChange={(e) => onUpdateAgent(selectedAgent.role, { maxSteps: parseInt(e.target.value) || 10 })}
-                  className="bg-card border border-subtle focus:border-cyan-400 rounded-md px-2.5 py-1.5 text-xs text-white outline-none font-mono"
+                  className="bg-[#0f1523] border border-[#232f48] focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs text-white outline-none font-mono"
                 />
               </div>
 
               {/* System Objective / Prompt */}
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
+                <label className="text-[10px] uppercase font-bold text-gray-400">
                   {lang === 'ar' ? 'مهمة الوكيل والتعليمات الأساسية' : 'Agent System Objective'}
                 </label>
                 <textarea
@@ -202,69 +335,77 @@ export default function RightPanel({
                     const key = lang === 'ar' ? 'systemPromptAr' : 'systemPrompt';
                     onUpdateAgent(selectedAgent.role, { [key]: e.target.value });
                   }}
-                  className="bg-card border border-subtle focus:border-cyan-400 rounded-md p-2.5 text-xs text-text-primary outline-none resize-none leading-relaxed"
+                  className="bg-[#0f1523] border border-[#232f48] focus:border-cyan-400 rounded-lg p-2.5 text-xs text-gray-200 outline-none resize-none leading-relaxed"
                 />
               </div>
 
-              <div className="p-2.5 bg-[#05070a] border border-subtle rounded-lg flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+              <div className="p-2.5 bg-[#070a12] border border-[#1e273a] rounded-lg flex items-center gap-2 text-emerald-400 text-xs font-semibold">
                 <Check className="w-4 h-4" />
                 <span>{lang === 'ar' ? 'تم الحفظ تلقائياً في حالة الورك فلو' : 'Auto-synced with Workflow State'}</span>
               </div>
             </>
           ) : (
-            <div className="text-center text-text-muted text-xs my-auto">
+            <div className="text-center text-gray-500 text-xs my-auto">
               {lang === 'ar' ? 'قم بتحديد وكيل من المخطط لعرض وتعديل إعداداته' : 'Select an agent from canvas to inspect'}
             </div>
           )}
         </div>
       )}
 
-      {/* Tab 2: Agent-Specific Skills Management (Only this agent's skills) */}
+      {/* Tab 2: Agent-Specific Skills Management & Doc Inspection */}
       {activeTab === 'skills' && (
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3.5">
           {selectedAgent ? (
             <>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-text-secondary">
+                <span className="text-[10px] uppercase font-bold text-gray-400">
                   {lang === 'ar' ? `مهارات الوكيل [${selectedAgent.titleAr}] فقط` : `Skills for [${selectedAgent.title}]`}
                 </span>
-                <span className="text-[10px] font-mono text-purple-300 bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-mono text-purple-300 bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 rounded">
                   {selectedAgent.skills?.length || 0} active
                 </span>
               </div>
 
-              {/* Bound Skills List with Delete Buttons */}
+              {/* Bound Skills List with Doc & Delete Buttons */}
               <div className="flex flex-col gap-2">
                 {selectedAgent.skills && selectedAgent.skills.length > 0 ? (
                   selectedAgent.skills.map((skillName, idx) => (
                     <div
                       key={idx}
-                      className="bg-card border border-subtle hover:border-purple-500/40 rounded-lg p-2.5 flex items-center justify-between transition"
+                      className="bg-[#141c2e] border border-[#232f48] hover:border-purple-500/50 rounded-xl p-2.5 flex items-center justify-between transition shadow-sm"
                     >
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                         <span className="text-xs font-mono font-bold text-purple-200">{skillName}</span>
                       </div>
-                      <button
-                        onClick={() => onRemoveSkill(selectedAgent.role, skillName)}
-                        className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[10px] font-bold rounded flex items-center gap-1 transition"
-                        title="Delete this skill"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>{lang === 'ar' ? 'حذف' : 'Delete'}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setInspectedSkill(skillDocsCatalog[skillName] || { title: skillName, description: 'Installed enterprise skill module.' })}
+                          className="p-1 bg-[#1e273a] hover:bg-purple-500/20 text-purple-300 rounded transition"
+                          title="View Skill Documentation"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => onRemoveSkill(selectedAgent.role, skillName)}
+                          className="p-1 bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 rounded transition"
+                          title="Delete this skill"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-text-muted text-xs py-4 bg-[#05070a] border border-dashed border-subtle rounded-lg">
+                  <div className="text-center text-gray-500 text-xs py-4 bg-[#070a12] border border-dashed border-[#1e273a] rounded-xl">
                     {lang === 'ar' ? 'لا توجد مهارات مربوطة بهذا الوكيل حالياً' : 'No skills attached to this agent'}
                   </div>
                 )}
               </div>
 
               {/* Add Custom Skill */}
-              <div className="pt-3 border-t border-subtle flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
+              <div className="pt-3 border-t border-[#1e273a] flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase font-bold text-gray-400">
                   {lang === 'ar' ? 'إضافة مهارة جديدة لهذا الوكيل' : 'Add New Skill to this Agent'}
                 </label>
                 <div className="flex gap-1.5">
@@ -273,131 +414,274 @@ export default function RightPanel({
                     placeholder="e.g. clean-python-architecture"
                     value={newSkillInput}
                     onChange={(e) => setNewSkillInput(e.target.value)}
-                    className="flex-1 bg-card border border-subtle focus:border-purple-400 rounded-md px-2.5 py-1.5 text-xs text-purple-200 font-mono outline-none"
+                    className="flex-1 bg-[#0f1523] border border-[#232f48] focus:border-purple-400 rounded-lg px-2.5 py-1.5 text-xs text-purple-200 font-mono outline-none"
                   />
                   <button
                     onClick={handleAddCustomSkill}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-md transition flex items-center gap-1"
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{lang === 'ar' ? 'إضافة' : 'Add'}</span>
                   </button>
                 </div>
               </div>
-
-              {/* Active Sandboxed Tools */}
-              <div className="pt-2 border-t border-subtle flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
-                  {lang === 'ar' ? 'الأدوات المعزولة المتاحة للوكيل' : 'Authorized Sandboxed Tools'}
-                </label>
-                <div className="flex flex-wrap gap-1">
-                  {(selectedAgent.tools || ['workspace_file', 'terminal_exec']).map((tool, i) => (
-                    <span
-                      key={i}
-                      className="bg-card border border-subtle text-cyan-300 font-mono text-[10px] px-2 py-1 rounded"
-                    >
-                      🔧 {tool}
-                    </span>
-                  ))}
-                </div>
-              </div>
             </>
           ) : null}
         </div>
       )}
 
-      {/* Tab 3: Variables & Guardrails */}
+      {/* Tab 3: Custom Variables Management & Presets (CRUD) */}
       {activeTab === 'variables' && (
         <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3.5">
           {selectedAgent ? (
             <>
-              {/* Working Domain */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <FolderLock className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{lang === 'ar' ? `متغيرات [${selectedAgent.titleAr}]` : `Variables for [${selectedAgent.title}]`}</span>
+                  </h4>
+                </div>
+                <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/20 border border-indigo-500/40 px-2 py-0.5 rounded">
+                  {Object.keys(agentVariables).length} vars
+                </span>
+              </div>
+
+              {/* Quick Presets Pills */}
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary">
-                  {lang === 'ar' ? 'نطاق العمل البرمجي (Domain Scope)' : 'Domain Working Scope'}
-                </label>
+                <span className="text-[9px] uppercase font-bold text-gray-400">
+                  {lang === 'ar' ? 'إعدادات سريعة جاهزة (Presets):' : 'Quick Variable Presets:'}
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('STRICT_TYPE_CHECK', 'true')}
+                    className="px-2 py-0.5 bg-[#141c2e] hover:bg-indigo-600/30 border border-[#232f48] text-[9px] font-mono text-indigo-300 rounded"
+                  >
+                    + STRICT_TYPE_CHECK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('FAST_FAIL', 'false')}
+                    className="px-2 py-0.5 bg-[#141c2e] hover:bg-indigo-600/30 border border-[#232f48] text-[9px] font-mono text-indigo-300 rounded"
+                  >
+                    + FAST_FAIL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('COVERAGE_THRESHOLD', '90')}
+                    className="px-2 py-0.5 bg-[#141c2e] hover:bg-indigo-600/30 border border-[#232f48] text-[9px] font-mono text-indigo-300 rounded"
+                  >
+                    + COVERAGE_THRESHOLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('TIMEOUT_SECONDS', '60')}
+                    className="px-2 py-0.5 bg-[#141c2e] hover:bg-indigo-600/30 border border-[#232f48] text-[9px] font-mono text-indigo-300 rounded"
+                  >
+                    + TIMEOUT_SECONDS
+                  </button>
+                </div>
+              </div>
+
+              {/* Variable Search Filter */}
+              <div className="relative">
+                <Search className="w-3 h-3 text-gray-500 absolute start-2.5 top-2.5" />
                 <input
                   type="text"
-                  value={selectedAgent.domain || ''}
-                  onChange={(e) => onUpdateAgent(selectedAgent.role, { domain: e.target.value })}
-                  className="bg-card border border-subtle focus:border-amber-400 rounded-md px-2.5 py-1.5 text-xs text-amber-200 font-mono outline-none"
+                  placeholder="Filter variables by key or value..."
+                  value={varSearchQuery}
+                  onChange={(e) => setVarSearchQuery(e.target.value)}
+                  className="w-full bg-[#070a12] border border-[#1e273a] focus:border-indigo-400 rounded-lg ps-7 pe-2.5 py-1.5 text-xs text-white font-mono outline-none"
                 />
               </div>
 
-              {/* Allowed Write Paths */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{lang === 'ar' ? 'المسارات المسموح بالكتابة فيها' : 'Allowed Write Prefixes'}</span>
-                </label>
-                <div className="bg-[#07090e] border border-subtle rounded-md p-2 flex flex-wrap gap-1 font-mono text-xs text-emerald-300">
-                  {(selectedAgent.allowedWrites || []).map((p, i) => (
-                    <span key={i} className="bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">
-                      {p}
-                    </span>
-                  ))}
-                </div>
+              {/* Variables List */}
+              <div className="flex flex-col gap-2">
+                {filteredVariables.length > 0 ? (
+                  filteredVariables.map(([key, val]) => (
+                    <div
+                      key={key}
+                      className="bg-[#141c2e] border border-[#232f48] hover:border-indigo-500/50 rounded-xl p-2.5 flex flex-col gap-1.5 transition shadow-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-indigo-300">
+                          {key}
+                        </span>
+                        <button
+                          onClick={() => onDeleteVariable && onDeleteVariable(selectedAgent.role, key)}
+                          className="p-1 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
+                          title="Delete variable"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Editable Value */}
+                      <input
+                        type="text"
+                        value={val}
+                        onChange={(e) => onUpdateVariable && onUpdateVariable(selectedAgent.role, key, e.target.value)}
+                        className="bg-[#070a12] border border-[#1e273a] focus:border-indigo-400 rounded-lg px-2 py-1 text-xs text-gray-200 font-mono outline-none"
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 text-xs py-4 bg-[#070a12] border border-dashed border-[#1e273a] rounded-xl">
+                    {lang === 'ar' ? 'لا توجد متغيرات مطابقة' : 'No matching custom variables'}
+                  </div>
+                )}
               </div>
 
-              {/* Blocked Write Paths */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-bold text-text-secondary flex items-center gap-1">
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                  <span>{lang === 'ar' ? 'المسارات المحظورة أمنياً (Guardrails)' : 'Blocked Write Prefixes (Security Guard)'}</span>
+              {/* Add New Variable Form */}
+              <form onSubmit={handleAddNewVariable} className="pt-3 border-t border-[#1e273a] flex flex-col gap-2">
+                <label className="text-[10px] uppercase font-bold text-gray-400">
+                  {lang === 'ar' ? 'إضافة متغير جديد للوكيل:' : 'Add New Variable:'}
                 </label>
-                <div className="bg-[#07090e] border border-subtle rounded-md p-2 flex flex-wrap gap-1 font-mono text-xs text-rose-300">
-                  {(selectedAgent.blockedWrites || []).map((p, i) => (
-                    <span key={i} className="bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded text-[10px]">
-                      {p}
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="VARIABLE_NAME (e.g. TIMEOUT_SEC)"
+                    value={newVarKey}
+                    onChange={(e) => setNewVarKey(e.target.value)}
+                    className="bg-[#0f1523] border border-[#232f48] focus:border-indigo-400 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono outline-none uppercase"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Variable value (e.g. 120 or true)"
+                    value={newVarVal}
+                    onChange={(e) => setNewVarVal(e.target.value)}
+                    className="bg-[#0f1523] border border-[#232f48] focus:border-indigo-400 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{lang === 'ar' ? 'إضافة المتغير' : 'Add Variable'}</span>
+                  </button>
                 </div>
-              </div>
-
-              {/* Invariants & Anti-Loop Policy */}
-              <div className="p-3 bg-card border border-subtle rounded-lg flex flex-col gap-1 text-[11px] text-text-secondary leading-relaxed">
-                <span className="font-bold text-white flex items-center gap-1.5">
-                  <FolderLock className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{lang === 'ar' ? 'سياسة حوكمة العزل المعماري' : 'Architectural Isolation Invariants'}</span>
-                </span>
-                <p>
-                  {lang === 'ar'
-                    ? 'يتم تطبيق قواعد الحوكمة لمنع الوكيل من تجاوز الصلاحيات أو التعديل في غير نطاقه المخصص.'
-                    : 'Deterministic boundary checks ensure strict isolation and zero cross-contamination.'}
-                </p>
-              </div>
+              </form>
             </>
           ) : null}
         </div>
       )}
 
-      {/* Tab 4: Telemetry & Real-Time Logs */}
+      {/* Tab 4: Live Code Diffs */}
+      {activeTab === 'diffs' && (
+        <div className="flex-1 p-3 flex flex-col overflow-hidden">
+          <LiveDiffViewer activeAgent={selectedAgent} lang={lang} />
+        </div>
+      )}
+
+      {/* Tab 5: Telemetry & Real-Time Logs */}
       {activeTab === 'telemetry' && (
-        <div className="flex-1 p-4 flex flex-col gap-3 overflow-hidden">
-          <div className="flex-1 bg-[#05070a] border border-subtle rounded-lg p-3 font-mono text-[11px] overflow-y-auto flex flex-col gap-1 text-emerald-400">
-            {logs.map((log, idx) => (
-              <div key={idx} className="leading-relaxed">
-                <span className="text-text-muted select-none me-1.5">[{log.time}]</span>
+        <div className="flex-1 p-3 flex flex-col gap-2.5 overflow-hidden">
+          {/* Live Token Burn Gauge */}
+          <LiveTokenGauge
+            tokensUsed={loopConfig?.tokensUsed || 3420}
+            maxBudget={loopConfig?.maxTokensBudget || 250000}
+            isRunning={isRunning}
+            lang={lang}
+          />
+
+          {/* Filter Bar & Search */}
+          <div className="flex items-center gap-1.5 bg-[#070a12] p-1.5 rounded-lg border border-[#1e273a]">
+            {['ALL', 'INFO', 'EXEC', 'WARN', 'ERROR'].map(f => (
+              <button
+                key={f}
+                onClick={() => setLogFilter(f)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition ${
+                  logFilter === f
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+            <div className="w-[1px] h-3.5 bg-[#1e273a] mx-1" />
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={logSearchQuery}
+              onChange={(e) => setLogSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent text-[10px] text-white font-mono outline-none"
+            />
+          </div>
+
+          {/* Terminal Console Output */}
+          <div className="flex-1 bg-[#05070a] border border-[#1e273a] rounded-xl p-3 font-mono text-[11px] overflow-y-auto flex flex-col gap-1 select-text shadow-inner">
+            {filteredLogs.map((log, idx) => (
+              <div key={idx} className="leading-relaxed break-all">
+                <span className="text-gray-600 select-none me-1.5">[{log.time}]</span>
                 <span className={log.color || 'text-cyan-400'}>{log.text}</span>
               </div>
             ))}
+            <div ref={terminalEndRef} />
           </div>
 
+          {/* Terminal Bottom Controls */}
           <div className="flex gap-2">
             <button
+              onClick={handleCopyLogs}
+              className="flex-1 py-1.5 bg-[#141c2e] hover:bg-[#1c273e] border border-[#232f48] text-xs text-gray-300 hover:text-white rounded-lg flex items-center justify-center gap-1.5 transition"
+            >
+              {logsCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{logsCopied ? (lang === 'ar' ? 'تم النسخ' : 'Copied') : (lang === 'ar' ? 'نسخ السجل' : 'Copy')}</span>
+            </button>
+
+            <button
               onClick={onClearLogs}
-              className="flex-1 py-1.5 bg-card hover:bg-cardHover border border-subtle text-xs text-text-secondary hover:text-white rounded-md flex items-center justify-center gap-1.5 transition"
+              className="flex-1 py-1.5 bg-[#141c2e] hover:bg-[#1c273e] border border-[#232f48] text-xs text-gray-300 hover:text-white rounded-lg flex items-center justify-center gap-1.5 transition"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>{lang === 'ar' ? 'مسح السجلات' : 'Clear Logs'}</span>
+              <span>{lang === 'ar' ? 'مسح السجلات' : 'Clear'}</span>
             </button>
 
             <button
               onClick={onVerifyAudit}
-              className="flex-1 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-xs text-purple-300 rounded-md flex items-center justify-center gap-1.5 transition"
+              className="flex-1 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-xs text-purple-300 rounded-lg flex items-center justify-center gap-1.5 transition"
             >
               <ShieldAlert className="w-3.5 h-3.5 text-purple-400" />
-              <span>{lang === 'ar' ? 'فحص الأدلة الجنائية' : 'Verify Audit'}</span>
+              <span>{lang === 'ar' ? 'فحص الأدلة' : 'Audit'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Skill Documentation Drawer Modal */}
+      {inspectedSkill && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f1523] border border-[#232f48] w-full max-w-lg rounded-2xl shadow-2xl p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-[#232f48] pb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-bold text-white">{inspectedSkill.title}</h3>
+              </div>
+              <button
+                onClick={() => setInspectedSkill(null)}
+                className="p-1 text-gray-400 hover:text-white rounded-md"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-300 leading-relaxed">{inspectedSkill.description}</p>
+            {inspectedSkill.rules && (
+              <div className="flex flex-col gap-1 mt-1">
+                <span className="text-[10px] font-bold uppercase text-gray-400">Core Invariants:</span>
+                <ul className="list-disc list-inside text-[11px] text-purple-300 space-y-0.5">
+                  {inspectedSkill.rules.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <button
+              onClick={() => setInspectedSkill(null)}
+              className="mt-2 w-full py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition"
+            >
+              Close Documentation
             </button>
           </div>
         </div>

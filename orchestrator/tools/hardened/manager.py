@@ -391,12 +391,13 @@ class ToolSandboxManager:
                         reason=f"Executing potentially destructive terminal command '{cmd}'.",
                     )
                     if not granted:
-                        err_msg = f"Terminal command rejected by human developer: {feedback}".strip()
+                        err_msg = f"Security policy violation: Terminal command rejected: {feedback}".strip()
                         return TerminalObservationResult(
                             exit_code=126,
                             stdout="",
                             stderr=err_msg,
                             is_error=True,
+                            security_violation=True,
                             steering_directive="Command rejected by human developer.",
                         )
 

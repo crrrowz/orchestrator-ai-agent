@@ -30,7 +30,14 @@ CRITICAL INSTRUCTIONS:
 4. Output Standards:
    - Write verified structured findings to `docs/audit_findings.json` using workspace_file write operation.
    - Format: {"status": "AUDIT_COMPLETED", "findings": [{"id": "AUD-001", "severity": "HIGH", "type": "BUG", "file": "path/to/file.py", "line": 42, "evidence": "code snippet", "problem": "exact issue", "recommended_fix": "exact fix", "actionable": true}]}
-   - Also write the comprehensive human report to `docs/AUDIT_REPORT.md`.
+   - Write the comprehensive, in-depth human report to `docs/AUDIT_REPORT.md` following this structure:
+     # Codebase Architecture & Security Audit Report
+     ## 1. Executive Summary & Architecture Health Score
+     ## 2. Structural Hotspots & Module Boundaries
+     ## 3. DRY Violations & Duplicate Logic
+     ## 4. Security, Secret Leak & Subprocess Vulnerability Audit
+     ## 5. Error Handling, Edge Cases & Failure Recovery Gaps
+     ## 6. Actionable Prioritized Remediation Roadmap
 """
 
 

@@ -830,6 +830,30 @@ class SDKAgentFactory:
     """Creates configured OpenHands Agent instances per persona without monkey-patching."""
 
     @staticmethod
+    def get_default_system_prompt_for_role(role_name: str) -> str:
+        """Retrieve canonical expert system prompt for a persona role."""
+        norm_role = role_name.strip().lower()
+        if norm_role == "auditor":
+            from orchestrator.agents.auditor import AUDITOR_SYSTEM_PROMPT
+            return AUDITOR_SYSTEM_PROMPT
+        elif norm_role == "architect":
+            from orchestrator.agents.architect import ARCHITECT_SYSTEM_PROMPT
+            return ARCHITECT_SYSTEM_PROMPT
+        elif norm_role == "reviewer":
+            from orchestrator.agents.reviewer import REVIEWER_SYSTEM_PROMPT
+            return REVIEWER_SYSTEM_PROMPT
+        elif norm_role == "tester":
+            from orchestrator.agents.tester import TESTER_SYSTEM_PROMPT
+            return TESTER_SYSTEM_PROMPT
+        elif norm_role == "documentation":
+            from orchestrator.agents.documentation import DOCUMENTATION_SYSTEM_PROMPT
+            return DOCUMENTATION_SYSTEM_PROMPT
+        elif norm_role == "developer":
+            from orchestrator.agents.developer import DEVELOPER_SYSTEM_PROMPT
+            return DEVELOPER_SYSTEM_PROMPT
+        return f"You are a helpful software engineer acting as {role_name}."
+
+    @staticmethod
     def get_default_scope_for_role(
         role_name: str,
         config: Optional[Any] = None,
@@ -972,10 +996,10 @@ class SDKAgentFactory:
 
         system_prompt = (
             prompt_view.tier0_system_prompt
-            if isinstance(prompt_view, PromptView)
+            if isinstance(prompt_view, PromptView) and prompt_view.tier0_system_prompt
             else (
                 getattr(prompt_view, "tier0_system_prompt", None)
-                or f"You are a helpful software engineer acting as {role_name}."
+                or cls.get_default_system_prompt_for_role(role_name)
             )
         )
 
