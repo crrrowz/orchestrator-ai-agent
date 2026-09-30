@@ -51,6 +51,12 @@ from orchestrator.pipeline.fsm.guards import (
 )
 from orchestrator.pipeline.fsm.profiles import LifecycleProfile, PipelineMode, get_profile
 from orchestrator.pipeline.fsm.states import FSMState
+from orchestrator.governance.models import (
+    ExecutionHealth,
+    GovernanceAction,
+    GovernanceDecision,
+)
+from orchestrator.governance.iteration_governor import IterationGovernor
 from orchestrator.pipeline.fsm.transitions import (
     TransitionMatrix,
     TransitionResult,
@@ -110,6 +116,8 @@ class GuardedFSMEngine:
             self.governor = AdaptiveResourceGovernor()
         else:
             self.governor = None
+
+        self.iteration_governor = IterationGovernor()
 
         # Initialize Sandboxes & Runtime Bridge
         self.sandbox_manager = ToolSandboxManager(workspace_root=self.workspace_path)
@@ -598,9 +606,20 @@ class GuardedFSMEngine:
                 f"## Pytest Failure Diagnostics:\n{self.context.last_test_result.stdout or self.context.last_test_result.stderr}\n"
             )
 
+        if self.context.metadata.get("governance_directive"):
+            prompt_lines.append(
+                f"## Strategic Directive from Governance Watchdog:\n"
+                f"{self.context.metadata['governance_directive']}\n"
+            )
+
         compiled_prompt = "\n".join(prompt_lines)
 
-        allocated_turns = self.profile.default_agent_turn_limit
+        allocated_turns = self.iteration_governor.allocate_initial_budget(
+            task_description=self.context.task_description,
+            role=role_name,
+            mode=self.profile.mode.value if hasattr(self.profile.mode, "value") else str(self.profile.mode),
+            workspace_path=self.workspace_path,
+        )
         if self.governor:
             ac_count = len(self.context.milestone_dag) if self.context.milestone_dag else 1
             if self.context.task_truth_graph and hasattr(self.context.task_truth_graph, "acceptance_criteria"):
@@ -614,7 +633,7 @@ class GuardedFSMEngine:
                 dag_depth=dag_depth,
                 target_files_count=target_files,
             )
-            allocated_turns = turn_res.allocated_turns
+            allocated_turns = max(allocated_turns, turn_res.allocated_turns)
             if self.governor.is_tripped:
                 return PipelineEvent(
                     event_type=EventType.HUMAN_INTERVENTION_REQUIRED,
@@ -632,8 +651,26 @@ class GuardedFSMEngine:
                     max_turns=allocated_turns
                 ),
                 sandbox_manager=self.sandbox_manager,
+                progress_monitor=self.iteration_governor.monitor,
             )
             self._accumulate_outcome(outcome, phase=ResourcePhase.IMPLEMENTATION)
+
+            # Evaluate Governance outcome
+            task_profile = self.iteration_governor.get_task_profile(
+                task_description=self.context.task_description,
+                role=role_name,
+                mode=self.profile.mode.value if hasattr(self.profile.mode, "value") else str(self.profile.mode),
+            )
+            gov_decision = self.iteration_governor.evaluate_turn_yield(
+                profile=task_profile,
+                turns_used=outcome.iterations_executed if outcome else 0,
+                turns_allocated=allocated_turns,
+                completed_naturally=bool(outcome and outcome.completed_naturally),
+                has_prior_mutations=bool(self.context.mutated_files),
+            )
+            self.context.metadata["governance_decision"] = gov_decision.model_dump()
+            if gov_decision.recommended_directive:
+                self.context.metadata["governance_directive"] = gov_decision.recommended_directive
         elif not self.llm_manager or not self.runtime_bridge:
             return PipelineEvent(
                 event_type=EventType.CRITICAL_ERROR,
@@ -706,6 +743,16 @@ class GuardedFSMEngine:
                 and self.context.active_milestone_index + 1 < len(self.context.milestone_dag)
             )
 
+            gov_meta = self.context.metadata.get("governance_decision")
+            gov_blocked = False
+            gov_reason = ""
+            if gov_meta and isinstance(gov_meta, dict):
+                act = gov_meta.get("action")
+                hlth = gov_meta.get("health")
+                if act in ("FAIL", "PAUSE_BLOCK") or hlth in ("CHAOTIC", "STAGNANT", "EXHAUSTED", "CRITICAL_FAILURE"):
+                    gov_blocked = True
+                    gov_reason = str(gov_meta.get("reason") or "Governance watchdog detected unhealthy execution")
+
             if not preflight_ok:
                 decision = CompletionDecision(
                     status=CompletionStatus.FAILED,
@@ -723,6 +770,12 @@ class GuardedFSMEngine:
                         f"Developer agent did not complete naturally: {last_outcome.exit_reason.value if hasattr(last_outcome.exit_reason, 'value') else last_outcome.exit_reason}"
                     ],
                     blocking_reasons=[err_msg],
+                )
+            elif gov_blocked:
+                decision = CompletionDecision(
+                    status=CompletionStatus.FAILED,
+                    failed_criteria=[f"Iteration Governance Blocked: {gov_reason}"],
+                    blocking_reasons=[gov_reason],
                 )
             elif test_res and not test_res.passed:
                 err_detail = ""

@@ -18,10 +18,17 @@ docs/
 │   └── CONFIG_REFERENCE.md        # Comprehensive 47-Parameter Configuration Matrix
 │
 ├── architecture/                  # 🏛️ Deep-Dive Architecture & Forensic Specifications
+│   ├── MODULAR_ENGINE_ARCHITECTURE.md # 🧩 Langflow-Style 13-Engine Modular Platform Spec
+│   ├── ADAPTIVE_ITERATION_GOVERNANCE.md # Adaptive Iteration Governance Layer Spec
 │   ├── API_REFERENCE.md           # Programmatic Python API & Architecture Contract
 │   ├── ARCHITECTURAL_ASSESSMENT.md # 360-Degree Architectural Assessment & Invariants
 │   ├── CODE_INTELLIGENCE_REVIEW.md# Native Code Intelligence & Review System Spec
 │   └── FAILURE_ANALYSIS.md        # 360-Degree Performance & Failure Mode Analysis
+│
+├── Reliable Promete Diagnostic/   # 🔬 Forensic Investigation & Diagnostic Traces
+│   ├── FORENSIC_EXECUTION_INVESTIGATION_REPORT.md # Root-Cause Analysis Report
+│   ├── Investigation-execution session.md         # Diagnostic Session Directive
+│   └── ORAGAI Forensic Execution Investigation.md # Investigation Methodology
 │
 ├── plans/                         # 📐 Active Target Implementation Plans (P15-P18)
 │   ├── INDEX.md                   # Plans Index & Execution Strategy
@@ -49,6 +56,7 @@ Practical operational manuals for running, deploying, and configuring ORAGAI.
 
 ### 2. 🏛️ [Architecture (`docs/architecture/`)](architecture/)
 Foundational architecture contracts, component boundaries, and forensic analysis.
+- **[Langflow-Style Modular Engine Architecture](architecture/MODULAR_ENGINE_ARCHITECTURE.md)**: Specifications for the 13 composable engines, universal component model, dynamic graph execution, and visual builder.
 - **[Programmatic API & Architecture Contract](architecture/API_REFERENCE.md)**: Python classes, pipeline engines, domain models, ports & adapters, and token governor APIs.
 - **[360-Degree Architectural Assessment](architecture/ARCHITECTURAL_ASSESSMENT.md)**: Comprehensive evaluation of modular boundaries, OpenHands SDK integration, and 6-plane target architecture.
 - **[Native Code Intelligence & Review System](architecture/CODE_INTELLIGENCE_REVIEW.md)**: Zero-token Graft AST indexing, change management, and automated review protocols.

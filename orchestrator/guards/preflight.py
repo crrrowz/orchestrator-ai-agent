@@ -40,6 +40,28 @@ class PreFlightGuard:
                             healed_reports.append(f"{fp.relative_to(workspace)}: {msg}")
                     except Exception:
                         continue
+
+        # Ensure workspace tests directory has sys.path resolution to workspace root
+        tests_dir = workspace / "tests"
+        if (
+            tests_dir.is_dir()
+            and not (tests_dir / "conftest.py").exists()
+            and not (workspace / "conftest.py").exists()
+            and not (workspace / "pyproject.toml").exists()
+        ):
+            try:
+                conftest_path = tests_dir / "conftest.py"
+                conftest_path.write_text(
+                    "import sys\nfrom pathlib import Path\n"
+                    "root_dir = Path(__file__).resolve().parent.parent\n"
+                    "if str(root_dir) not in sys.path:\n"
+                    "    sys.path.insert(0, str(root_dir))\n",
+                    encoding="utf-8",
+                )
+                healed_reports.append("tests/conftest.py: Auto-generated sys.path root resolver for pytest.")
+            except Exception:
+                pass
+
         return healed_reports
 
     @classmethod

@@ -83,7 +83,18 @@ def parse_args() -> argparse.Namespace:
         "task",
         nargs="?",
         default=None,
-        help="Software development task description to execute.",
+        help="Software development task description to execute (or 'gui' to launch the Visual Studio web interface).",
+    )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the ORAGAI Visual Studio web interface.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port for Visual Studio web interface (default: 8080).",
     )
     parser.add_argument(
         "--mode",
@@ -319,6 +330,13 @@ def main() -> None:
                 role_cfg.model = clean_model
 
     skill_manager = SkillManager(ORCHESTRATOR_ROOT)
+
+    if getattr(args, "gui", False) or (args.task and str(args.task).strip().lower() in ("gui", "ui", "serve")):
+        from orchestrator.ui.server.app import serve
+        port = getattr(args, "port", 8080) or 8080
+        ConsoleOutput.banner("ORAGAI Visual Studio", f"http://127.0.0.1:{port}")
+        serve(port)
+        sys.exit(0)
 
     if args.no_memory:
         config.enable_memory = False

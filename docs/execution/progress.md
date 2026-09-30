@@ -1,5 +1,37 @@
 # ORAGAI Incremental Execution Progress Log
 
+### Bite Record: BITE-P15-GOV-01 - Adaptive Iteration Governance Layer & Forensic Resolution
+- **Plan Reference:** Adaptive Iteration Governance Specification (`docs/architecture/ADAPTIVE_ITERATION_GOVERNANCE.md`) / Forensic Investigation Protocol (`docs/Reliable Promete Diagnostic/FORENSIC_EXECUTION_INVESTIGATION_REPORT.md`)
+- **Target Files & Symbols:**
+  - `orchestrator/governance/models.py` (`GovernanceAction`, `ExecutionHealth`, `TaskCategory`, `TaskBudgetProfile`, `StepRecord`, `ProgressMetricsSnapshot`, `GovernanceDecision`)
+  - `orchestrator/governance/budget_allocator.py` (`AdaptiveTaskBudgetAllocator` computing category-tailored initial and extension turn budgets)
+  - `orchestrator/governance/progress_monitor.py` (`ProgressMonitor` recording live steps and telemetry events)
+  - `orchestrator/governance/progress_metrics.py` (`ProgressMetricsCalculator` computing mutation velocity, error rate, action diversity, and repetition scores)
+  - `orchestrator/governance/chaos_detector.py` (`ChaosDetector` detecting consecutive error bursts $\ge 3$ and high error density)
+  - `orchestrator/governance/stagnation_detector.py` (`StagnationDetector` detecting exploration exhaustion $\ge 7$ read turns and repetitive read loops $\ge 3$)
+  - `orchestrator/governance/checkpoint_evaluator.py` (`CheckpointEvaluator` executing trajectory evaluations, evidence-based extensions, and zero false-completion gates)
+  - `orchestrator/governance/iteration_governor.py` (`IterationGovernor` master facade)
+  - `orchestrator/governance/governance_policy.py` (`DEFAULT_TASK_PROFILES` with category-specific budget bounds)
+  - `orchestrator/engine/openhands_bridge.py` (`OpenHandsTelemetryBridge` integrated with `ProgressMonitor` for synchronous step tracking; `AgentExecutionOutcome` extended with metrics and decisions)
+  - `orchestrator/pipeline/fsm/engine.py` (`GuardedFSMEngine` integrated with `IterationGovernor` for dynamic budget allocation, directive injection, and governance-guarded verification)
+  - `tests/test_adaptive_iteration_governance.py` (9 comprehensive unit and integration tests verifying all governance modules)
+  - `docs/Reliable Promete Diagnostic/FORENSIC_EXECUTION_INVESTIGATION_REPORT.md` (Formal forensic report documenting session `3c93f9a6` and root cause analysis)
+- **Acceptance Criteria Verified:**
+  - Task-aware dynamic turn budgets replacing static limits across 11 engineering disciplines.
+  - Active progress monitoring calculating real-time mutation velocity and error rates.
+  - Chaos and error-burst detection intercepting thrashing streams with corrective directives.
+  - Exploration exhaustion mitigation preventing agents from silently burning turn budgets in read-only loops.
+  - Evidence-based budget extensions granting turns only when genuine code progress is observed.
+  - Zero False Completion barrier preventing verification from passing on uncompleted or stagnant turns even if pre-existing tests are green.
+  - Zero Regressions: All 565 repository tests pass deterministically (565/565 passed).
+- **Test Evidence:**
+  - `tests/test_adaptive_iteration_governance.py`: 9 passed in 7.42s
+  - `tests/` total suite: 565 passed in 28.53s (`pytest tests/`)
+- **PreFlight Status:** SYNTAX_CLEAN
+- **Status:** COMPLETED & VERIFIED
+
+---
+
 ### Bite Record: BITE-P15-FSM-01 - GuardedFSMEngine Milestone Progression, Verification Gate Hardening & RateLimiter Implementation
 - **Plan Reference:** `.kilo/plans/comprehensive-remediation-and-ratelimiter-plan.md` / `GuardedFSMEngine` Resiliency Protocol
 - **Target Files & Symbols:**

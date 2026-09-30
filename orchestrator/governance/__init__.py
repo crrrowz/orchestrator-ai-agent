@@ -5,14 +5,17 @@ Specification: docs/plans/P13_FINAL_ORAGAI_TARGET_ARCHITECTURE_SPECIFICATION.md
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from orchestrator.governance.fsm.engine import GuardedFSMEngine, FSMContext
+
 from orchestrator.governance.fsm import (
     CompletionDecision,
     CompletionStatus,
     EventType,
-    FSMContext,
     FSMGuards,
     FSMState,
-    GuardedFSMEngine,
     PipelineEvent,
     StateTransition,
     TaskTruthSemanticQueries,
@@ -54,6 +57,34 @@ from orchestrator.governance.gates import (
     CompletionGate,
     verify_mandatory_criteria_satisfied,
 )
+from orchestrator.governance.models import (
+    ExecutionHealth,
+    GovernanceAction,
+    GovernanceDecision,
+    ProgressMetricsSnapshot,
+    StepRecord,
+    TaskBudgetProfile,
+    TaskCategory,
+)
+from orchestrator.governance.progress_metrics import ProgressMetricsCalculator
+from orchestrator.governance.progress_monitor import ProgressMonitor
+from orchestrator.governance.chaos_detector import ChaosDetector
+from orchestrator.governance.stagnation_detector import StagnationDetector
+from orchestrator.governance.budget_allocator import AdaptiveTaskBudgetAllocator
+from orchestrator.governance.checkpoint_evaluator import CheckpointEvaluator
+from orchestrator.governance.iteration_governor import IterationGovernor
+from orchestrator.governance.governance_policy import DEFAULT_TASK_PROFILES
+
+
+def __getattr__(name: str):
+    if name == "GuardedFSMEngine":
+        from orchestrator.pipeline.fsm.engine import GuardedFSMEngine
+        return GuardedFSMEngine
+    if name == "FSMContext":
+        from orchestrator.pipeline.fsm.context import FSMContext
+        return FSMContext
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "GuardedFSMEngine",
@@ -97,4 +128,19 @@ __all__ = [
     "StrategyMutationDirective",
     "CompletionGate",
     "verify_mandatory_criteria_satisfied",
+    "ExecutionHealth",
+    "GovernanceAction",
+    "GovernanceDecision",
+    "ProgressMetricsSnapshot",
+    "StepRecord",
+    "TaskBudgetProfile",
+    "TaskCategory",
+    "ProgressMetricsCalculator",
+    "ProgressMonitor",
+    "ChaosDetector",
+    "StagnationDetector",
+    "AdaptiveTaskBudgetAllocator",
+    "CheckpointEvaluator",
+    "IterationGovernor",
+    "DEFAULT_TASK_PROFILES",
 ]

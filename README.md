@@ -78,13 +78,14 @@ Unlike standard conversational agents that loop unpredictably and burn tokens, O
 
 | Feature | Description |
 |---|---|
-| 🛡️ **Guarded FSM Engine** | Deterministic 11-state state machine with formal guard predicates. Eliminates prompt loops and enforces rigorous completion gates. |
+| 🧩 **13-Engine Modular Platform** | Composable Langflow-style architecture featuring discrete Core, Graph, Agent, Model, Tool, Skill, Memory, Task, Execution, Governance, Verification, Event, and Plugin engines. |
+| 🛡️ **Guarded FSM & Graph Engine** | Deterministic state execution supporting DAG and cyclic workflows, formal guard predicates, and visual canvas compatibility. |
 | 🔍 **Zero-Token Codebase Intelligence** | Ingests full-repo dependency graphs, call trees, and API skeletons via Graft integration without consuming a single LLM token. |
 | 🩹 **Self-Healing AST Guard** | Intercepts all file writes in-memory, auto-repairs missing imports, unclosed colons, and syntax defects before disk commit. |
-| 💰 **Dynamic Token Governor** | Partitions tokens into distinct phases (*Investigation*, *Implementation*, *Testing*, *Reserve*) with smart circuit breakers against runaway spend. |
+| 💰 **Dynamic Token & Adaptive Governor** | Multi-dimensional governance combining deterministic token ceilings, stagnation velocity detection, chaos mitigation, and circuit breakers. |
 | 🔄 **Multi-Tier Cloud Resilience** | Seamless real-time failover across OpenRouter, Google Gemini, OpenAI, Anthropic, and Groq with zero session disruption. |
-| 🏗️ **Hexagonal Architecture** | Clean separation of Driving ports (CLI, FSM, Lifecycle) and Driven ports (Runtime, VCS, Tools, Storage) ensuring modularity and extensibility. |
-| 📊 **Autonomous Benchmark Suite** | Built-in empirical verification engine measuring TCR (Task Completion Rate), FCR (False Completion Rate), and Progress Efficiency Ratio. |
+| 🏗️ **Universal Component Contracts** | Standardized `IComponent` interface with typed input/output ports for visual drag-and-drop workflow assembly. |
+| 📊 **Autonomous Verification Engine** | Independent evidence-based completion gates measuring test execution, security scans, and code diff integrity. |
 
 ---
 

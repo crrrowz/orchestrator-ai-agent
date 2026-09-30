@@ -116,6 +116,8 @@ class AgentExecutionOutcome:
     mutated_files: Tuple[str, ...]
     final_thought: Optional[str]
     handoff_payload: Optional[Any] = None
+    progress_metrics: Optional[Any] = None
+    governance_decision: Optional[Any] = None
 
 
 # =====================================================================
@@ -543,12 +545,14 @@ class OpenHandsTelemetryBridge:
         diagnostics_db: Optional[Any] = None,
         telemetry_recorder: Optional[Any] = None,
         role_name: str = "agent",
+        progress_monitor: Optional[Any] = None,
     ) -> None:
         self.store = log_store
         self.visualizer = visualizer
         self.db = diagnostics_db
         self.recorder = telemetry_recorder
         self.role_name = role_name
+        self.progress_monitor = progress_monitor
         self.mutated_files: Set[str] = set()
         self.step_count: int = 0
         self.prompt_tokens: int = 0
@@ -624,6 +628,19 @@ class OpenHandsTelemetryBridge:
             if op in ("write", "patch", "edit", "delete", "append") and target_path:
                 self.mutated_files.add(target_path)
 
+            if self.progress_monitor and hasattr(self.progress_monitor, "record_step"):
+                try:
+                    cmd_val = str(args.get("command")) if args.get("command") else None
+                    self.progress_monitor.record_step(
+                        action_type=op or tool_name,
+                        tool_name=tool_name,
+                        target_path=target_path or None,
+                        command=cmd_val,
+                        is_error=False,
+                    )
+                except Exception:
+                    pass
+
             if self.store:
                 summary = (
                     f"{tool_name} ({op} {target_path})"
@@ -673,6 +690,12 @@ class OpenHandsTelemetryBridge:
                 if is_err
                 else f"Observation: {tool_name} success"
             )
+
+            if is_err and self.progress_monitor and hasattr(self.progress_monitor, "mark_last_step_error"):
+                try:
+                    self.progress_monitor.mark_last_step_error(error_msg or stderr or stdout)
+                except Exception:
+                    pass
 
             if self.store:
                 self.store.add_step(
@@ -1264,6 +1287,13 @@ class SDKSessionRunner:
             execution_exception=execution_exception,
         )
 
+        if telemetry_bridge and telemetry_bridge.progress_monitor and hasattr(telemetry_bridge.progress_monitor, "get_metrics"):
+            try:
+                metrics = telemetry_bridge.progress_monitor.get_metrics()
+                outcome = dataclasses.replace(outcome, progress_metrics=metrics)
+            except Exception:
+                pass
+
         # 6. Ephemeral Teardown
         try:
             conv.close()
@@ -1310,6 +1340,7 @@ class OpenHandsRuntimeBridge:
         prompt_view: Union[PromptView, str],
         turn_envelope: Union[TurnEnvelope, Dict[str, Any]],
         sandbox_manager: Any,
+        progress_monitor: Optional[Any] = None,
     ) -> AgentExecutionOutcome:
         """Execute a single bounded turn for the specified persona."""
         # 1. Build Agent via SDKAgentFactory
@@ -1342,6 +1373,7 @@ class OpenHandsRuntimeBridge:
             diagnostics_db=self.diagnostics_db,
             telemetry_recorder=self.telemetry_recorder,
             role_name=role_name,
+            progress_monitor=progress_monitor,
         )
 
         # 3. Run Ephemeral Bounded Session
