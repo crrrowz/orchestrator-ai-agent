@@ -239,7 +239,8 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             self._tokens_str = tokens_str
             self._update_live()
 
-            if not self._is_tty:
+            # Always print progressive CLI line for non-TTY or when Rich live rendering isn't active
+            if not self._is_tty or self._live is None:
                 self._safe_print(
                     f"[dim]{t_now}[/dim] [bold magenta]▶ [{role}][/bold magenta] "
                     f"[blue]({model})[/blue] "
@@ -291,7 +292,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
             self._last_status = f"{icon} [dim]{obs_preview}[/dim]"
             self._update_live()
 
-            if not self._is_tty:
+            if not self._is_tty or self._live is None:
                 if self.verbosity != "quiet" or is_err:
                     if self.verbosity == "debug":
                         self._safe_print(f"       {icon} [dim]{text_res}[/dim]")

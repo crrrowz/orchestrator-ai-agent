@@ -46,32 +46,34 @@ docker build --target development -t oragai:dev . ; docker image prune -f
 ### 2. Check System Configuration & API Keys
 Verify your environment and model access offline:
 ```powershell
-docker run --rm --env-file .env oragai:dev python -m orchestrator.main --check-config
+docker run --rm --env-file .env oragai:dev --check-config
 ```
 
 ### 3. List Discovered Agent Skills
 Inspect all active skills categorized by persona role:
 ```powershell
-docker run --rm oragai:dev python -m orchestrator.main --list-skills
+docker run --rm oragai:dev --list-skills
 ```
 
 ### 4. Run Codebase Audit (Zero Code Mutation)
 Perform deep inspection and detect architectural drift:
 ```powershell
-docker run --rm oragai:dev python -m orchestrator.main --mode audit
+docker run --rm oragai:dev --mode audit
 ```
 
 ### 5. Execute an Autonomous Engineering Task
 Run the 4-agent pipeline (Architect, Developer, Tester, Reviewer):
 ```powershell
-docker run --rm -it --env-file .env oragai:dev python -m orchestrator.main "Build a REST endpoint for health checks" --mode dev-test
+docker run --rm -it --env-file .env oragai:dev "Build a REST endpoint for health checks" --mode dev-test
 ```
 
 ### 6. Pre-Execution Cost & Token Estimation
 Estimate token consumption and budget before running LLMs:
 ```powershell
-docker run --rm oragai:dev python -m orchestrator.main "Refactor authentication flow" --estimate
+docker run --rm oragai:dev "Refactor authentication flow" --estimate
 ```
+
+> 💡 **Note on `ENTRYPOINT`:** The Docker image already defines `ENTRYPOINT ["python", "-m", "orchestrator.main"]`. Do **not** pass `python -m orchestrator.main` after `oragai:dev`, as Docker will treat them as extra application arguments. Pass your flags and tasks directly. If you want to run arbitrary python commands or pytest, override the entrypoint with `--entrypoint` (e.g., `--entrypoint python` or `--entrypoint pytest`).
 
 ### 7. Run Full Automated Test Suite (~458 Test Functions)
 Run pytest inside the hermetic Linux container:

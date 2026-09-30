@@ -10,6 +10,25 @@ import re
 from pathlib import Path
 
 
+HTML_ENTITIES = {
+    "&mdash;": "—",
+    "&ndash;": "–",
+    "&bull;": "•",
+    "&nbsp;": " ",
+    "&hellip;": "…",
+    "&trade;": "™",
+    "&copy;": "©",
+    "&reg;": "®",
+}
+
+
+def sanitize_xml_entities(content: str) -> str:
+    """Replace non-standard XML entities with valid UTF-8 characters."""
+    for entity, char in HTML_ENTITIES.items():
+        content = content.replace(entity, char)
+    return content
+
+
 def extract_styles(html_content: str) -> str:
     """Extract CSS rules from <style> tags within HTML."""
     style_matches = re.findall(r"<style[^>]*>(.*?)</style>", html_content, re.DOTALL | re.IGNORECASE)
@@ -44,6 +63,7 @@ def extract_styles(html_content: str) -> str:
 def convert_html_to_svg(html_path: Path, output_path: Path) -> bool:
     """Read HTML, extract style and SVG, and save as self-contained animated SVG."""
     content = html_path.read_text(encoding="utf-8")
+    content = sanitize_xml_entities(content)
 
     # Extract CSS styles
     css_styles = extract_styles(content)
@@ -80,6 +100,9 @@ def convert_html_to_svg(html_path: Path, output_path: Path) -> bool:
 {svg_body}
 {svg_close_tag}
 """
+
+    # Final entity sanitize pass
+    standalone_svg = sanitize_xml_entities(standalone_svg)
 
     output_path.write_text(standalone_svg, encoding="utf-8")
     print(f"[+] Successfully converted: {html_path.name} -> {output_path.name}")

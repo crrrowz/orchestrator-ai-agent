@@ -340,6 +340,21 @@ class GuardedFSMEngine:
 
     def _execute_state_handler(self, state: FSMState) -> PipelineEvent:
         """Dispatch execution to persona/task handler for the current state."""
+        state_labels = {
+            FSMState.INIT: ("System", "Initializing workspace and environment"),
+            FSMState.PREFLIGHT: ("System", "Running zero-token syntax & preflight checks"),
+            FSMState.PLANNING: ("Architect", "Generating architecture breakdown & PLAN.md"),
+            FSMState.IMPLEMENTATION: ("Developer", "Writing code & unit tests"),
+            FSMState.VERIFICATION: ("Tester", "Running pytest test suite & invariant validation"),
+            FSMState.RESOLUTION: ("System", "Evaluating test outcomes and triaging remediation"),
+            FSMState.REVIEW: ("Reviewer", "Security audit, quality gate & final review"),
+            FSMState.COMPLETED: ("System", "Task completed successfully"),
+            FSMState.FAILED: ("System", "Task execution terminated with failure"),
+        }
+        if state in state_labels:
+            role, action = state_labels[state]
+            ConsoleOutput.agent_step(role, action)
+
         if state == FSMState.INIT:
             return self._handle_init()
         elif state == FSMState.PREFLIGHT:

@@ -78,7 +78,7 @@ class OrchestratorDispatcher:
             if log_store is None:
                 try:
                     from orchestrator.ui.session_store import SessionLogStore
-                    log_store = SessionLogStore(run_id=f"fsm_{int(time.time())}")
+                    log_store = SessionLogStore(workspace_path=ws)
                 except Exception:
                     log_store = None
             if visualizer is None and log_store is not None:

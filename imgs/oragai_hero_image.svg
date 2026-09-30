@@ -254,7 +254,7 @@
     <g transform="translate(380, 180)">
         <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#a855f7" stroke-width="1.5" filter="url(#card-shadow)" />
         <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">ARCHITECT</text>
-        <text x="0" y="14" class="text-violet font-mono" font-size="9" text-anchor="middle">Plan &bull; DAG</text>
+        <text x="0" y="14" class="text-violet font-mono" font-size="9" text-anchor="middle">Plan • DAG</text>
     </g>
 
     <!-- 2. DEVELOPER (Top Right: 820, 180) -->
@@ -275,7 +275,7 @@
     <g transform="translate(760, 580)">
         <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5" filter="url(#card-shadow)" />
         <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">REVIEWER</text>
-        <text x="0" y="14" class="text-emerald font-mono" font-size="9" text-anchor="middle">Security &bull; Quality</text>
+        <text x="0" y="14" class="text-emerald font-mono" font-size="9" text-anchor="middle">Security • Quality</text>
     </g>
 
     <!-- 5. AUDITOR (Bottom Left: 440, 580) -->

@@ -183,10 +183,10 @@ ORAGAI provides production-ready Docker containers with volume isolation:
 docker build --target development -t oragai:dev .
 
 # Run test suite inside isolated Linux container
-docker run --rm oragai:dev pytest tests/ -v
+docker run --rm --entrypoint pytest oragai:dev tests/ -v
 
-# Run an orchestration task inside Docker
-docker run --rm -it --env-file .env oragai:dev python -m orchestrator.main "Build rate limiter" --mode dev-test
+# Run an orchestration task inside Docker (ENTRYPOINT is already python -m orchestrator.main)
+docker run --rm -it --env-file .env oragai:dev "Build rate limiter" --mode dev-test
 ```
 
 > 📖 For full Docker Compose and remote VM SSH workflows, see the **[Docker Architecture & Operations Guide](docs/guides/DOCKER_GUIDE.md)**.

@@ -135,23 +135,23 @@
         <g fill="none" stroke-width="0.75" opacity="0.25">
             <!-- L1 Governance Orbit -->
             <ellipse cx="900" cy="480" rx="160" ry="100" stroke="#fbbf24" stroke-dasharray="3 5" />
-            <text x="900" y="365" class="text-layer font-mono" text-anchor="middle" fill="#fbbf24" opacity="0.7">LAYER 1 &mdash; GOVERNANCE</text>
+            <text x="900" y="365" class="text-layer font-mono" text-anchor="middle" fill="#fbbf24" opacity="0.7">LAYER 1 — GOVERNANCE</text>
             
             <!-- L2 Intelligence Orbit -->
             <ellipse cx="900" cy="480" rx="280" ry="175" stroke="#c084fc" stroke-dasharray="3 7" />
-            <text x="900" y="292" class="text-layer font-mono" text-anchor="middle" fill="#c084fc" opacity="0.7">LAYER 2 &mdash; INTELLIGENCE</text>
+            <text x="900" y="292" class="text-layer font-mono" text-anchor="middle" fill="#c084fc" opacity="0.7">LAYER 2 — INTELLIGENCE</text>
             
             <!-- L3 Agents Orbit -->
             <ellipse cx="900" cy="480" rx="400" ry="250" stroke="#38bdf8" stroke-dasharray="4 8" />
-            <text x="900" y="218" class="text-layer font-mono" text-anchor="middle" fill="#38bdf8" opacity="0.7">LAYER 3 &mdash; SPECIALIZED AGENTS</text>
+            <text x="900" y="218" class="text-layer font-mono" text-anchor="middle" fill="#38bdf8" opacity="0.7">LAYER 3 — SPECIALIZED AGENTS</text>
             
             <!-- L4 Execution Orbit -->
             <ellipse cx="900" cy="480" rx="510" ry="320" stroke="#94a3b8" stroke-dasharray="2 8" />
-            <text x="900" y="148" class="text-layer font-mono" text-anchor="middle" fill="#94a3b8" opacity="0.7">LAYER 4 &mdash; EXECUTION SPINE</text>
+            <text x="900" y="148" class="text-layer font-mono" text-anchor="middle" fill="#94a3b8" opacity="0.7">LAYER 4 — EXECUTION SPINE</text>
 
             <!-- L5 Protection Orbit -->
             <ellipse cx="900" cy="480" rx="620" ry="390" stroke="#fbbf24" stroke-dasharray="3 10" />
-            <text x="900" y="78" class="text-layer font-mono" text-anchor="middle" fill="#fbbf24" opacity="0.7">LAYER 5 &mdash; PROTECTION &amp; AST</text>
+            <text x="900" y="78" class="text-layer font-mono" text-anchor="middle" fill="#fbbf24" opacity="0.7">LAYER 5 — PROTECTION &amp; AST</text>
 
             <!-- L6 Resilience Orbit -->
             <ellipse cx="900" cy="480" rx="730" ry="460" stroke="#f87171" stroke-dasharray="2 12" />

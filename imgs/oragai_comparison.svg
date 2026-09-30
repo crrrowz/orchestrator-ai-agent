@@ -152,7 +152,7 @@
 
         <!-- 9. Re-tests / retries -->
         <rect x="270" y="810" width="260" height="42" rx="8" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5" />
-        <text x="400" y="836" class="node-text-dark font-sans" text-anchor="middle" fill="#9f1239">Test fails &mdash; Unbounded retry loop</text>
+        <text x="400" y="836" class="node-text-dark font-sans" text-anchor="middle" fill="#9f1239">Test fails — Unbounded retry loop</text>
 
         <!-- Flow Arrows (Dashed) -->
         <path d="M 400 172 L 400 205" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-broken)" />
@@ -195,7 +195,7 @@
         <text x="715" y="794" class="tag-text-left font-mono" text-anchor="middle">Unbounded Retry</text>
 
         <!-- Bottom Left Caption -->
-        <text x="400" y="930" class="bottom-stmt font-sans" text-anchor="middle">Same repository &bull; Repeated reasoning &bull; Unbounded costs</text>
+        <text x="400" y="930" class="bottom-stmt font-sans" text-anchor="middle">Same repository • Repeated reasoning • Unbounded costs</text>
     </g>
 
     <!-- ========================================================= -->
@@ -317,7 +317,7 @@
 
         <!-- SECTION 4: AST GUARD (Protection Layer) -->
         <rect x="835" y="700" width="730" height="114" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" />
-        <text x="855" y="724" class="layer-title font-mono" text-anchor="start" fill="#0f172a">AST GUARD &bull; VALIDATION &amp; REPAIR PIPELINE</text>
+        <text x="855" y="724" class="layer-title font-mono" text-anchor="start" fill="#0f172a">AST GUARD • VALIDATION &amp; REPAIR PIPELINE</text>
 
         <g transform="translate(935, 740)">
             <!-- Validate -->
@@ -338,7 +338,7 @@
         </g>
 
         <!-- Bottom Right Caption -->
-        <text x="1200" y="930" class="bottom-stmt font-sans" text-anchor="middle">One control plane &bull; Specialized agents &bull; Shared execution context</text>
+        <text x="1200" y="930" class="bottom-stmt font-sans" text-anchor="middle">One control plane • Specialized agents • Shared execution context</text>
     </g>
 
 

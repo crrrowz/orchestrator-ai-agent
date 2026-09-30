@@ -162,7 +162,7 @@
         <g transform="translate(0, 0)">
             <rect width="280" height="115" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 115 L 8 115 Q 0 115 0 107 Z" fill="#38bdf8" />
-            <text x="24" y="32" class="text-blue font-mono" font-size="15" font-weight="700">01 &mdash; INGEST</text>
+            <text x="24" y="32" class="text-blue font-mono" font-size="15" font-weight="700">01 — INGEST</text>
             <circle cx="255" cy="27" r="4" fill="#38bdf8" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Task &amp; schema ingestion</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• Configuration &amp; repo boundaries</text>
@@ -174,7 +174,7 @@
         <g transform="translate(0, 145)">
             <rect width="280" height="135" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 135 L 8 135 Q 0 135 0 127 Z" fill="#a855f7" />
-            <text x="24" y="32" class="text-violet font-mono" font-size="15" font-weight="700">02 &mdash; UNDERSTAND</text>
+            <text x="24" y="32" class="text-violet font-mono" font-size="15" font-weight="700">02 — UNDERSTAND</text>
             <circle cx="255" cy="27" r="4" fill="#a855f7" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Zero-token codebase intelligence</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• AST call tree &amp; dependency DAG</text>
@@ -187,7 +187,7 @@
         <g transform="translate(0, 310)">
             <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 125 L 8 125 Q 0 125 0 117 Z" fill="#818cf8" />
-            <text x="24" y="32" class="text-blue font-mono" font-size="15" font-weight="700">03 &mdash; PLAN</text>
+            <text x="24" y="32" class="text-blue font-mono" font-size="15" font-weight="700">03 — PLAN</text>
             <circle cx="255" cy="27" r="4" fill="#818cf8" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Architect agent synthesis</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• Deterministic PLAN.md DAG</text>
@@ -199,7 +199,7 @@
         <g transform="translate(0, 465)">
             <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 125 L 8 125 Q 0 125 0 117 Z" fill="#fbbf24" />
-            <text x="24" y="32" class="text-amber font-mono" font-size="15" font-weight="700">04 &mdash; GOVERN</text>
+            <text x="24" y="32" class="text-amber font-mono" font-size="15" font-weight="700">04 — GOVERN</text>
             <circle cx="255" cy="27" r="4" fill="#fbbf24" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Guarded FSM state machine</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• Dynamic Token Governor</text>
@@ -215,7 +215,7 @@
         <g transform="translate(0, 0)">
             <rect width="280" height="115" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 107 Q 280 115 272 115 L 272 115 Z" fill="#14b8a6" />
-            <text x="24" y="32" class="text-emerald font-mono" font-size="15" font-weight="700">05 &mdash; DISPATCH</text>
+            <text x="24" y="32" class="text-emerald font-mono" font-size="15" font-weight="700">05 — DISPATCH</text>
             <circle cx="255" cy="27" r="4" fill="#14b8a6" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Specialized persona allocation</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• Developer &amp; Tester handoff</text>
@@ -227,7 +227,7 @@
         <g transform="translate(0, 145)">
             <rect width="280" height="135" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 127 Q 280 135 272 135 L 272 135 Z" fill="#fbbf24" />
-            <text x="24" y="32" class="text-amber font-mono" font-size="15" font-weight="700">06 &mdash; VALIDATE</text>
+            <text x="24" y="32" class="text-amber font-mono" font-size="15" font-weight="700">06 — VALIDATE</text>
             <circle cx="255" cy="27" r="4" fill="#fbbf24" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Pytest isolated test execution</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• In-memory AST Guard repair</text>
@@ -240,7 +240,7 @@
         <g transform="translate(0, 310)">
             <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 117 Q 280 125 272 125 L 272 125 Z" fill="#ef4444" />
-            <text x="24" y="32" class="text-red font-mono" font-size="15" font-weight="700">07 &mdash; RECOVER</text>
+            <text x="24" y="32" class="text-red font-mono" font-size="15" font-weight="700">07 — RECOVER</text>
             <circle cx="255" cy="27" r="4" fill="#ef4444" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• SRE Mesh fault detection</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• Backoff retry &amp; AST auto-heal</text>
@@ -252,7 +252,7 @@
         <g transform="translate(0, 465)">
             <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
             <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 117 Q 280 125 272 125 L 272 125 Z" fill="#10b981" />
-            <text x="24" y="32" class="text-emerald font-mono" font-size="15" font-weight="700">08 &mdash; COMPLETE</text>
+            <text x="24" y="32" class="text-emerald font-mono" font-size="15" font-weight="700">08 — COMPLETE</text>
             <circle cx="255" cy="27" r="4" fill="#10b981" />
             <text x="24" y="58" class="text-gray-light" font-size="12">• Forensic Auditor sign-off</text>
             <text x="24" y="78" class="text-gray-light" font-size="12">• Verified test &amp; diff receipts</text>
@@ -401,7 +401,7 @@
             <!-- Item 2: Multi-Agent Pipeline -->
             <rect x="247" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-blue" />
             <text x="359" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Role-Specialized DAG</text>
-            <text x="359" y="38" class="text-gray" font-size="10" text-anchor="middle">Architect &bull; Dev &bull; QA</text>
+            <text x="359" y="38" class="text-gray" font-size="10" text-anchor="middle">Architect • Dev • QA</text>
 
             <path d="M 472 24 L 493 24" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
 
@@ -429,7 +429,7 @@
             <!-- Item 6: Cloud Resilience -->
             <rect x="1235" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-red" />
             <text x="1347" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Resilience Mesh</text>
-            <text x="1347" y="38" class="text-gray" font-size="10" text-anchor="middle">Fault Tolerance &bull; Fallbacks</text>
+            <text x="1347" y="38" class="text-gray" font-size="10" text-anchor="middle">Fault Tolerance • Fallbacks</text>
         </g>
     </g>
 

@@ -171,7 +171,7 @@
     <!-- ========================================== -->
     <g transform="translate(800, 36)" text-anchor="middle">
         <text y="24" class="text-light-title font-sans">MANUAL AGENT CALL vs ORAGAI EXECUTION</text>
-        <text y="54" class="text-light-sub font-sans">Same software task &mdash; fundamentally different execution architecture</text>
+        <text y="54" class="text-light-sub font-sans">Same software task — fundamentally different execution architecture</text>
     </g>
 
     <!-- ========================================== -->
@@ -227,7 +227,7 @@
 
             <!-- 8. Failure Node -->
             <rect x="45" y="595" width="270" height="42" rx="8" fill="url(#node-fail)" stroke="#f43f5e" stroke-width="1.5" filter="url(#shadow-sm)" />
-            <text x="180" y="621" class="text-light-node font-sans" text-anchor="middle" fill="#9f1239">Test Failed &mdash; Unhandled State</text>
+            <text x="180" y="621" class="text-light-node font-sans" text-anchor="middle" fill="#9f1239">Test Failed — Unhandled State</text>
 
             <!-- 9. Context lost node -->
             <rect x="410" y="595" width="300" height="42" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="6 4" />
@@ -322,8 +322,8 @@
             <!-- 2. AST GUARD VALIDATION & REPAIR -->
             <g transform="translate(365, 126)">
                 <rect x="0" y="0" width="350" height="64" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow-blue)" />
-                <text x="20" y="26" class="text-dark-node font-sans" font-size="13" font-weight="700" fill="#93c5fd">AST GUARD &bull; SYNTAX AUTO-REPAIR</text>
-                <text x="20" y="48" class="text-dark-node-sub font-mono" font-size="11" fill="#cbd5e1">In-memory syntax healing pre-commit &bull; Zero crash</text>
+                <text x="20" y="26" class="text-dark-node font-sans" font-size="13" font-weight="700" fill="#93c5fd">AST GUARD • SYNTAX AUTO-REPAIR</text>
+                <text x="20" y="48" class="text-dark-node-sub font-mono" font-size="11" fill="#cbd5e1">In-memory syntax healing pre-commit • Zero crash</text>
             </g>
 
             <!-- 3. DETERMINISTIC COMPLETION GATES -->
@@ -374,7 +374,7 @@
             <path d="M 205 395 L 243 395" fill="none" stroke="#818cf8" stroke-width="2" marker-end="url(#arrow-violet)" />
             <rect x="250" y="373" width="465" height="46" rx="8" fill="url(#node-agent)" stroke="#818cf8" stroke-width="1.5" />
             <text x="270" y="397" class="text-dark-node font-sans" font-weight="700">Developer</text>
-            <text x="270" y="412" class="text-dark-node-sub font-mono">Clean code implementation &bull; Protected by AST Guard</text>
+            <text x="270" y="412" class="text-dark-node-sub font-mono">Clean code implementation • Protected by AST Guard</text>
 
             <!-- 7. Tester Agent -->
             <path d="M 205 470 L 243 470" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow-amber)" />

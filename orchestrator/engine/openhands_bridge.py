@@ -50,6 +50,7 @@ from openhands.sdk.tool import (
     register_tool,
 )
 from openhands.sdk.tool.schema import TextContent
+from orchestrator.rendering.output import ConsoleOutput
 
 if TYPE_CHECKING:
     from orchestrator.config import OrchestratorConfig
@@ -642,8 +643,13 @@ class OpenHandsTelemetryBridge:
             if self.visualizer and hasattr(self.visualizer, "on_event"):
                 try:
                     self.visualizer.on_event(event)
-                except Exception:
-                    pass
+                except Exception as ex:
+                    logger.debug("Visualizer on_event error: %s", ex)
+            elif masked_thought:
+                preview = masked_thought.replace("\n", " ").strip()
+                if len(preview) > 100:
+                    preview = preview[:97] + "..."
+                ConsoleOutput.agent_step(self.role_name, f"Thinking: {preview}")
 
         elif event_name == "ObservationEvent":
             obs = getattr(event, "observation", None)
@@ -699,8 +705,10 @@ class OpenHandsTelemetryBridge:
             if self.visualizer and hasattr(self.visualizer, "on_event"):
                 try:
                     self.visualizer.on_event(event)
-                except Exception:
-                    pass
+                except Exception as ex:
+                    logger.debug("Visualizer on_event error: %s", ex)
+            else:
+                ConsoleOutput.agent_step(self.role_name, f"Observation: {tool_name} (error={is_err})")
 
         elif event_name in ("AgentErrorEvent", "ConversationErrorEvent"):
             code = str(getattr(event, "code", "Error"))
