@@ -83,31 +83,6 @@ docker run --rm --entrypoint pytest oragai:dev tests/ -v
 
 ---
 
-## ⚡ Direct Universal Launcher Workflow (`oragai`)
-
-Instead of writing long commands, ORAGAI provides cross-platform universal launcher scripts:
-- **Windows PowerShell**: `.\oragai.ps1 <command>` or `.\oragai <command>`
-- **Windows CMD**: `oragai.cmd <command>` or `oragai <command>`
-- **Linux / macOS**: `./oragai <command>`
-
-All scripts automatically implement a 2-tier architecture:
-1. **Tier 1 (Native Python - Recommended)**: Checks for local `.venv` or system Python with orchestrator installed and runs directly with instant execution, native file writing, and zero container overhead.
-2. **Tier 2 (Universal Docker Fallback)**: If no local Python environment exists, automatically runs within Docker, cleanly mounting `./workspace` via relative paths and injecting `.env` settings.
-
-### Examples:
-```bash
-# Verify connectivity
-.\oragai --check-config
-
-# Run full multi-agent pipeline
-.\oragai "Build microservice" --mode full
-
-# Run auto-fixing audit loop
-.\oragai --mode audit-fix
-```
-
----
-
 ## 📦 Docker Compose Workflow (Optional)
 
 If you prefer `docker compose`:
