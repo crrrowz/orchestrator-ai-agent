@@ -8,6 +8,16 @@ from orchestrator.adapters.generic_adapter import GenericAdapter
 from orchestrator.adapters.node_adapter import NodeAdapter
 from orchestrator.adapters.python_adapter import PythonAdapter
 from orchestrator.adapters.registry import detect_adapter, get_available_adapters
+from orchestrator.adapters.polyglot import (
+    CDriver,
+    GoDriver,
+    LanguageDetector,
+    NodeDriver,
+    PolyglotDriverRegistry,
+    PythonDriver,
+    RustDriver,
+    SelfAdaptingPolyglotDriver,
+)
 from orchestrator.adapters.runtime import OpenHandsSDKAdapter, ToolDefinition
 from orchestrator.adapters.sandbox import (
     ASTVirtualizer,
@@ -36,4 +46,12 @@ __all__ = [
     "CheckpointRepository",
     "GitOpsAdapter",
     "RollbackManager",
+    "PolyglotDriverRegistry",
+    "LanguageDetector",
+    "PythonDriver",
+    "NodeDriver",
+    "CDriver",
+    "RustDriver",
+    "GoDriver",
+    "SelfAdaptingPolyglotDriver",
 ]

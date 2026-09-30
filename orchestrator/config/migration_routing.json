@@ -8,6 +8,7 @@
   "use_deep_inspection_engine": true,
   "use_stagnation_recovery_engine": true,
   "use_benchmark_engine": true,
+  "use_polyglot_mesh": true,
   "strangler_active": true,
   "migration_phase": "PHASE_4_CANARY",
   "canary_percentage": 100,
