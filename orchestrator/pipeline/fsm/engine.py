@@ -641,27 +641,51 @@ class GuardedFSMEngine:
 
         # If no task_truth_graph is attached (e.g. dev-test mode), derive decision from tests & syntax
         if not self.context.task_truth_graph:
+            has_more_milestones = (
+                bool(self.context.milestone_dag)
+                and self.context.active_milestone_index + 1 < len(self.context.milestone_dag)
+            )
+
             if not preflight_ok:
                 decision = CompletionDecision(
                     status=CompletionStatus.FAILED,
                     violated_invariants=[preflight_msg],
                     blocking_reasons=[f"Syntax Error: {preflight_msg}"],
                 )
-            elif test_res and test_res.passed:
-                decision = CompletionDecision(
-                    status=CompletionStatus.COMPLETE,
-                    satisfied_requirements=["Task Execution"],
-                )
             elif test_res and not test_res.passed:
+                err_detail = ""
+                if hasattr(test_res, "summary") and isinstance(test_res.summary, str) and test_res.summary:
+                    err_detail = test_res.summary
+                elif hasattr(test_res, "failure_details") and isinstance(test_res.failure_details, str) and test_res.failure_details:
+                    err_detail = test_res.failure_details
+                elif hasattr(test_res, "stderr") and isinstance(test_res.stderr, str) and test_res.stderr:
+                    err_detail = test_res.stderr
+                elif hasattr(test_res, "raw_stderr") and isinstance(test_res.raw_stderr, str) and test_res.raw_stderr:
+                    err_detail = test_res.raw_stderr
+                else:
+                    err_detail = "Tests failed"
+
                 decision = CompletionDecision(
                     status=CompletionStatus.FAILED,
                     failed_criteria=["Pytest execution failed"],
-                    blocking_reasons=[test_res.stderr or "Tests failed"],
+                    blocking_reasons=[str(err_detail)],
+                )
+            elif has_more_milestones:
+                active_ms_label = self.context.active_milestone_id or str(self.context.active_milestone_index + 1)
+                decision = CompletionDecision(
+                    status=CompletionStatus.INCOMPLETE,
+                    satisfied_requirements=[f"Milestone {active_ms_label} verified clean"],
+                    blocking_reasons=[f"Milestone {active_ms_label} completed; subsequent milestones pending"],
+                )
+            elif test_res and test_res.passed:
+                decision = CompletionDecision(
+                    status=CompletionStatus.COMPLETE,
+                    satisfied_requirements=["Task Execution", "All Tests Passed"],
                 )
             else:
                 decision = CompletionDecision(
                     status=CompletionStatus.COMPLETE,
-                    satisfied_requirements=["Syntax clean"],
+                    satisfied_requirements=["Syntax clean", "All milestones completed"],
                 )
 
         self.context.last_verification_decision = decision

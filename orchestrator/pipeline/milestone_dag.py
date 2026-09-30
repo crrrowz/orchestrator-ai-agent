@@ -13,6 +13,7 @@ class SubtaskMilestone(BaseModel):
     content: str
     target_files: List[str] = Field(default_factory=list)
     dependencies: List[int] = Field(default_factory=list)
+    is_completed: bool = False
 
 
 class MilestoneParser:

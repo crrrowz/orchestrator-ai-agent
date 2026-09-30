@@ -76,7 +76,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
         enable_review=True,
         enable_git_commit=True,
         max_fix_iterations=5,
-        default_agent_turn_limit=10,
+        default_agent_turn_limit=30,
     ),
     PipelineMode.AUDIT: LifecycleProfile(
         mode=PipelineMode.AUDIT,

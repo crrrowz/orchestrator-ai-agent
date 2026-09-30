@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, List, Optional, Sequence
 
 from orchestrator.pipeline.fsm.events import EventType, PipelineEvent
-from orchestrator.pipeline.fsm.guards import FSMGuards
+from orchestrator.pipeline.fsm.guards import CompletionStatus, FSMGuards
 from orchestrator.pipeline.fsm.states import FSMState
 
 # FSMContext is referenced by forward-ref string in transition callables
@@ -218,6 +218,32 @@ class TransitionMatrix:
         # ==========================================
         # 5. VERIFICATION State Transitions
         # ==========================================
+        def guard_verif_to_next_milestone(ctx: "FSMContext", ev: PipelineEvent) -> bool:
+            decision = getattr(ctx, "last_verification_decision", None)
+            if decision is None or decision.status in (
+                CompletionStatus.FAILED,
+                CompletionStatus.BLOCKED,
+                CompletionStatus.AMBIGUOUS,
+            ):
+                return False
+            return (
+                bool(ctx.milestone_dag)
+                and ctx.active_milestone_index + 1 < len(ctx.milestone_dag)
+            )
+
+        def action_advance_milestone(ctx: "FSMContext", ev: PipelineEvent) -> None:
+            if ctx.milestone_dag and ctx.active_milestone_index < len(ctx.milestone_dag):
+                ctx.milestone_dag[ctx.active_milestone_index].is_completed = True
+            ctx.active_milestone_index += 1
+            if ctx.active_milestone_index < len(ctx.milestone_dag):
+                ctx.active_milestone_id = str(ctx.milestone_dag[ctx.active_milestone_index].index)
+            ctx.iteration_count = 0
+            ctx.stagnation_counter = 0
+
+        def action_mark_final_milestone_completed(ctx: "FSMContext", ev: PipelineEvent) -> None:
+            if ctx.milestone_dag and ctx.active_milestone_index < len(ctx.milestone_dag):
+                ctx.milestone_dag[ctx.active_milestone_index].is_completed = True
+
         def guard_verif_to_review(ctx: "FSMContext", ev: PipelineEvent) -> bool:
             return FSMGuards.guard_can_complete(ctx, ev) and getattr(ctx.profile, "enable_review", True)
 
@@ -228,8 +254,19 @@ class TransitionMatrix:
             TransitionRule(
                 source_state=FSMState.VERIFICATION,
                 trigger_event=EventType.VERIFICATION_COMPLETED,
+                target_state=FSMState.IMPLEMENTATION,
+                guard=guard_verif_to_next_milestone,
+                on_entry=action_advance_milestone,
+                description="Milestone verified: advance to next milestone implementation.",
+            )
+        )
+        matrix.add_rule(
+            TransitionRule(
+                source_state=FSMState.VERIFICATION,
+                trigger_event=EventType.VERIFICATION_COMPLETED,
                 target_state=FSMState.REVIEW,
                 guard=guard_verif_to_review,
+                on_entry=action_mark_final_milestone_completed,
                 description="Verification passed: proceed to independent reviewer assessment.",
             )
         )
@@ -239,6 +276,7 @@ class TransitionMatrix:
                 trigger_event=EventType.VERIFICATION_COMPLETED,
                 target_state=FSMState.COMPLETED,
                 guard=guard_verif_to_completed,
+                on_entry=action_mark_final_milestone_completed,
                 description="Verification passed (review disabled): mark task completed.",
             )
         )

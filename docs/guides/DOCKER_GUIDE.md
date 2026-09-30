@@ -28,7 +28,7 @@
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │                      MODE B: IMMUTABLE IMAGE (FAST REBUILDS)                            │
 │  - Source code is baked directly into the Docker image layer.                           │
-│  - Runs uniformly on remote servers or VMs over SSH context (`debian-vm`).              │
+│  - Runs uniformly on local Docker engines or container hosts.                           │
 │  - Thanks to `uv` package caching, rebuilding takes only ~1 to 2 seconds.               │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -83,17 +83,16 @@ docker run --rm --entrypoint pytest oragai:dev tests/ -v
 
 ---
 
-## ⚡ Direct Launcher Workflow (`oragai`)
+## ⚡ Direct Universal Launcher Workflow (`oragai`)
 
-Instead of writing long `docker run` commands, ORAGAI provides cross-platform lightweight wrapper scripts:
+Instead of writing long commands, ORAGAI provides cross-platform universal launcher scripts:
 - **Windows PowerShell**: `.\oragai.ps1 <command>` or `.\oragai <command>`
 - **Windows CMD**: `oragai.cmd <command>` or `oragai <command>`
 - **Linux / macOS**: `./oragai <command>`
 
-All scripts automatically:
-1. Mount the local `./workspace` directory into `/workspace/orchestrator-ai-agent/workspace` inside the container.
-2. Load secrets and environment settings from `.env`.
-3. Configure interactive TTY sessions for live progress rendering.
+All scripts automatically implement a 2-tier architecture:
+1. **Tier 1 (Native Python - Recommended)**: Checks for local `.venv` or system Python with orchestrator installed and runs directly with instant execution, native file writing, and zero container overhead.
+2. **Tier 2 (Universal Docker Fallback)**: If no local Python environment exists, automatically runs within Docker, cleanly mounting `./workspace` via relative paths and injecting `.env` settings.
 
 ### Examples:
 ```bash

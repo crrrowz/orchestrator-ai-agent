@@ -356,6 +356,8 @@ class FSMGuards:
         context: "FSMContext", event: PipelineEvent
     ) -> bool:
         """Verify that all milestone criteria pass and code is syntactically sound."""
+        if context.milestone_dag and context.active_milestone_index + 1 < len(context.milestone_dag):
+            return False
         if context.last_verification_decision is not None:
             return context.last_verification_decision.is_complete
         return TaskTruthSemanticQueries.can_enter_review(
@@ -367,6 +369,8 @@ class FSMGuards:
         context: "FSMContext", event: PipelineEvent
     ) -> bool:
         """Verify that CompletionGate returned COMPLETE."""
+        if context.milestone_dag and context.active_milestone_index + 1 < len(context.milestone_dag):
+            return False
         if context.last_verification_decision is not None:
             return context.last_verification_decision.is_complete
         return TaskTruthSemanticQueries.can_complete(

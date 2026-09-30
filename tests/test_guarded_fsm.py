@@ -839,3 +839,143 @@ def test_controller_abort_signal(tmp_path: Path):
     result = engine.run("Aborted task")
     assert result["success"] is False
     assert result["status"] == "ABORTED"
+
+
+def test_fsm_engine_multi_milestone_progression_loop(tmp_path: Path):
+    """Verify sequential execution across multiple milestones in milestone_dag."""
+    src_file = tmp_path / "app.py"
+    src_file.write_text("x = 1\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+
+    # 3 Milestones
+    engine.context.milestone_dag = [
+        SubtaskMilestone(index=1, title="Milestone 1: Interface", content="Define interface"),
+        SubtaskMilestone(index=2, title="Milestone 2: Implementation", content="Implement logic"),
+        SubtaskMilestone(index=3, title="Milestone 3: Tests", content="Add tests"),
+    ]
+
+    executed_milestone_indices = []
+
+    def mock_execute_turn(**kwargs):
+        executed_milestone_indices.append(engine.context.active_milestone_index)
+        return BridgeAgentOutcome(
+            role="developer",
+            exit_reason=AgentExitReason.NATURAL_COMPLETION,
+            completed_naturally=True,
+            iterations_executed=1,
+            max_iterations_allocated=5,
+            prompt_tokens=50,
+            completion_tokens=20,
+            total_tokens=70,
+            cost_usd=0.0,
+            error_message=None,
+            mutated_files=tuple(),
+            final_thought="Done milestone",
+        )
+
+    engine.runtime_bridge = MagicMock()
+    engine.runtime_bridge.execute_bounded_turn.side_effect = mock_execute_turn
+
+    # Mock tests passing
+    mock_adapter = MagicMock()
+    mock_adapter.run_tests.return_value = MagicMock(passed=True, summary="All passed")
+    engine.context.adapter = mock_adapter
+
+    result = engine.run("Build feature with 3 milestones")
+    assert result["success"] is True
+    assert result["status"] == "COMPLETED"
+    # Should execute milestones 0, 1, 2 in order
+    assert executed_milestone_indices == [0, 1, 2]
+    # All milestones should be marked completed
+    assert all(m.is_completed for m in engine.context.milestone_dag)
+
+
+def test_fsm_engine_milestone_failure_retries_same_milestone(tmp_path: Path):
+    """Verify milestone verification failure stays on same milestone until fixed."""
+    src_file = tmp_path / "app.py"
+    src_file.write_text("x = 1\n", encoding="utf-8")
+
+    cfg = OrchestratorConfig(workspace_path=tmp_path, max_iterations=5)
+    engine = GuardedFSMEngine(
+        config=cfg,
+        profile=get_profile(PipelineMode.DEV_TEST),
+        workspace_path=tmp_path,
+    )
+
+    engine.context.milestone_dag = [
+        SubtaskMilestone(index=1, title="Milestone 1", content="Step 1"),
+        SubtaskMilestone(index=2, title="Milestone 2", content="Step 2"),
+    ]
+
+    executed_indices = []
+
+    def mock_execute_turn(**kwargs):
+        executed_indices.append(engine.context.active_milestone_index)
+        return BridgeAgentOutcome(
+            role="developer",
+            exit_reason=AgentExitReason.NATURAL_COMPLETION,
+            completed_naturally=True,
+            iterations_executed=1,
+            max_iterations_allocated=5,
+            prompt_tokens=50,
+            completion_tokens=20,
+            total_tokens=70,
+            cost_usd=0.0,
+            error_message=None,
+            mutated_files=tuple(),
+            final_thought="Iter done",
+        )
+
+    engine.runtime_bridge = MagicMock()
+    engine.runtime_bridge.execute_bounded_turn.side_effect = mock_execute_turn
+
+    # Milestone 1: first fails, second passes. Milestone 2: passes
+    fail_res = MagicMock(passed=False, summary="Syntax/test failed")
+    pass_res = MagicMock(passed=True, summary="Passed")
+    mock_adapter = MagicMock()
+    mock_adapter.run_tests.side_effect = [fail_res, pass_res, pass_res]
+    engine.context.adapter = mock_adapter
+
+    result = engine.run("Build with retry")
+    assert result["success"] is True
+    assert result["status"] == "COMPLETED"
+    # Executed milestone 0 twice (due to retry), then milestone 1 once
+    assert executed_indices == [0, 0, 1]
+    assert all(m.is_completed for m in engine.context.milestone_dag)
+
+
+def test_fsm_guard_prevents_premature_completion(tmp_path: Path):
+    """Verify guard_can_complete rejects completion while milestones are pending."""
+    ctx = FSMContext(
+        workspace_path=tmp_path,
+        config=OrchestratorConfig(workspace_path=tmp_path),
+        profile=get_profile(PipelineMode.DEV_TEST),
+        milestone_dag=[
+            SubtaskMilestone(index=1, title="M1", content=""),
+            SubtaskMilestone(index=2, title="M2", content=""),
+        ],
+        active_milestone_index=0,
+        last_verification_decision=CompletionDecision(
+            status=CompletionStatus.COMPLETE,
+            satisfied_requirements=["Clean"],
+        ),
+    )
+    ev = PipelineEvent(
+        event_type=EventType.VERIFICATION_COMPLETED,
+        source_phase=FSMState.VERIFICATION,
+    )
+
+    assert FSMGuards.guard_can_complete(ctx, ev) is False
+    assert FSMGuards.guard_can_enter_review(ctx, ev) is False
+
+    # When on final milestone (index 1)
+    ctx.active_milestone_index = 1
+    assert FSMGuards.guard_can_complete(ctx, ev) is True
+    assert FSMGuards.guard_can_enter_review(ctx, ev) is True
+

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from orchestrator.analysis.pytest_parser import (
     PytestOutputParser,
@@ -47,6 +47,28 @@ class ProjectAdapter(ABC):
     def get_test_command(self, workspace: Path) -> str:
         """Return the shell command to execute the test suite."""
         return "python -m pytest -v"
+
+    def run_tests(
+        self, workspace: Path, timeout_seconds: int = 60
+    ) -> Optional[TestExecutionResult]:
+        """Execute test suite via detected language adapter and return structured TestExecutionResult."""
+        if not self.has_test_suite(workspace):
+            return None
+        test_cmd = self.get_test_command(workspace)
+        if not test_cmd:
+            return None
+        from orchestrator.tools import WorkspaceTerminalAction, execute_terminal_action
+
+        res = execute_terminal_action(
+            WorkspaceTerminalAction(command=test_cmd, timeout_seconds=timeout_seconds),
+            base_dir=workspace,
+        )
+        return self.classify_test_result(
+            stdout=res.stdout,
+            stderr=res.stderr,
+            exit_code=res.exit_code,
+            timed_out=getattr(res, "timed_out", False),
+        )
 
     @abstractmethod
     def parse_test_failures(self, stdout: str, stderr: str) -> str:

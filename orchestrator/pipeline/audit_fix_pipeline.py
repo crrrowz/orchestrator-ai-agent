@@ -418,16 +418,18 @@ class AuditFixPipeline(BasePipeline):
         if test_result.is_infra_or_env:
             # Auto-heal launcher command if it used bare pytest, uv trampoline, or launcher issues
             fallback_cmd = None
-            if "uv run pytest" in test_cmd:
-                fallback_cmd = test_cmd.replace(
-                    "uv run pytest", "uv run python -m pytest"
-                )
-            elif "uv run python -m pytest" in test_cmd:
+            if "uv run python -m pytest" in test_cmd:
                 fallback_cmd = test_cmd.replace(
                     "uv run python -m pytest", "python -m pytest"
                 )
+            elif "uv run pytest" in test_cmd:
+                fallback_cmd = test_cmd.replace(
+                    "uv run pytest", "uv run python -m pytest"
+                )
             elif "pytest" in test_cmd and "python -m pytest" not in test_cmd:
                 fallback_cmd = test_cmd.replace("pytest", "python -m pytest")
+            elif "python -m pytest" in test_cmd:
+                fallback_cmd = test_cmd.replace("python -m pytest", "pytest")
 
             if fallback_cmd and fallback_cmd != test_cmd:
                 ConsoleOutput.info(

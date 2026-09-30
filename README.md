@@ -23,7 +23,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture: Hexagonal](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange.svg)](#️-architecture--hexagonal-design)
-[![Test Suite](https://img.shields.io/badge/Tests-450%2B%20Passing-brightgreen.svg?logo=pytest&logoColor=white)](#-testing--verification)
+[![Test Suite](https://img.shields.io/badge/Tests-530%2B%20Passing-brightgreen.svg?logo=pytest&logoColor=white)](#-testing--verification)
 [![Docker Support](https://img.shields.io/badge/Docker-Multi--Stage%20Ready-2496ED.svg?logo=docker&logoColor=white)](docs/guides/DOCKER_GUIDE.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -111,9 +111,11 @@ cp .env.example .env
 # Edit .env and insert your preferred provider API key (OpenRouter, Gemini, OpenAI, etc.)
 ```
 
-### Run with Single-Command Launcher (`oragai`)
+### Run with Single-Command Universal Launcher (`oragai`)
 
-ORAGAI includes direct zero-setup launchers (`oragai.cmd` on Windows CMD, `oragai.ps1` on PowerShell, and `./oragai` on Linux/macOS) that automatically bind your host `./workspace` folder, attach interactive TTYs, and inject `.env`:
+ORAGAI includes direct zero-setup universal launchers (`oragai.cmd` on Windows CMD, `oragai.ps1` on PowerShell, and `./oragai` on Linux/macOS) designed with a **2-Tier execution architecture**:
+1. **Tier 1 (Native Python)**: Instantly detects your local `.venv` (or system Python) and executes directly with native disk I/O, live diagnostics logging, and zero container overhead.
+2. **Tier 2 (Universal Docker Fallback)**: Automatically falls back to Docker if no Python virtual environment is found, mounting `./workspace` portably and injecting `.env`.
 
 ```bash
 # 1. Zero-Token Connectivity & Config Check
@@ -281,7 +283,7 @@ The codebase strictly adheres to **Hexagonal (Ports & Adapters) Architecture** g
 │   ├── context/             # Dynamic Prompt Builders, Graft Injectors, Context Handoff Mesh
 │   ├── diagnostics/         # Telemetry aggregation, Full-text Search, SQLite WAL Store
 │   └── cli/                 # Interactive CLI, Wizard, Diagnostics Dashboard
-├── tests/                   # 50 test modules (~458 automated tests)
+├── tests/                   # 50 test modules (538 automated tests)
 ├── docs/                    # Deep-dive architecture and operational guides
 ├── Dockerfile               # Multi-stage container specification
 ├── docker-compose.yml       # Composable dev, cli, and test services
