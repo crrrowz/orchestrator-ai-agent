@@ -72,6 +72,25 @@ class OrchestratorDispatcher:
             )
             profile: LifecycleProfile = get_profile(clean_mode)
 
+            # Wire live visualizer and session store so progress and thoughts are visible
+            log_store = getattr(legacy_pipeline, "store", None)
+            visualizer = getattr(legacy_pipeline, "visualizer", None)
+            if log_store is None:
+                try:
+                    from orchestrator.ui.session_store import SessionLogStore
+                    log_store = SessionLogStore(run_id=f"fsm_{int(time.time())}")
+                except Exception:
+                    log_store = None
+            if visualizer is None and log_store is not None:
+                try:
+                    from orchestrator.ui.visualizer import OrchestratorLiveVisualizer
+                    visualizer = OrchestratorLiveVisualizer(
+                        log_store=log_store,
+                        verbosity=getattr(cfg, "verbosity", "normal"),
+                    )
+                except Exception:
+                    visualizer = None
+
             try:
                 engine = GuardedFSMEngine(
                     config=cfg,
@@ -80,6 +99,8 @@ class OrchestratorDispatcher:
                     workspace_path=ws,
                     controller=controller,
                     human_channel=human_channel,
+                    log_store=log_store,
+                    visualizer=visualizer,
                 )
                 raw_res = engine.run(task_description=task)
                 duration = time.perf_counter() - t0

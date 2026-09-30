@@ -49,6 +49,7 @@ from openhands.sdk.tool import (
     ToolExecutor,
     register_tool,
 )
+from openhands.sdk.tool.schema import TextContent
 
 if TYPE_CHECKING:
     from orchestrator.config import OrchestratorConfig
@@ -198,7 +199,7 @@ class HardenedFileObservation(Observation):
     success: bool = True
     operation: str = "read"
     path: str = ""
-    content: Optional[str] = None
+    content: Optional[Any] = None
     total_lines: int = 0
     returned_lines: int = 0
     has_more: bool = False
@@ -206,6 +207,36 @@ class HardenedFileObservation(Observation):
     error_message: Optional[str] = None
     outline_summary: Optional[str] = None
     files: Optional[List[str]] = None
+
+    @property
+    def to_llm_content(self) -> Sequence[Any]:
+        llm_content = []
+        if self.is_error or not self.success:
+            err = self.error_message or "An error occurred during file operation."
+            llm_content.append(TextContent(text=f"[Error: {err}]\n"))
+        text_parts = []
+        if self.content:
+            if isinstance(self.content, list):
+                for item in self.content:
+                    if hasattr(item, "text"):
+                        text_parts.append(item.text)
+                    elif isinstance(item, str):
+                        text_parts.append(item)
+            elif isinstance(self.content, str):
+                text_parts.append(self.content)
+        elif self.files:
+            text_parts.append("\n".join(self.files))
+        elif self.outline_summary:
+            text_parts.append(self.outline_summary)
+        elif self.success:
+            text_parts.append(f"Successfully performed {self.operation} on {self.path}")
+        main_text = "\n".join(text_parts) if text_parts else "Success"
+        llm_content.append(TextContent(text=main_text))
+        return llm_content
+
+    @property
+    def text(self) -> str:
+        return "".join(item.text for item in self.to_llm_content if hasattr(item, "text"))
 
 
 class HardenedTerminalAction(Action):
@@ -238,6 +269,27 @@ class HardenedTerminalObservation(Observation):
     security_violation: bool = False
     error_message: Optional[str] = None
     steering_directive: Optional[str] = None
+
+    @property
+    def to_llm_content(self) -> Sequence[Any]:
+        llm_content = []
+        if self.is_error or self.exit_code != 0:
+            err = self.error_message or self.stderr or f"Command failed with exit code {self.exit_code}"
+            llm_content.append(TextContent(text=f"[Exit Code {self.exit_code}]\n{err}\n"))
+        text_parts = []
+        if self.stdout:
+            text_parts.append(self.stdout)
+        if self.stderr and self.exit_code == 0:
+            text_parts.append(self.stderr)
+        if self.steering_directive:
+            text_parts.append(f"\n[Directive: {self.steering_directive}]")
+        main_text = "\n".join(text_parts) if text_parts else f"[Exit Code: {self.exit_code}]"
+        llm_content.append(TextContent(text=main_text))
+        return llm_content
+
+    @property
+    def text(self) -> str:
+        return "".join(item.text for item in self.to_llm_content if hasattr(item, "text"))
 
 
 # =====================================================================
@@ -1168,7 +1220,8 @@ class SDKSessionRunner:
             conv.run()
         except Exception as e:
             logger.error(
-                f"Execution error in {role_name} turn: {e}", exc_info=True
+                f"Execution error in {role_name} turn: {e}",
+                exc_info=True,
             )
 
         # 5. Classify Exit Status

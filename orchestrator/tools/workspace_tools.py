@@ -1102,12 +1102,18 @@ def execute_terminal_action(
     }
     is_windows = sys.platform == "win32" or os.name == "nt"
     if is_windows and base_name in powershell_cmdlets:
+        import base64
+
+        encoded_bytes = cmd_to_exec.encode("utf-16le")
+        b64_cmd = base64.b64encode(encoded_bytes).decode("ascii")
         exec_args = [
             "powershell.exe",
             "-NoProfile",
             "-NonInteractive",
-            "-Command",
-            cmd_to_exec,
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            b64_cmd,
         ]
     elif (
         is_windows
@@ -1115,12 +1121,18 @@ def execute_terminal_action(
         and not shutil.which("graft", path=env.get("PATH"))
         and shutil.which("graft.ps1", path=env.get("PATH"))
     ):
+        import base64
+
+        encoded_bytes = cmd_to_exec.encode("utf-16le")
+        b64_cmd = base64.b64encode(encoded_bytes).decode("ascii")
         exec_args = [
             "powershell.exe",
             "-NoProfile",
             "-NonInteractive",
-            "-Command",
-            cmd_to_exec,
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            b64_cmd,
         ]
     elif is_windows and base_name in shell_builtins:
         exec_args = ["cmd.exe", "/c", *cmd_tokens]
@@ -1133,6 +1145,7 @@ def execute_terminal_action(
     try:
         proc = subprocess.run(
             exec_args,
+            stdin=subprocess.DEVNULL,
             shell=False,
             cwd=str(workspace_root),
             capture_output=True,

@@ -44,8 +44,9 @@ services:
       target: development
     working_dir: /workspace/orchestrator-ai-agent
     volumes:
-      - .:/workspace/orchestrator-ai-agent
-      - venv-isolation:/workspace/orchestrator-ai-agent/.venv
+      - type: bind
+        source: ./workspace
+        target: /workspace/orchestrator-ai-agent/workspace
       - uv-cache:/root/.cache/uv
     env_file:
       - path: .env

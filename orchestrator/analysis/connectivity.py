@@ -6,6 +6,7 @@ import httpx
 from rich.table import Table
 
 from orchestrator.core.config import OrchestratorConfig
+from orchestrator.llm.factory import sanitize_base_url
 from orchestrator.rendering.output import console, ConsoleOutput
 
 
@@ -105,8 +106,9 @@ class ConnectivityChecker:
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
+            clean_url = sanitize_base_url(base_url) or base_url
             with httpx.Client(timeout=5.0) as client:
-                url = f"{base_url.rstrip('/')}/models"
+                url = f"{clean_url.rstrip('/')}/models"
                 resp = client.get(url, headers=headers)
                 if resp.status_code == 200:
                     result["connected"] = True
@@ -118,7 +120,10 @@ class ConnectivityChecker:
                                 "openai/", ""
                             )
                             result["models_status"][m] = (
-                                clean_id in available_ids or len(available_ids) == 0
+                                clean_id in available_ids
+                                or m in available_ids
+                                or any(available_id.endswith(clean_id) for available_id in available_ids)
+                                or len(available_ids) == 0
                             )
                 else:
                     result["error"] = f"HTTP {resp.status_code}"
@@ -186,7 +191,8 @@ class ConnectivityChecker:
                 )
             ):
                 if omniroute_info and omniroute_info["connected"]:
-                    provider_status = f"[green][OK] Connected[/green]\n[dim]{config.omniroute_base_url}[/dim]"
+                    display_url = sanitize_base_url(config.omniroute_base_url) or config.omniroute_base_url
+                    provider_status = f"[green][OK] Connected[/green]\n[dim]{display_url}[/dim]"
                     is_avail = omniroute_info["models_status"].get(model_str, True)
                     model_status = (
                         "[green][OK] Active on OmniRoute[/green]"

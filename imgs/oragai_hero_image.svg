@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg">
+
+    <defs>
+        <style type="text/css">
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap');
+            *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        
+
+        svg {
+            width: 100%;
+            height: auto;
+            max-height: 95vh;
+            display: block;
+            border-radius: 20px;
+            box-shadow: 0 35px 70px -15px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
+            background: #02040a;
+        }
+        
+        /* Font styles */
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .font-sans { font-family: 'Inter', sans-serif; }
+        .text-white { fill: #f8fafc; }
+        .text-blue { fill: #38bdf8; }
+        .text-violet { fill: #c084fc; }
+        .text-amber { fill: #fbbf24; }
+        .text-emerald { fill: #34d399; }
+        .text-gray { fill: #94a3b8; }
+        .text-red { fill: #f87171; }
+        
+        /* Animations */
+        @keyframes pulse-core {
+            0%, 100% { filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.45)); }
+            50% { filter: drop-shadow(0 0 25px rgba(56, 189, 248, 0.85)); }
+        }
+        .animate-core {
+            animation: pulse-core 4s infinite ease-in-out;
+        }
+
+        @keyframes data-flow {
+            to { stroke-dashoffset: -32; }
+        }
+        .animate-flow {
+            stroke-dasharray: 6 6;
+            animation: data-flow 1.8s linear infinite;
+        }
+        .animate-flow-reverse {
+            stroke-dasharray: 6 6;
+            animation: data-flow 1.8s linear infinite reverse;
+        }
+        </style>
+    </defs>
+
+
+    <defs>
+        <!-- Gradients -->
+        <radialGradient id="bg-glow" cx="50%" cy="42%" r="60%">
+            <stop offset="0%" stop-color="#0e172e" stop-opacity="0.9" />
+            <stop offset="50%" stop-color="#050a17" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#02040a" stop-opacity="1" />
+        </radialGradient>
+        
+        <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f8fafc" stop-opacity="1" />
+            <stop offset="25%" stop-color="#38bdf8" stop-opacity="0.85" />
+            <stop offset="65%" stop-color="#1e3a8a" stop-opacity="0.3" />
+            <stop offset="100%" stop-color="#020617" stop-opacity="0" />
+        </radialGradient>
+
+        <linearGradient id="ring-grad-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.1" />
+            <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.7" />
+            <stop offset="100%" stop-color="#818cf8" stop-opacity="0.1" />
+        </linearGradient>
+
+        <linearGradient id="ring-grad-violet" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7" stop-opacity="0.1" />
+            <stop offset="50%" stop-color="#c084fc" stop-opacity="0.6" />
+            <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.1" />
+        </linearGradient>
+        
+        <linearGradient id="node-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#1e293b" />
+            <stop offset="100%" stop-color="#0f172a" />
+        </linearGradient>
+
+        <!-- Filters for glowing -->
+        <filter id="glow-intense-blue" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+        
+        <filter id="glow-violet" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+
+        <filter id="glow-amber" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+
+        <!-- Card shadow -->
+        <filter id="card-shadow" x="-10%" y="-10%" width="120%" height="125%">
+            <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.6" />
+        </filter>
+
+        <!-- Grid Pattern -->
+        <pattern id="tech-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+            <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#1e293b" stroke-width="0.6" stroke-opacity="0.2" />
+            <circle cx="0" cy="0" r="1" fill="#475569" opacity="0.3" />
+        </pattern>
+
+        <!-- Connection Markers -->
+        <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#38bdf8" />
+        </marker>
+        <marker id="arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#c084fc" />
+        </marker>
+        <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#fbbf24" />
+        </marker>
+        <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#34d399" />
+        </marker>
+        <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#f87171" />
+        </marker>
+        <marker id="dot-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5">
+            <circle cx="5" cy="5" r="3" fill="#38bdf8" />
+        </marker>
+    </defs>
+
+    <!-- Background Layer -->
+    <rect width="1200" height="900" fill="#02040a" />
+    <rect width="1200" height="900" fill="url(#bg-glow)" />
+    <rect width="1200" height="900" fill="url(#tech-grid)" />
+
+    <!-- Ambient Stars -->
+    <g opacity="0.35" fill="#475569">
+        <circle cx="160" cy="160" r="1.5" />
+        <circle cx="280" cy="100" r="1" />
+        <circle cx="940" cy="160" r="1.5" />
+        <circle cx="1060" cy="100" r="1" />
+        <circle cx="140" cy="620" r="1.5" />
+        <circle cx="860" cy="710" r="1" />
+        <circle cx="440" cy="740" r="1" />
+    </g>
+
+    <!-- ========================================================= -->
+    <!-- CENTRAL CONTROL PLANE CORE (Center: 600, 375)             -->
+    <!-- ========================================================= -->
+    <g transform="translate(600, 375)">
+        <!-- Core Glow -->
+        <circle cx="0" cy="0" r="110" fill="url(#core-glow)" class="animate-core" />
+        
+        <!-- Rotating Outer Rings -->
+        <circle cx="0" cy="0" r="70" fill="none" stroke="url(#ring-grad-blue)" stroke-width="2" stroke-dasharray="16 28 60 16" />
+        <circle cx="0" cy="0" r="85" fill="none" stroke="#38bdf8" stroke-width="0.75" stroke-dasharray="4 6" opacity="0.6" />
+        <path d="M 0 -70 L 0 -48 M 60 -35 L 42 -24 M -60 -35 L -42 -24 M 60 35 L 42 24 M -60 35 L -42 24 M 0 70 L 0 48" stroke="#38bdf8" stroke-width="1" opacity="0.6"/>
+        
+        <circle cx="0" cy="0" r="100" fill="none" stroke="url(#ring-grad-violet)" stroke-width="1.5" stroke-dasharray="30 45 90 25" />
+        <circle cx="0" cy="0" r="115" fill="none" stroke="#a855f7" stroke-width="0.75" stroke-dasharray="3 8" opacity="0.5" />
+
+        <!-- Solid Hub -->
+        <circle cx="0" cy="0" r="48" fill="#0b1329" stroke="#38bdf8" stroke-width="2" filter="url(#glow-intense-blue)" />
+        <path d="M -16 0 L 16 0 M 0 -16 L 0 16 M -11 -11 L 11 11 M -11 11 L 11 -11" stroke="#7dd3fc" stroke-width="1.5" opacity="0.9" />
+        <circle cx="0" cy="0" r="6" fill="#ffffff" filter="url(#glow-intense-blue)" />
+    </g>
+
+    <!-- ========================================================= -->
+    <!-- LAYER 2: GOVERNANCE RING (R ~ 160 around 600, 375)        -->
+    <!-- ========================================================= -->
+    <g transform="translate(600, 375)">
+        <circle cx="0" cy="0" r="160" fill="none" stroke="#1e293b" stroke-width="1" stroke-dasharray="4 4" opacity="0.6" />
+        
+        <!-- 1. Guarded FSM (Top: 0, -160) -->
+        <g transform="translate(0, -160)">
+            <line x1="0" y1="16" x2="0" y2="60" stroke="#38bdf8" stroke-width="1.5" class="animate-flow" marker-start="url(#dot-blue)" />
+            <rect x="-65" y="-16" width="130" height="32" rx="6" fill="url(#node-grad)" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow-intense-blue)" />
+            <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="700" text-anchor="middle">GUARDED FSM</text>
+        </g>
+
+        <!-- 2. Context Handoff (Bottom Right: 140, 80) -->
+        <g transform="translate(140, 80)">
+            <line x1="-16" y1="-9" x2="-68" y2="-38" stroke="#c084fc" stroke-width="1.5" class="animate-flow" marker-start="url(#dot-blue)" />
+            <rect x="-70" y="-16" width="140" height="32" rx="6" fill="url(#node-grad)" stroke="#a855f7" stroke-width="1.5" filter="url(#glow-violet)" />
+            <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="700" text-anchor="middle">CONTEXT HANDOFF</text>
+        </g>
+
+        <!-- 3. Token Governor (Bottom Left: -140, 80) -->
+        <g transform="translate(-140, 80)">
+            <line x1="16" y1="-9" x2="68" y2="-38" stroke="#38bdf8" stroke-width="1.5" class="animate-flow" marker-start="url(#dot-blue)" />
+            <rect x="-70" y="-16" width="140" height="32" rx="6" fill="url(#node-grad)" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow-intense-blue)" />
+            <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="700" text-anchor="middle">TOKEN GOVERNOR</text>
+        </g>
+    </g>
+
+    <!-- ========================================================= -->
+    <!-- LAYER 3: SPECIALIZED AGENT PENTAGON                       -->
+    <!-- 1. ARCHITECT (380, 180)                                   -->
+    <!-- 2. DEVELOPER (820, 180)                                   -->
+    <!-- 3. TESTER (920, 390)                                      -->
+    <!-- 4. REVIEWER (760, 580)                                    -->
+    <!-- 5. AUDITOR (440, 580)                                     -->
+    <!-- ========================================================= -->
+    
+    <!-- Outer Orbit Ring -->
+    <ellipse cx="600" cy="375" rx="350" ry="240" fill="none" stroke="#334155" stroke-width="0.75" stroke-dasharray="6 6" opacity="0.4" />
+
+    <!-- FLOW PATHS BETWEEN AGENTS (Clockwise Pipeline) -->
+    <!-- Guarded FSM dispatches to Architect & Developer -->
+    <path d="M 545 220 Q 480 200 445 185" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-blue)" />
+    <path d="M 655 220 Q 720 200 755 185" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-blue)" />
+
+    <!-- 1. Architect -> Developer (Top Handoff Path) -->
+    <path d="M 445 180 L 750 180" fill="none" stroke="#c084fc" stroke-width="2" class="animate-flow" marker-end="url(#arrow-violet)" />
+    <!-- Context Label on Top Path -->
+    <rect x="560" y="165" width="80" height="18" rx="4" fill="#02040a" stroke="#a855f7" stroke-width="0.75" />
+    <text x="600" y="178" class="text-violet font-mono" font-size="9" font-weight="600" text-anchor="middle">DAG PLAN</text>
+
+    <!-- 2. Developer -> Tester (Implementation to QA) -->
+    <path d="M 850 205 Q 920 280 920 365" fill="none" stroke="#38bdf8" stroke-width="2" class="animate-flow" marker-end="url(#arrow-blue)" />
+
+    <!-- 3. Tester -> Developer (Red Bug/Failure Feedback Loop) -->
+    <path d="M 885 375 Q 860 300 825 210" fill="none" stroke="#f87171" stroke-width="1.5" stroke-dasharray="5 3" class="animate-flow-reverse" marker-end="url(#arrow-red)" />
+    <text x="885" y="290" class="text-red font-mono" font-size="9" text-anchor="middle">re-test fail</text>
+
+    <!-- 4. Tester -> Reviewer (Success Flow) -->
+    <path d="M 890 415 Q 850 510 795 560" fill="none" stroke="#fbbf24" stroke-width="2" class="animate-flow" marker-end="url(#arrow-amber)" />
+
+    <!-- 5. Reviewer -> Auditor (Security Audit Pass) -->
+    <path d="M 695 580 L 510 580" fill="none" stroke="#34d399" stroke-width="2" class="animate-flow" marker-end="url(#arrow-emerald)" />
+    <rect x="575" y="571" width="50" height="18" rx="4" fill="#02040a" stroke="#10b981" stroke-width="0.75" />
+    <text x="600" y="584" class="text-emerald font-mono" font-size="9" font-weight="600" text-anchor="middle">AUDITED</text>
+
+    <!-- 6. Auditor -> Token Governor / Control Plane (Commit & Verify) -->
+    <path d="M 440 555 Q 430 480 445 465" fill="none" stroke="#c084fc" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-violet)" />
+
+    <!-- AGENT CARDS -->
+    <!-- 1. ARCHITECT (Top Left: 380, 180) -->
+    <g transform="translate(380, 180)">
+        <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#a855f7" stroke-width="1.5" filter="url(#card-shadow)" />
+        <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">ARCHITECT</text>
+        <text x="0" y="14" class="text-violet font-mono" font-size="9" text-anchor="middle">Plan &bull; DAG</text>
+    </g>
+
+    <!-- 2. DEVELOPER (Top Right: 820, 180) -->
+    <g transform="translate(820, 180)">
+        <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" filter="url(#card-shadow)" />
+        <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">DEVELOPER</text>
+        <text x="0" y="14" class="text-blue font-mono" font-size="9" text-anchor="middle">Implementation</text>
+    </g>
+
+    <!-- 3. TESTER (Far Right: 920, 390) -->
+    <g transform="translate(920, 390)">
+        <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" filter="url(#card-shadow)" />
+        <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">TESTER</text>
+        <text x="0" y="14" class="text-amber font-mono" font-size="9" text-anchor="middle">Isolated Pytest</text>
+    </g>
+
+    <!-- 4. REVIEWER (Bottom Right: 760, 580) -->
+    <g transform="translate(760, 580)">
+        <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#34d399" stroke-width="1.5" filter="url(#card-shadow)" />
+        <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">REVIEWER</text>
+        <text x="0" y="14" class="text-emerald font-mono" font-size="9" text-anchor="middle">Security &bull; Quality</text>
+    </g>
+
+    <!-- 5. AUDITOR (Bottom Left: 440, 580) -->
+    <g transform="translate(440, 580)">
+        <rect x="-65" y="-24" width="130" height="48" rx="8" fill="#0f172a" stroke="#a855f7" stroke-width="1.5" filter="url(#card-shadow)" />
+        <text x="0" y="-3" class="text-white font-mono" font-size="12" font-weight="700" text-anchor="middle">AUDITOR</text>
+        <text x="0" y="14" class="text-violet font-mono" font-size="9" text-anchor="middle">Forensic Audit</text>
+    </g>
+
+    <!-- ========================================================= -->
+    <!-- LAYER 4: PERIPHERAL FLANK SYSTEMS                         -->
+    <!-- ========================================================= -->
+    <!-- 1. CODEBASE INTEL (Far Left: 155, 180) -> ARCHITECT -->
+    <g transform="translate(155, 180)">
+        <rect x="-80" y="-18" width="160" height="36" rx="18" fill="url(#node-grad)" stroke="#a855f7" stroke-width="1.5" filter="url(#glow-violet)" />
+        <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="600" text-anchor="middle">CODEBASE INTEL</text>
+    </g>
+    <path d="M 235 180 L 310 180" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-violet)" />
+
+    <!-- 2. AST GUARD (Far Left: 155, 420) -> DEVELOPER / AUDITOR -->
+    <g transform="translate(155, 420)">
+        <rect x="-70" y="-18" width="140" height="36" rx="18" fill="url(#node-grad)" stroke="#fbbf24" stroke-width="1.5" filter="url(#glow-amber)" />
+        <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="600" text-anchor="middle">AST GUARD</text>
+    </g>
+    <path d="M 225 420 Q 320 420 375 555" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-amber)" />
+
+    <!-- 3. MULTI-AGENT DAG (Far Right: 1045, 180) -> DEVELOPER -->
+    <g transform="translate(1045, 180)">
+        <rect x="-80" y="-18" width="160" height="36" rx="18" fill="url(#node-grad)" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow-intense-blue)" />
+        <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="600" text-anchor="middle">MULTI-AGENT DAG</text>
+    </g>
+    <path d="M 965 180 L 890 180" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-blue)" />
+
+    <!-- 4. SRE RESILIENCE (Far Right: 1045, 580) -> TESTER / RECOVERY -->
+    <g transform="translate(1045, 580)">
+        <rect x="-75" y="-18" width="150" height="36" rx="18" fill="url(#node-grad)" stroke="#f87171" stroke-width="1.5" filter="url(#glow-amber)" />
+        <text x="0" y="5" class="text-white font-mono" font-size="11" font-weight="600" text-anchor="middle">SRE RESILIENCE</text>
+    </g>
+    <!-- Connect SRE Resilience smoothly up-left into TESTER without crossing text -->
+    <path d="M 970 570 Q 940 500 930 420" fill="none" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-red)" />
+
+    <!-- ========================================================= -->
+    <!-- TITLE BLOCK (Bottom Center: Well spaced, never cut off)   -->
+    <!-- ========================================================= -->
+    <g transform="translate(600, 755)" text-anchor="middle">
+        <text y="0" class="text-white font-sans" font-size="48" font-weight="800" letter-spacing="6">ORAGAI</text>
+        <text y="30" class="text-blue font-mono" font-size="12" font-weight="700" letter-spacing="3">ORCHESTRATED RESILIENT AUTONOMOUS GENERATIVE AI</text>
+        <text y="52" class="text-gray font-sans" font-size="11" font-weight="500" letter-spacing="1">Deterministic Multi-Agent Software Engineering Control Plane</text>
+        
+        <!-- Framing brackets -->
+        <path d="M -240 68 L -290 68 L -290 58 M 240 68 L 290 68 L 290 58" fill="none" stroke="#334155" stroke-width="1.5" />
+    </g>
+
+    <!-- UI Overlay Framing Markers -->
+    <g opacity="0.35" stroke="#475569" stroke-width="1" fill="none" class="font-mono" font-size="10">
+        <!-- Top Left -->
+        <path d="M 35 45 L 35 30 L 50 30" />
+        <text x="45" y="55" class="text-gray" fill="#94a3b8">STATE: DETERMINISTIC</text>
+        
+        <!-- Top Right -->
+        <path d="M 1165 45 L 1165 30 L 1150 30" />
+        <text x="1155" y="55" text-anchor="end" class="text-gray" fill="#94a3b8">GOVERNOR: ACTIVE</text>
+        
+        <!-- Bottom Left -->
+        <path d="M 35 845 L 35 860 L 50 860" />
+        
+        <!-- Bottom Right -->
+        <path d="M 1165 845 L 1165 860 L 1150 860" />
+        
+        <!-- Center Top Crosshair -->
+        <path d="M 590 30 L 610 30 M 600 20 L 600 40" />
+    </g>
+
+
+</svg>

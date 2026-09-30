@@ -1,23 +1,37 @@
 <div align="center">
 
+<p align="center">
+  <img src="imgs/logo-oragai.jpg" alt="ORAGAI Official Logo" width="220" style="border-radius: 50%; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);" />
+</p>
+
 # ⚡ ORAGAI
 
 ### *Orchestrated Resilient Autonomous Generative AI*
 
 **Production-Grade Multi-Agent Software Engineering Framework with Guarded FSM Lifecycle, Zero-Token Architecture Intelligence & Self-Healing SRE Mesh.**
 
+<br />
+
+<p align="center">
+  <img src="imgs/oragai_hero_image.svg" alt="ORAGAI Deterministic Multi-Agent Engineering Architecture" width="100%" />
+</p>
+
+> **Hero Architecture Diagram:** The ORAGAI Deterministic Multi-Agent Control Plane orchestrating 5 specialized agent personas (*Architect*, *Developer*, *Tester*, *Reviewer*, *Auditor*) with centralized state machines, in-memory AST guards, and dynamic token governance.
+
+<br />
+
 [![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Architecture: Hexagonal](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange.svg)](#-architecture--hexagonal-design)
+[![Architecture: Hexagonal](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange.svg)](#️-architecture--hexagonal-design)
 [![Test Suite](https://img.shields.io/badge/Tests-450%2B%20Passing-brightgreen.svg?logo=pytest&logoColor=white)](#-testing--verification)
 [![Docker Support](https://img.shields.io/badge/Docker-Multi--Stage%20Ready-2496ED.svg?logo=docker&logoColor=white)](docs/guides/DOCKER_GUIDE.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 [Features](#-key-innovations) •
 [Quickstart](#-quickstart-in-60-seconds) •
-[Architecture](#-architecture--hexagonal-design) •
+[Architecture](#️-architecture--hexagonal-design) •
 [Execution Modes](#-execution-modes) •
-[Why ORAGAI?](#-why-oragai-vs-alternatives) •
+[Why ORAGAI?](#️-why-oragai-vs-alternatives) •
 [Documentation](#-documentation-index)
 
 </div>
@@ -97,7 +111,29 @@ cp .env.example .env
 # Edit .env and insert your preferred provider API key (OpenRouter, Gemini, OpenAI, etc.)
 ```
 
-### Run an Autonomous Task
+### Run with Single-Command Launcher (`oragai`)
+
+ORAGAI includes direct zero-setup launchers (`oragai.cmd` on Windows CMD, `oragai.ps1` on PowerShell, and `./oragai` on Linux/macOS) that automatically bind your host `./workspace` folder, attach interactive TTYs, and inject `.env`:
+
+```bash
+# 1. Zero-Token Connectivity & Config Check
+./oragai --check-config       # Linux/macOS
+.\oragai --check-config       # Windows PowerShell / CMD
+
+# 2. Fast MVP Development & Testing
+./oragai "Build a Sliding Window RateLimiter class with unit tests" --mode dev-test
+
+# 3. Full 4-Agent Pipeline (Architect -> Dev -> Test -> Review)
+./oragai "Design and implement an OAuth2 token validation service" --mode full
+
+# 4. Codebase Forensic Audit
+./oragai --mode audit
+
+# 5. Codebase Audit & Auto-Remediation Loop
+./oragai --mode audit-fix
+```
+
+### Python CLI Direct (Native Python Environment)
 
 ```bash
 # Verify environment and model connectivity (0 tokens)
@@ -111,6 +147,9 @@ python -m orchestrator.main "Design and implement an OAuth2 token validation ser
 
 # Run deep codebase security & architecture audit
 python -m orchestrator.main --mode audit
+
+# Run automated audit and fix remediation loop
+python -m orchestrator.main --mode audit-fix
 ```
 
 ### Python Programmatic API
@@ -170,6 +209,16 @@ ORAGAI provides 5 specialized orchestration modes:
 
 ## ⚖️ Why ORAGAI vs. Alternatives?
 
+### Execution Paradigm Comparison
+
+<p align="center">
+  <img src="imgs/manual_agent_vs_oragai.svg" alt="Manual Agent Calls vs ORAGAI Governed Execution" width="100%" />
+</p>
+
+> **Figure 3: Isolated Agent Calls vs. ORAGAI Governed Execution.** Comparing fragile, blind repository scans and runaway retry loops against ORAGAI's shared context spine, dynamic budget quotas, and pre-commit AST guards.
+
+<br />
+
 | Capability | ORAGAI | CrewAI | AutoGen | LangGraph |
 |---|:---:|:---:|:---:|:---:|
 | **Deterministic Guarded FSM** | ✅ **11-State Guarded** | ❌ Heuristic | ❌ Freeform Conversational | ⚠️ Manual Graph |
@@ -182,9 +231,39 @@ ORAGAI provides 5 specialized orchestration modes:
 
 ---
 
+### Architectural Divergence in Practice
+
+<p align="center">
+  <img src="imgs/oragai_comparison.svg" alt="Architectural Comparison: Fragmented vs Governed" width="100%" />
+</p>
+
+> **Figure 4: Detailed Structural Comparison.** Left: fragmented workflow with cold starts, blind repository parsing, and context loss. Right: ORAGAI unified control plane with zero-token intelligence, specialized personas, and clean AST validation.
+
+<br />
+
+---
+
 ## 🏛️ Architecture & Hexagonal Design
 
-The codebase strictly adheres to **Hexagonal (Ports & Adapters) Architecture**:
+The codebase strictly adheres to **Hexagonal (Ports & Adapters) Architecture** governed by an 8-stage deterministic state pipeline:
+
+<p align="center">
+  <img src="imgs/oragai_architecture.svg" alt="ORAGAI 8-Stage Lifecycle & Control Plane Architecture" width="100%" />
+</p>
+
+> **Figure 1: ORAGAI 8-Stage Lifecycle Architecture.** Visualizes the flow from Task Ingestion (01) through Zero-Token Analysis (02), Formal Planning (03), Governance (04), Role-Specialized Dispatch (05), In-Memory Validation (06), SRE Mesh Recovery (07), to Verifiable Cryptographic Completion (08).
+
+<br />
+
+### Comprehensive Multi-Agent Constellation Mesh
+
+<p align="center">
+  <img src="imgs/oragai_hero_constellation.svg" alt="ORAGAI Multi-Agent Orbit Constellation" width="100%" />
+</p>
+
+> **Figure 2: Multi-Agent Orbital Constellation.** 6-tier hierarchical view detailing active orchestration paths between Governance (L1), Zero-Token Intelligence (L2), Specialized Agents (L3), Execution Spine (L4), AST Protection (L5), and the Cloud Resilience Provider Mesh (L6).
+
+<br />
 
 ```text
 .

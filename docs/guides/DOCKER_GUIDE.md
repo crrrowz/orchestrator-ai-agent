@@ -81,6 +81,32 @@ docker run --rm --entrypoint pytest oragai:dev tests/ -v
 
 ---
 
+## ⚡ Direct Launcher Workflow (`oragai`)
+
+Instead of writing long `docker run` commands, ORAGAI provides cross-platform lightweight wrapper scripts:
+- **Windows PowerShell**: `.\oragai.ps1 <command>` or `.\oragai <command>`
+- **Windows CMD**: `oragai.cmd <command>` or `oragai <command>`
+- **Linux / macOS**: `./oragai <command>`
+
+All scripts automatically:
+1. Mount the local `./workspace` directory into `/workspace/orchestrator-ai-agent/workspace` inside the container.
+2. Load secrets and environment settings from `.env`.
+3. Configure interactive TTY sessions for live progress rendering.
+
+### Examples:
+```bash
+# Verify connectivity
+.\oragai --check-config
+
+# Run full multi-agent pipeline
+.\oragai "Build microservice" --mode full
+
+# Run auto-fixing audit loop
+.\oragai --mode audit-fix
+```
+
+---
+
 ## 📦 Docker Compose Workflow (Optional)
 
 If you prefer `docker compose`:

@@ -48,7 +48,8 @@ RUN uv sync --frozen
 # ==============================================================================
 FROM base AS development
 
-CMD ["sleep", "infinity"]
+ENTRYPOINT ["python", "-m", "orchestrator.main"]
+CMD ["--check-config"]
 
 # ==============================================================================
 # Stage: production (Direct CLI entrypoint)

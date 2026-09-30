@@ -1,0 +1,437 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+
+    <defs>
+        <style type="text/css">
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap');
+            *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        
+
+        svg {
+            width: 100%;
+            height: auto;
+            max-height: 94vh;
+            display: block;
+            border-radius: 16px;
+            box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+            background: #050814;
+        }
+
+        /* Typography */
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .font-sans { font-family: 'Inter', sans-serif; }
+        
+        .text-white { fill: #f8fafc; }
+        .text-gray { fill: #94a3b8; }
+        .text-gray-light { fill: #cbd5e1; }
+        .text-blue { fill: #38bdf8; }
+        .text-violet { fill: #c084fc; }
+        .text-amber { fill: #fbbf24; }
+        .text-emerald { fill: #34d399; }
+        .text-red { fill: #f87171; }
+        
+        .stroke-blue { stroke: #38bdf8; }
+        .stroke-violet { stroke: #a855f7; }
+        .stroke-amber { stroke: #fbbf24; }
+        .stroke-emerald { stroke: #10b981; }
+        .stroke-red { stroke: #ef4444; }
+        .stroke-gray { stroke: #334155; }
+        
+        .bg-panel { fill: #0a0f24; stroke: #1e293b; stroke-width: 1.5; }
+        .bg-panel-highlight { fill: #0f172a; stroke: #334155; stroke-width: 1.5; }
+
+        @keyframes pulse-core {
+            0%, 100% { opacity: 0.9; filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4)); }
+            50% { opacity: 1; filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.8)); }
+        }
+        .anim-pulse {
+            animation: pulse-core 4s infinite ease-in-out;
+        }
+
+        @keyframes flow-dash {
+            to { stroke-dashoffset: -24; }
+        }
+        .anim-flow {
+            stroke-dasharray: 6 6;
+            animation: flow-dash 1.5s linear infinite;
+        }
+        </style>
+    </defs>
+
+
+    <defs>
+        <!-- Gradients -->
+        <linearGradient id="bg-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#070c1e" />
+            <stop offset="50%" stop-color="#040713" />
+            <stop offset="100%" stop-color="#02040a" />
+        </linearGradient>
+        
+        <linearGradient id="control-plane-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#1e1b4b" stop-opacity="0.95" />
+            <stop offset="50%" stop-color="#0f172a" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#172554" stop-opacity="0.95" />
+        </linearGradient>
+
+        <linearGradient id="glow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="50%" stop-color="#818cf8" />
+            <stop offset="100%" stop-color="#c084fc" />
+        </linearGradient>
+
+        <!-- Glow Filters -->
+        <filter id="glow-blue" x="-25%" y="-25%" width="150%" height="150%">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="glow-amber" x="-25%" y="-25%" width="150%" height="150%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="glow-red" x="-25%" y="-25%" width="150%" height="150%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+        <filter id="glow-violet" x="-25%" y="-25%" width="150%" height="150%">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+
+        <!-- Drop shadow -->
+        <filter id="card-shadow" x="-10%" y="-10%" width="120%" height="125%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5" />
+        </filter>
+
+        <!-- Grid Pattern -->
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.75" stroke-opacity="0.3" />
+        </pattern>
+        
+        <!-- Markers -->
+        <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#38bdf8" />
+        </marker>
+        <marker id="arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#a855f7" />
+        </marker>
+        <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#fbbf24" />
+        </marker>
+        <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#10b981" />
+        </marker>
+        <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#ef4444" />
+        </marker>
+        <marker id="arrow-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#64748b" />
+        </marker>
+    </defs>
+
+    <!-- Background -->
+    <rect width="1600" height="1000" fill="url(#bg-grad)" />
+    <rect width="1600" height="1000" fill="url(#grid)" />
+
+    <!-- ========================================== -->
+    <!-- HEADER                                     -->
+    <!-- ========================================== -->
+    <g transform="translate(800, 58)" text-anchor="middle">
+        <text y="0" class="text-white" font-size="38" font-weight="800" letter-spacing="4">ORAGAI</text>
+        <text y="28" class="text-blue font-mono" font-size="13" font-weight="700" letter-spacing="2.5">ORCHESTRATED RESILIENT AUTONOMOUS GENERATIVE AI</text>
+        <text y="50" class="text-gray" font-size="13" font-weight="400" letter-spacing="0.8">Production-Grade Multi-Agent Lifecycle &amp; Control Plane Architecture</text>
+        <line x1="-320" y1="68" x2="320" y2="68" class="stroke-gray" stroke-width="1" stroke-opacity="0.4" />
+    </g>
+
+    <!-- ========================================== -->
+    <!-- TOP INPUT SPECIFICATION                    -->
+    <!-- ========================================== -->
+    <g transform="translate(800, 150)" text-anchor="middle">
+        <rect x="-150" y="0" width="300" height="42" rx="8" class="bg-panel-highlight stroke-blue" stroke-width="1.5" filter="url(#glow-blue)" />
+        <text y="26" class="text-white font-mono" font-size="12" font-weight="700" letter-spacing="1">USER TASK / SPECIFICATION</text>
+        <!-- Arrow extends directly into the TASK orbit box at y=300 -->
+        <path d="M 0 42 L 0 134" class="stroke-blue anim-flow" stroke-width="2" marker-end="url(#arrow-blue)" />
+    </g>
+
+    <!-- ========================================== -->
+    <!-- LEFT COLUMN: STAGES 01 - 04                -->
+    <!-- ========================================== -->
+    <g transform="translate(45, 230)">
+        <!-- 01 INGEST -->
+        <g transform="translate(0, 0)">
+            <rect width="280" height="115" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 115 L 8 115 Q 0 115 0 107 Z" fill="#38bdf8" />
+            <text x="24" y="32" class="text-blue font-mono" font-size="15" font-weight="700">01 &mdash; INGEST</text>
+            <circle cx="255" cy="27" r="4" fill="#38bdf8" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Task &amp; schema ingestion</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• Configuration &amp; repo boundaries</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Execution model dispatch</text>
+            <path d="M 140 115 L 140 142" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+        </g>
+
+        <!-- 02 UNDERSTAND -->
+        <g transform="translate(0, 145)">
+            <rect width="280" height="135" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 135 L 8 135 Q 0 135 0 127 Z" fill="#a855f7" />
+            <text x="24" y="32" class="text-violet font-mono" font-size="15" font-weight="700">02 &mdash; UNDERSTAND</text>
+            <circle cx="255" cy="27" r="4" fill="#a855f7" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Zero-token codebase intelligence</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• AST call tree &amp; dependency DAG</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Semantic blast radius detection</text>
+            <text x="24" y="118" class="text-gray-light" font-size="12">• API contract skeletal extraction</text>
+            <path d="M 140 135 L 140 162" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+        </g>
+
+        <!-- 03 PLAN -->
+        <g transform="translate(0, 310)">
+            <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 125 L 8 125 Q 0 125 0 117 Z" fill="#818cf8" />
+            <text x="24" y="32" class="text-blue font-mono" font-size="15" font-weight="700">03 &mdash; PLAN</text>
+            <circle cx="255" cy="27" r="4" fill="#818cf8" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Architect agent synthesis</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• Deterministic PLAN.md DAG</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Explicit invariant boundaries</text>
+            <path d="M 140 125 L 140 152" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+        </g>
+
+        <!-- 04 GOVERN -->
+        <g transform="translate(0, 465)">
+            <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 0 8 Q 0 0 8 0 L 8 0 L 8 125 L 8 125 Q 0 125 0 117 Z" fill="#fbbf24" />
+            <text x="24" y="32" class="text-amber font-mono" font-size="15" font-weight="700">04 &mdash; GOVERN</text>
+            <circle cx="255" cy="27" r="4" fill="#fbbf24" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Guarded FSM state machine</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• Dynamic Token Governor</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Anti-hallucination barriers</text>
+        </g>
+    </g>
+
+    <!-- ========================================== -->
+    <!-- RIGHT COLUMN: STAGES 05 - 08               -->
+    <!-- ========================================== -->
+    <g transform="translate(1275, 230)">
+        <!-- 05 DISPATCH -->
+        <g transform="translate(0, 0)">
+            <rect width="280" height="115" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 107 Q 280 115 272 115 L 272 115 Z" fill="#14b8a6" />
+            <text x="24" y="32" class="text-emerald font-mono" font-size="15" font-weight="700">05 &mdash; DISPATCH</text>
+            <circle cx="255" cy="27" r="4" fill="#14b8a6" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Specialized persona allocation</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• Developer &amp; Tester handoff</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Context isolation enforcement</text>
+            <path d="M 140 115 L 140 142" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+        </g>
+
+        <!-- 06 VALIDATE -->
+        <g transform="translate(0, 145)">
+            <rect width="280" height="135" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 127 Q 280 135 272 135 L 272 135 Z" fill="#fbbf24" />
+            <text x="24" y="32" class="text-amber font-mono" font-size="15" font-weight="700">06 &mdash; VALIDATE</text>
+            <circle cx="255" cy="27" r="4" fill="#fbbf24" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Pytest isolated test execution</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• In-memory AST Guard repair</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Reviewer security audit</text>
+            <text x="24" y="118" class="text-gray-light" font-size="12">• False-completion gating</text>
+            <path d="M 140 135 L 140 162" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+        </g>
+
+        <!-- 07 RECOVER -->
+        <g transform="translate(0, 310)">
+            <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 117 Q 280 125 272 125 L 272 125 Z" fill="#ef4444" />
+            <text x="24" y="32" class="text-red font-mono" font-size="15" font-weight="700">07 &mdash; RECOVER</text>
+            <circle cx="255" cy="27" r="4" fill="#ef4444" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• SRE Mesh fault detection</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• Backoff retry &amp; AST auto-heal</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Cloud provider failover mesh</text>
+            <path d="M 140 125 L 140 152" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+        </g>
+
+        <!-- 08 COMPLETE -->
+        <g transform="translate(0, 465)">
+            <rect width="280" height="125" rx="8" class="bg-panel" filter="url(#card-shadow)" />
+            <path d="M 272 0 L 280 0 Q 280 8 280 8 L 280 117 Q 280 125 272 125 L 272 125 Z" fill="#10b981" />
+            <text x="24" y="32" class="text-emerald font-mono" font-size="15" font-weight="700">08 &mdash; COMPLETE</text>
+            <circle cx="255" cy="27" r="4" fill="#10b981" />
+            <text x="24" y="58" class="text-gray-light" font-size="12">• Forensic Auditor sign-off</text>
+            <text x="24" y="78" class="text-gray-light" font-size="12">• Verified test &amp; diff receipts</text>
+            <text x="24" y="98" class="text-gray-light" font-size="12">• Clean final state commit</text>
+        </g>
+    </g>
+
+    <!-- ========================================== -->
+    <!-- CENTRAL ORAGAI CONTROL PLANE & SATELLITES  -->
+    <!-- ========================================== -->
+    <!-- 4 SATELLITE CARDS (SYMMETRICAL GRID) -->
+    <!-- Top-Left: Codebase Intelligence -->
+    <g transform="translate(370, 245)">
+        <rect width="230" height="95" rx="8" class="bg-panel-highlight stroke-violet" stroke-dasharray="4 2" filter="url(#card-shadow)" />
+        <text x="115" y="28" class="text-violet font-mono" font-size="12" font-weight="700" text-anchor="middle">CODEBASE INTEL</text>
+        <line x1="20" y1="38" x2="210" y2="38" class="stroke-gray" stroke-width="1" />
+        <text x="115" y="58" class="text-gray-light" font-size="11" text-anchor="middle">Zero-token repository graph</text>
+        <text x="115" y="74" class="text-gray-light" font-size="11" text-anchor="middle">Structural call trees &amp; AST</text>
+        <path d="M 230 47 Q 305 47 340 70" fill="none" class="stroke-violet anim-flow" stroke-width="1.5" marker-end="url(#arrow-violet)" />
+    </g>
+
+    <!-- Bottom-Left: Context Handoff -->
+    <g transform="translate(370, 480)">
+        <rect width="230" height="95" rx="8" class="bg-panel-highlight stroke-blue" stroke-dasharray="4 2" filter="url(#card-shadow)" />
+        <text x="115" y="28" class="text-blue font-mono" font-size="12" font-weight="700" text-anchor="middle">CONTEXT HANDOFF</text>
+        <line x1="20" y1="38" x2="210" y2="38" class="stroke-gray" stroke-width="1" />
+        <text x="115" y="58" class="text-gray-light" font-size="11" text-anchor="middle">Explicit state propagation</text>
+        <text x="115" y="74" class="text-gray-light" font-size="11" text-anchor="middle">Strict DAG boundaries</text>
+        <path d="M 230 47 Q 310 47 375 25" fill="none" class="stroke-blue anim-flow" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+    </g>
+
+    <!-- Top-Right: Token Governor -->
+    <g transform="translate(1000, 245)">
+        <rect width="230" height="95" rx="8" class="bg-panel-highlight stroke-blue" stroke-dasharray="4 2" filter="url(#card-shadow)" />
+        <text x="115" y="28" class="text-blue font-mono" font-size="12" font-weight="700" text-anchor="middle">TOKEN GOVERNOR</text>
+        <line x1="20" y1="38" x2="210" y2="38" class="stroke-gray" stroke-width="1" />
+        <text x="115" y="58" class="text-gray-light" font-size="11" text-anchor="middle">Dynamic budget quotas</text>
+        <text x="115" y="74" class="text-gray-light" font-size="11" text-anchor="middle">Unbounded loop prevention</text>
+        <path d="M 0 47 Q -70 47 -90 95" fill="none" class="stroke-blue anim-flow" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+    </g>
+
+    <!-- Bottom-Right: AST Guard & SRE -->
+    <g transform="translate(1000, 480)">
+        <rect width="230" height="95" rx="8" class="bg-panel-highlight stroke-amber" stroke-dasharray="4 2" filter="url(#card-shadow)" />
+        <text x="115" y="28" class="text-amber font-mono" font-size="12" font-weight="700" text-anchor="middle">AST GUARD &amp; SRE</text>
+        <line x1="20" y1="38" x2="210" y2="38" class="stroke-gray" stroke-width="1" />
+        <text x="115" y="58" class="text-gray-light" font-size="11" text-anchor="middle">Pre-commit syntax validation</text>
+        <text x="115" y="74" class="text-gray-light" font-size="11" text-anchor="middle">Fault containment &amp; healing</text>
+        <path d="M 0 47 Q -65 47 -95 70" fill="none" class="stroke-amber anim-flow" stroke-width="1.5" marker-end="url(#arrow-amber)" />
+    </g>
+
+    <!-- THE CENTRAL ENGINE CORE -->
+    <g transform="translate(800, 465)">
+        <!-- Outer Concentric Orbits -->
+        <circle cx="0" cy="0" r="165" fill="none" stroke="#334155" stroke-width="1" stroke-dasharray="3 6" opacity="0.6" />
+        <circle cx="0" cy="0" r="125" fill="none" stroke="#4f46e5" stroke-width="1" stroke-dasharray="4 8" opacity="0.5" />
+        
+        <!-- Core Orb -->
+        <circle cx="0" cy="0" r="95" fill="url(#control-plane-grad)" stroke="#38bdf8" stroke-width="2" class="anim-pulse" />
+        <circle cx="0" cy="0" r="85" fill="none" stroke="#6366f1" stroke-width="1" stroke-dasharray="10 5" opacity="0.6" />
+        
+        <!-- Core Text -->
+        <text x="0" y="-10" class="text-white font-sans" font-size="22" font-weight="800" text-anchor="middle" letter-spacing="2">ORAGAI</text>
+        <text x="0" y="16" class="text-blue font-mono" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="1.5">CONTROL PLANE</text>
+
+        <!-- ORBIT NODES (Circumference r=165) -->
+        <!-- Top: Task Entry -->
+        <g transform="translate(0, -165)">
+            <rect x="-45" y="-16" width="90" height="32" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" filter="url(#glow-blue)" />
+            <text x="0" y="5" class="text-white font-mono" font-size="11" text-anchor="middle" font-weight="700">TASK</text>
+        </g>
+
+        <!-- Top-Right: Plan -->
+        <g transform="translate(130, -100)">
+            <circle cx="0" cy="0" r="24" fill="#0f172a" stroke="#818cf8" stroke-width="1.5" filter="url(#glow-violet)" />
+            <text x="0" y="4" class="text-white font-mono" font-size="10" text-anchor="middle" font-weight="600">PLAN</text>
+        </g>
+
+        <!-- Right: Dispatch -->
+        <g transform="translate(165, 0)">
+            <circle cx="0" cy="0" r="24" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+            <text x="0" y="4" class="text-white font-mono" font-size="9" text-anchor="middle" font-weight="600">DISPATCH</text>
+        </g>
+
+        <!-- Bottom-Right: Execute -->
+        <g transform="translate(120, 115)">
+            <circle cx="0" cy="0" r="26" fill="#0f172a" stroke="#a855f7" stroke-width="1.5" filter="url(#glow-violet)" />
+            <text x="0" y="4" class="text-white font-mono" font-size="10" text-anchor="middle" font-weight="600">EXEC</text>
+        </g>
+
+        <!-- Bottom-Left: Verify / Test -->
+        <g transform="translate(-120, 115)">
+            <rect x="-35" y="-16" width="70" height="32" rx="6" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" filter="url(#glow-amber)" />
+            <text x="0" y="5" class="text-amber font-mono" font-size="11" text-anchor="middle" font-weight="700">TEST</text>
+        </g>
+
+        <!-- Left: Guarded Gate -->
+        <g transform="translate(-165, 0)">
+            <circle cx="0" cy="0" r="24" fill="#0f172a" stroke="#10b981" stroke-width="1.5" />
+            <text x="0" y="4" class="text-white font-mono" font-size="9" text-anchor="middle" font-weight="600">GATE</text>
+        </g>
+
+        <!-- Top-Left: Recover -->
+        <g transform="translate(-130, -100)">
+            <rect x="-38" y="-16" width="76" height="32" rx="6" fill="#0f172a" stroke="#ef4444" stroke-width="1.5" filter="url(#glow-red)" />
+            <text x="0" y="5" class="text-red font-mono" font-size="10" text-anchor="middle" font-weight="700">RECOVER</text>
+        </g>
+
+        <!-- Directional Flow Paths (Clockwise Lifecycle) -->
+        <path d="M 45 -155 Q 95 -145 110 -115" fill="none" class="stroke-blue" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+        <path d="M 145 -78 Q 165 -45 165 -25" fill="none" class="stroke-violet" stroke-width="1.5" marker-end="url(#arrow-violet)" />
+        <path d="M 165 25 Q 160 70 138 95" fill="none" class="stroke-blue" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+        <path d="M 95 125 L -80 125" fill="none" class="stroke-amber" stroke-width="2" marker-end="url(#arrow-amber)" />
+        <path d="M -140 100 Q -165 65 -165 25" fill="none" class="stroke-emerald" stroke-width="1.5" marker-end="url(#arrow-emerald)" />
+        <!-- Complete Loop: GATE back up to RECOVER / COMPLETE -->
+        <path d="M -165 -25 Q -165 -65 -140 -85" fill="none" class="stroke-emerald" stroke-width="1.5" marker-end="url(#arrow-emerald)" />
+        
+        <!-- Failure Recovery Arc -->
+        <path d="M -135 105 Q -210 20 -150 -80" fill="none" class="stroke-red" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-red)" />
+        <!-- Recover back to Exec -->
+        <path d="M -90 -95 Q 0 -50 95 100" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-blue)" />
+        
+        <!-- Guarded gate badge -->
+        <rect x="-38" y="117" width="76" height="16" rx="3" fill="#030712" stroke="#fbbf24" stroke-width="0.5" />
+        <text x="0" y="129" class="text-amber font-mono" font-size="8" font-weight="700" text-anchor="middle">VERIFIED GATE</text>
+    </g>
+
+    <!-- ========================================== -->
+    <!-- BOTTOM INFRASTRUCTURE COMPONENT STRIP      -->
+    <!-- ========================================== -->
+    <g transform="translate(45, 840)">
+        <rect width="1510" height="96" rx="10" class="bg-panel" stroke="#334155" filter="url(#card-shadow)" />
+        
+        <!-- Strip Title -->
+        <text x="755" y="-12" class="text-blue font-mono" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="2.5">CORE INFRASTRUCTURE MODULES</text>
+        
+        <!-- 6 Symmetrically distributed cards -->
+        <g transform="translate(25, 24)">
+            <!-- Item 1: Guarded FSM -->
+            <rect x="0" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-amber" />
+            <text x="112" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Guarded FSM Engine</text>
+            <text x="112" y="38" class="text-gray" font-size="10" text-anchor="middle">Finite State Invariants</text>
+
+            <path d="M 225 24 L 246 24" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+
+            <!-- Item 2: Multi-Agent Pipeline -->
+            <rect x="247" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-blue" />
+            <text x="359" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Role-Specialized DAG</text>
+            <text x="359" y="38" class="text-gray" font-size="10" text-anchor="middle">Architect &bull; Dev &bull; QA</text>
+
+            <path d="M 472 24 L 493 24" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+
+            <!-- Item 3: Zero-Token Intelligence -->
+            <rect x="494" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-violet" />
+            <text x="606" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Zero-Token Repository</text>
+            <text x="606" y="38" class="text-gray" font-size="10" text-anchor="middle">Instant Blast Radius</text>
+
+            <path d="M 719 24 L 740 24" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+
+            <!-- Item 4: Token Governance -->
+            <rect x="741" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-blue" />
+            <text x="853" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Dynamic Token Budget</text>
+            <text x="853" y="38" class="text-gray" font-size="10" text-anchor="middle">Partitioned Hard Quotas</text>
+
+            <path d="M 966 24 L 987 24" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+
+            <!-- Item 5: AST Auto-Heal -->
+            <rect x="988" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-amber" />
+            <text x="1100" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">AST Auto-Repair</text>
+            <text x="1100" y="38" class="text-gray" font-size="10" text-anchor="middle">Syntax Healing Pre-Commit</text>
+
+            <path d="M 1213 24 L 1234 24" class="stroke-gray" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+
+            <!-- Item 6: Cloud Resilience -->
+            <rect x="1235" y="0" width="225" height="48" rx="6" class="bg-panel-highlight stroke-red" />
+            <text x="1347" y="24" class="text-white font-mono" font-size="12" font-weight="600" text-anchor="middle">Resilience Mesh</text>
+            <text x="1347" y="38" class="text-gray" font-size="10" text-anchor="middle">Fault Tolerance &bull; Fallbacks</text>
+        </g>
+    </g>
+
+
+</svg>

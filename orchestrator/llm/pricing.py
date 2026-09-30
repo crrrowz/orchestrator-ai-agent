@@ -14,7 +14,7 @@ def get_pricing_rates(model: str) -> Tuple[float, float]:
         return 0.15, 0.60
     if "gpt-4o" in m:
         return 2.50, 10.00
-    if "gemini-2.0-flash" in m or "gemini-1.5-flash" in m:
+    if "gemini-2.0-flash" in m or "gemini-1.5-flash" in m or "gemini-3.7-flash" in m or "gemini-3.7" in m:
         return 0.10, 0.40
     if "gemini-1.5-pro" in m:
         return 1.25, 5.00

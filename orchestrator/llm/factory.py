@@ -1,7 +1,8 @@
 """LLM instance factory with OpenRouter failover and provider routing."""
 
 import os
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Optional
 from pydantic import SecretStr
 
 from openhands.sdk import LLM
@@ -11,52 +12,133 @@ if TYPE_CHECKING:
     from orchestrator.config import AgentRoleConfig, OrchestratorConfig
 
 
+KNOWN_LITELLM_PROVIDERS = {
+    "openai",
+    "anthropic",
+    "gemini",
+    "google",
+    "openrouter",
+    "groq",
+    "ollama",
+    "vertex_ai",
+    "bedrock",
+    "azure",
+    "mistral",
+    "together_ai",
+    "deepseek",
+    "cohere",
+    "voyage",
+    "huggingface",
+    "cloudflare",
+    "replicate",
+}
+
+
+def sanitize_base_url(url: Optional[str]) -> Optional[str]:
+    """Sanitize base URL by correcting malformed port syntax (e.g. /:20128) and stripping trailing slashes."""
+    if not url:
+        return None
+    cleaned = url.strip()
+    if not cleaned:
+        return None
+    # Fix malformed port syntax like /:20128 -> :20128
+    cleaned = re.sub(r"/+:(\d+)", r":\1", cleaned)
+    # Remove trailing slash
+    return cleaned.rstrip("/")
+
+
 def create_llm_for_role(
     config: "OrchestratorConfig", role_config: "AgentRoleConfig"
 ) -> LLM:
     """Factory to create an OpenHands LLM instance with appropriate credentials and failover."""
-    model = normalize_model_slug(role_config.model)
+    raw_model = normalize_model_slug(role_config.model)
     api_key_val = role_config.api_key
+    base_url: Optional[str] = None
+    model = raw_model
 
-    # Resolve API Key by provider prefix if not explicitly set
-    if not api_key_val:
-        if model.startswith("anthropic/"):
-            api_key_val = config.anthropic_api_key
-        elif model.startswith("omniroute/"):
-            api_key_val = (
-                config.omniroute_api_key
-                or os.environ.get("OMNIROUTE_API_KEY")
-                or config.openai_api_key
-                or "sk-omniroute"
-            )
-        elif model.startswith("openai/"):
-            api_key_val = config.openai_api_key or config.omniroute_api_key
-        elif model.startswith("gemini/") or model.startswith("google/"):
-            api_key_val = config.gemini_api_key
-        elif model.startswith("openrouter/"):
-            api_key_val = config.openrouter_api_key
-        elif model.startswith("groq/"):
-            api_key_val = getattr(config, "groq_api_key", None) or os.environ.get(
-                "GROQ_API_KEY"
-            )
+    # Determine provider prefix
+    prefix = raw_model.split("/", 1)[0].lower() if "/" in raw_model else ""
+    active_provider = (getattr(config, "provider", None) or os.environ.get("PROVIDER", "")).lower()
 
-    base_url = None
-    if model.startswith("omniroute/"):
-        base_url = getattr(config, "omniroute_base_url", None) or os.environ.get(
-            "OMNIROUTE_BASE_URL", "http://localhost:20128/v1"
-        )
-        # Translate to OpenAI-compatible provider slug for LiteLLM engine
-        model = f"openai/{model[len('omniroute/') :]}"
-    elif model.startswith("openai/"):
-        if getattr(config, "openai_base_url", None) or os.environ.get(
-            "OPENAI_BASE_URL"
-        ):
-            base_url = config.openai_base_url or os.environ.get("OPENAI_BASE_URL")
-        elif getattr(config, "provider", "") == "omniroute":
-            base_url = getattr(config, "omniroute_base_url", None) or os.environ.get(
-                "OMNIROUTE_BASE_URL", "http://localhost:20128/v1"
-            )
+    omniroute_base = (
+        sanitize_base_url(getattr(config, "omniroute_base_url", None))
+        or sanitize_base_url(os.environ.get("OMNIROUTE_BASE_URL"))
+        or "http://localhost:20128/v1"
+    )
+    omniroute_key = (
+        getattr(config, "omniroute_api_key", None)
+        or os.environ.get("OMNIROUTE_API_KEY")
+        or getattr(config, "openai_api_key", None)
+        or "sk-omniroute"
+    )
+    openai_base = sanitize_base_url(
+        getattr(config, "openai_base_url", None) or os.environ.get("OPENAI_BASE_URL")
+    )
+    has_explicit_omniroute_base = bool(
+        getattr(config, "omniroute_base_url", None) or os.environ.get("OMNIROUTE_BASE_URL")
+    )
 
+    if raw_model.startswith("omniroute/"):
+        # Explicit omniroute prefix: route as OpenAI-compatible
+        suffix = raw_model[len("omniroute/") :]
+        model = f"openai/{suffix}"
+        base_url = omniroute_base
+        if not api_key_val:
+            api_key_val = omniroute_key
+    elif prefix in KNOWN_LITELLM_PROVIDERS:
+        # Standard LiteLLM built-in provider
+        if prefix in ("gemini", "google"):
+            if not api_key_val:
+                api_key_val = config.gemini_api_key
+        elif prefix == "anthropic":
+            if not api_key_val:
+                api_key_val = config.anthropic_api_key
+        elif prefix == "openrouter":
+            if not api_key_val:
+                api_key_val = config.openrouter_api_key
+        elif prefix == "groq":
+            if not api_key_val:
+                api_key_val = getattr(config, "groq_api_key", None) or os.environ.get("GROQ_API_KEY")
+        elif prefix == "openai":
+            if openai_base:
+                base_url = openai_base
+                if not api_key_val:
+                    api_key_val = config.openai_api_key
+            elif active_provider == "omniroute":
+                base_url = omniroute_base
+                if not api_key_val:
+                    api_key_val = omniroute_key
+            else:
+                if not api_key_val:
+                    api_key_val = config.openai_api_key
+    else:
+        # Unknown/Custom provider prefix (e.g. antigravity/..., custom/..., or pure model name)
+        if active_provider == "omniroute":
+            model = f"openai/{raw_model}"
+            base_url = omniroute_base
+            if not api_key_val:
+                api_key_val = omniroute_key
+        elif openai_base:
+            model = f"openai/{raw_model}"
+            base_url = openai_base
+            if not api_key_val:
+                api_key_val = config.openai_api_key or "sk-custom"
+        elif has_explicit_omniroute_base:
+            model = f"openai/{raw_model}"
+            base_url = omniroute_base
+            if not api_key_val:
+                api_key_val = omniroute_key
+        else:
+            model = f"openai/{raw_model}"
+            if active_provider == "openai" or config.openai_api_key:
+                if not api_key_val:
+                    api_key_val = config.openai_api_key
+            else:
+                base_url = omniroute_base
+                if not api_key_val:
+                    api_key_val = omniroute_key
+
+    # Export credentials to environment for LiteLLM
     if api_key_val:
         if model.startswith("gemini/") or model.startswith("google/"):
             os.environ["GEMINI_API_KEY"] = api_key_val

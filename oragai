@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="${SCRIPT_DIR}/workspace"
+mkdir -p "${WORKSPACE_DIR}"
+
+ENV_FILE="${SCRIPT_DIR}/.env"
+
+TTY_FLAG="-i"
+if [ -t 0 ] && [ -t 1 ]; then
+    TTY_FLAG="-it"
+fi
+
+if [ "$#" -eq 0 ]; then
+    docker run --rm ${TTY_FLAG} -v "${WORKSPACE_DIR}:/workspace/orchestrator-ai-agent/workspace" --env-file "${ENV_FILE}" oragai:dev --check-config
+else
+    docker run --rm ${TTY_FLAG} -v "${WORKSPACE_DIR}:/workspace/orchestrator-ai-agent/workspace" --env-file "${ENV_FILE}" oragai:dev "$@"
+fi

@@ -21,6 +21,10 @@ if sys.platform == "win32":
 # Suppress OpenHands banner box & debug spam immediately before any SDK import
 os.environ["OPENHANDS_SUPPRESS_BANNER"] = "1"
 os.environ["LITELLM_LOG"] = "CRITICAL"
+if "COLUMNS" not in os.environ:
+    os.environ["COLUMNS"] = "160"
+if "LINES" not in os.environ:
+    os.environ["LINES"] = "40"
 
 for _logger_name in [
     "openhands",

@@ -100,6 +100,14 @@ class TransitionMatrix:
                 description="Initialize task and advance to preflight static checks.",
             )
         )
+        matrix.add_rule(
+            TransitionRule(
+                source_state=FSMState.INIT,
+                trigger_event=EventType.CRITICAL_ERROR,
+                target_state=FSMState.FAILED,
+                description="Critical error or initialization failure in INIT state.",
+            )
+        )
 
         # ==========================================
         # 2. PREFLIGHT State Transitions

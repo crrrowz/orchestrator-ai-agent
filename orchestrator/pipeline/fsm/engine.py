@@ -94,6 +94,7 @@ class GuardedFSMEngine:
         self.skill_manager = skill_manager or SkillManager()
         self.profile = profile or get_profile(PipelineMode.DEV_TEST)
         self.workspace_path = (workspace_path or config.workspace_path).resolve()
+        self.workspace_path.mkdir(parents=True, exist_ok=True)
         self.controller = controller or PipelineController()
         self.human_channel = human_channel or get_active_channel()
         self.llm_manager = llm_manager
@@ -304,7 +305,7 @@ class GuardedFSMEngine:
                     f"Transition failed: {transition_res.rejection_reason}. Handling recovery."
                 )
                 if self.context.current_state == FSMState.RESOLUTION:
-                    self.process_event(
+                    rec_res = self.process_event(
                         PipelineEvent(
                             event_type=EventType.RETRIES_EXHAUSTED,
                             source_phase=FSMState.RESOLUTION,
@@ -312,7 +313,7 @@ class GuardedFSMEngine:
                         )
                     )
                 elif self.context.current_state == FSMState.PREFLIGHT:
-                    self.process_event(
+                    rec_res = self.process_event(
                         PipelineEvent(
                             event_type=EventType.PREFLIGHT_FAILED,
                             source_phase=FSMState.PREFLIGHT,
@@ -320,13 +321,20 @@ class GuardedFSMEngine:
                         )
                     )
                 else:
-                    self.process_event(
+                    rec_res = self.process_event(
                         PipelineEvent(
                             event_type=EventType.CRITICAL_ERROR,
                             source_phase=self.context.current_state,
                             error_message=transition_res.rejection_reason,
                         )
                     )
+                if not rec_res.success:
+                    logger.error(
+                        f"Recovery transition failed: {rec_res.rejection_reason}. Halting FSM engine."
+                    )
+                    self.context.current_state = FSMState.FAILED
+                    self.context.state_history.append(FSMState.FAILED)
+                    break
 
         return self._finalize_run_result()
 

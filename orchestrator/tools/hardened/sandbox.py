@@ -53,6 +53,7 @@ class TerminalSandboxEngine:
             "NUMBER_OF_PROCESSORS",
             "PROCESSOR_ARCHITECTURE",
             "OS",
+            "PSMODULEPATH",
         }
 
         env: Dict[str, str] = {}
@@ -157,7 +158,20 @@ class TerminalSandboxEngine:
         # 3. Assemble execution arguments
         if validation.is_powershell_pipeline:
             pwsh_bin = shutil.which("powershell.exe") if is_windows else (shutil.which("pwsh") or shutil.which("powershell"))
-            if pwsh_bin:
+            if pwsh_bin and is_windows:
+                import base64
+                encoded_bytes = clean_cmd.encode("utf-16le")
+                b64_cmd = base64.b64encode(encoded_bytes).decode("ascii")
+                exec_args = [
+                    pwsh_bin,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-EncodedCommand",
+                    b64_cmd,
+                ]
+            elif pwsh_bin:
                 exec_args = [
                     pwsh_bin,
                     "-NoProfile",
@@ -210,6 +224,7 @@ class TerminalSandboxEngine:
             proc = subprocess.Popen(
                 exec_args,
                 cwd=str(target_root),
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
