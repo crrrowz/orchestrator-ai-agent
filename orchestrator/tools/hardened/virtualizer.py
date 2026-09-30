@@ -652,17 +652,21 @@ class WorkspaceFileVirtualizer:
             ".ruff_cache",
         }
 
+        # Optimization: Avoid per-file Path creation and relative_to overhead during tree walk
+        root_str = str(self.workspace_root.resolve())
+        root_prefix = root_str if root_str.endswith(os.sep) else root_str + os.sep
+        dir_str = str(dir_path.resolve())
+
         try:
-            for root, dirs, files in os.walk(dir_path):
+            for root, dirs, files in os.walk(dir_str):
                 # Prune ignored directories in place
                 dirs[:] = [d for d in dirs if d not in ignored_names]
                 for file_name in files:
-                    full_p = Path(root) / file_name
-                    try:
-                        rel_p = full_p.relative_to(self.workspace_root).as_posix()
-                        results.append(rel_p)
-                    except ValueError:
-                        continue
+                    full_path = os.path.join(root, file_name)
+                    if full_path.startswith(root_prefix):
+                        rel_p = full_path[len(root_prefix):].replace(os.sep, "/")
+                        if rel_p:
+                            results.append(rel_p)
             return True, sorted(results), f"Found {len(results)} files."
         except Exception as e:
             return False, [], f"List directory error: {str(e)}"
