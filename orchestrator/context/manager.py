@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 from orchestrator.core.config import OrchestratorConfig
 from orchestrator.context.file_resolver import FilePathResolver
 from orchestrator.context.injectors import (
+    CIFailureReportInjector,
     ContextInjector,
     GraftInjector,
     MemoryInjector,
@@ -42,6 +43,7 @@ class ContextManager:
         )
         mgr.register(MemoryInjector(enabled=cfg.enable_memory), priority=40)
         mgr.register(PlanInjector(), priority=50)
+        mgr.register(CIFailureReportInjector(enabled=True), priority=60)
         return mgr
 
     def build_prompt(

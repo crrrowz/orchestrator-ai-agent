@@ -415,3 +415,27 @@ def handle_diagnostics_clean(diagnostics_dir: Optional[Path] = None) -> None:
         f"cleaned {results['tmp_files_removed']} temporary files."
     )
     ConsoleOutput.info(f"Regenerated catalog index: {manager.base_dir / 'INDEX.md'}")
+
+
+def handle_ci_diagnose(run_id: Optional[str] = None) -> None:
+    """Diagnose CI failure from GitHub Actions or local diagnostics store."""
+    from orchestrator.ci.analyzer import CIFailureAnalyzer
+
+    analyzer = CIFailureAnalyzer()
+    ConsoleOutput.banner("CI Failure Diagnostic Analysis", f"Target Run: {run_id or 'Latest'}")
+    report = analyzer.diagnose_run(run_id=run_id)
+    print(report.to_markdown())
+
+
+def handle_ci_verify(workspace_path: Optional[Path] = None) -> None:
+    """Run local replication of GitHub Actions CI pipeline verification gates."""
+    from orchestrator.ci.verifier import LocalCIVerifier
+
+    ConsoleOutput.banner("Local CI Verification Gate Runner", "Executing CI.yml gates locally")
+    verifier = LocalCIVerifier(workspace_path=workspace_path)
+    summary = verifier.verify()
+    print(summary.to_markdown())
+    if not summary.all_passed:
+        import sys
+        sys.exit(1)
+

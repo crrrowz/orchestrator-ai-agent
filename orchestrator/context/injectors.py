@@ -89,3 +89,36 @@ class PlanInjector(ContextInjector):
             except Exception:
                 pass
         return None
+
+
+class CIFailureReportInjector(ContextInjector):
+    """Injects structured, deduplicated CI failure diagnostics into Developer and Tester prompts."""
+
+    def __init__(self, enabled: bool = True, max_chars: int = 3000):
+        self.enabled = enabled
+        self.max_chars = max_chars
+
+    def should_inject(self, role: str, task: str) -> bool:
+        if not self.enabled:
+            return False
+        # Inject for developer, tester, reviewer, and auditor roles
+        is_relevant_role = role in ("developer", "tester", "reviewer", "auditor")
+        is_ci_related = any(kw in task.lower() for kw in ("ci", "pipeline", "github actions", "workflow", "run", "failure", "pytest"))
+        return is_relevant_role or is_ci_related
+
+    def get_context(self, task: str, workspace: Path) -> Optional[str]:
+        try:
+            from orchestrator.ci.analyzer import CIFailureAnalyzer
+
+            analyzer = CIFailureAnalyzer()
+            latest = analyzer.load_latest_report()
+            if latest and latest.failures:
+                # Include gate status and actionable failures
+                report_md = latest.to_markdown()
+                if len(report_md) > self.max_chars:
+                    report_md = report_md[: self.max_chars] + "\n... [Diagnostic report truncated for token budget]"
+                return f"[Verified CI Diagnostic Evidence]:\n{report_md}"
+        except Exception:
+            pass
+        return None
+

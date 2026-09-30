@@ -43,6 +43,8 @@ except ImportError:
 
 from orchestrator.cli.handlers import (  # noqa: E402
     handle_check_config,
+    handle_ci_diagnose,
+    handle_ci_verify,
     handle_diagnostics_clean,
     handle_diagnostics_dashboard,
     handle_diagnostics_search,
@@ -214,6 +216,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Clean up test artifacts, prune old logs/memories, and regenerate the central diagnostics catalog.",
     )
+    parser.add_argument(
+        "--ci-diagnose",
+        nargs="?",
+        const="latest",
+        default=None,
+        metavar="RUN_ID",
+        help="Diagnose GitHub Actions CI failure (e.g. --ci-diagnose [RUN_ID]).",
+    )
+    parser.add_argument(
+        "--ci-verify",
+        action="store_true",
+        help="Run local replication of GitHub Actions CI pipeline verification gates.",
+    )
     return parser.parse_args()
 
 
@@ -356,6 +371,16 @@ def main() -> None:
 
     if args.diagnostics_clean:
         handle_diagnostics_clean()
+        sys.exit(0)
+
+    if args.ci_diagnose is not None:
+        target_run = None if args.ci_diagnose == "latest" else args.ci_diagnose
+        handle_ci_diagnose(run_id=target_run)
+        sys.exit(0)
+
+    if args.ci_verify:
+        ws_dir = resolve_workspace_dir(args.workspace, config.workspace_path)
+        handle_ci_verify(workspace_path=ws_dir)
         sys.exit(0)
 
     # Check for --resume, direct audit/docs modes, or interactive wizard
