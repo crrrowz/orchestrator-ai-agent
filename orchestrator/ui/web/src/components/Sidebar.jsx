@@ -1,152 +1,186 @@
 import React, { useState } from 'react';
-import { Cpu, Dna, Sparkles, Box, Shield, Terminal, ArrowRight, Layers, Workflow, Database, RefreshCw } from 'lucide-react';
+import { 
+  FlaskConical, 
+  Layers, 
+  Search, 
+  Wrench, 
+  Sparkles, 
+  Dna, 
+  Cpu, 
+  Plus, 
+  Trash2, 
+  Laptop, 
+  ShieldAlert, 
+  Check, 
+  X 
+} from 'lucide-react';
 
-export default function Sidebar({ onSpawnNode, lang }) {
-  const [activeTab, setActiveTab] = useState('engines');
+export default function Sidebar({
+  modes,
+  activeMode,
+  onSelectMode,
+  agents,
+  selectedAgentRole,
+  onSelectAgentRole,
+  onBindSkill,
+  onRemoveSkill,
+  lang
+}) {
+  const [activeTab, setActiveTab] = useState('modes'); // 'modes' | 'skills' | 'graft'
 
-  const engineItems = [
-    {
-      title: 'Core Engine',
-      category: 'Core',
-      badge: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-      model: 'Gemini 2.5 Pro',
-      skill: 'Deterministic FSM',
-      domain: 'orchestrator/engines/core',
-      desc: lang === 'ar' ? 'منسق دورة حياة المحركات الـ 13 وإدارة الحالة المتكاملة.' : 'Deterministic 13-engine lifecycle coordinator & state machine.'
-    },
-    {
-      title: 'Graph Engine',
-      category: 'Graph',
-      badge: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-      model: 'Claude 3.7 Sonnet',
-      skill: 'Topological DAG',
-      domain: 'orchestrator/engines/graph',
-      desc: lang === 'ar' ? 'محرك التدفق الطوبولوجي التفاعلي مع نقاط حفظ الحالة.' : 'Langflow-style topological execution with state checkpoints.'
-    },
-    {
-      title: 'Adaptive Governor',
-      category: 'Safety',
-      badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
-      model: 'GPT-4o',
-      skill: 'Anti-Loop Invariant',
-      domain: 'orchestrator/engines/governance',
-      desc: lang === 'ar' ? 'إدارة الميزانية وحماية الوكلاء من التكرار والانهيار.' : 'Token budgeting, loop-breaking, chaos prevention & invariants.'
-    },
-    {
-      title: 'Verification Engine',
-      category: 'Audit',
-      badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-      model: 'GPT-4o',
-      skill: 'Forensic Gate',
-      domain: 'orchestrator/engines/verification',
-      desc: lang === 'ar' ? 'بوابة التحقق الجنائي وخلو الكود من التعطيل الوهمي Zero-Stub.' : 'Forensic evidence gate: zero-stub validation & test verification.'
-    },
-    {
-      title: 'Model Router Engine',
-      category: 'LLM',
-      badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      model: 'OmniRoute Router',
-      skill: 'Dynamic Fallback',
-      domain: 'orchestrator/engines/models',
-      desc: lang === 'ar' ? 'توجيه الطلبات متعدد المزودين مع تجاوز الأعطال التلقائي.' : 'Multi-provider dynamic routing with tiered fallbacks.'
-    },
-    {
-      title: 'Tool Broker Engine',
-      category: 'Tools',
-      badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-      model: 'Sandboxed Exec',
-      skill: 'Strict Permissions',
-      domain: 'orchestrator/engines/tools',
-      desc: lang === 'ar' ? 'تنفيذ الأدوات في بيئات معزولة وآمنة مع ضوابط الصلاحيات.' : 'Secure sandboxed tool execution and permission guards.'
-    }
+  const currentMode = modes[activeMode] || modes['dev-test'];
+  const pipelineAgents = currentMode.agents.map(role => agents[role]).filter(Boolean);
+  const selectedAgent = agents[selectedAgentRole] || pipelineAgents[0] || agents.developer;
+
+  // Catalog of available skills grouped by agent role
+  const agentSkillsCatalog = {
+    architect: [
+      {
+        name: 'architectural-decomposition',
+        badge: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+        desc: lang === 'ar' ? 'تفكيك المتطلبات الكبيرة إلى مواصفات ومراحل تنفيذية دقيقة.' : 'Decomposes high-level requirements into formal specs and dependency trees.'
+      },
+      {
+        name: 'api-design-contract',
+        badge: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+        desc: lang === 'ar' ? 'معايير تصميم واجهات RESTful مع رموز استجابة دقيقة وعقود OpenAPI.' : 'Enforces RESTful conventions, semantic HTTP status codes, and OpenAPI contracts.'
+      },
+      {
+        name: 'graft-architecture-intelligence',
+        badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        desc: lang === 'ar' ? 'استكشاف هيكل الكود ونطاق التأثير واستخراج المخطط بدون استهلاك توكنز.' : 'Zero-token repository orientation, symbol blast radius & skeleton.'
+      }
+    ],
+    developer: [
+      {
+        name: 'clean-python-architecture',
+        badge: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+        desc: lang === 'ar' ? 'معايير بايثون 3.12+ المتقدمة، حقن التبعيات، وصفر أكواد وهمية.' : 'Strict Python 3.12+ type hints, dependency injection, 0 stubs.'
+      },
+      {
+        name: 'systematic-debugging',
+        badge: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+        desc: lang === 'ar' ? 'تحليل الأسباب الجذرية للأخطاء بدقة منهجية وتفادي التراجع.' : 'Systematic root cause analysis without introducing regressions.'
+      },
+      {
+        name: 'docker-devops-containerization',
+        badge: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+        desc: lang === 'ar' ? 'بناء بيئات وحاويات دوكر المعزولة ومحكمة الإغلاق.' : 'Hermetic multi-stage Dockerfiles and devcontainer configurations.'
+      },
+      {
+        name: 'graft-architecture-intelligence',
+        badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        desc: lang === 'ar' ? 'استكشاف هيكل الكود ونطاق التأثير واستخراج المخطط بدون استهلاك توكنز.' : 'Zero-token repository orientation, symbol blast radius & skeleton.'
+      }
+    ],
+    tester: [
+      {
+        name: 'pytest-rigorous-testing',
+        badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+        desc: lang === 'ar' ? 'بروتوكول اختبارات صارم: اختبار الحالات الحدية والحماية من التراجع.' : 'Isolated unit tests, edge-case coverage, deterministic fixtures.'
+      }
+    ],
+    reviewer: [
+      {
+        name: 'code-review-standards',
+        badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+        desc: lang === 'ar' ? 'معايير مراجعة الكود، الجودة، الأداء والتوافقية العكسية.' : 'Rigorous code review rubric for security, correctness, and architecture.'
+      },
+      {
+        name: 'security-audit-hardening',
+        badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+        desc: lang === 'ar' ? 'تحصين أمني شامل ضد حقن الأوامر وثغرات اختراق المسارات.' : 'Defensive hardening against OWASP Top 10, path traversal, injection.'
+      }
+    ],
+    auditor: [
+      {
+        name: 'security-audit-hardening',
+        badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+        desc: lang === 'ar' ? 'تحصين أمني شامل ضد حقن الأوامر وثغرات اختراق المسارات.' : 'Defensive hardening against OWASP Top 10, path traversal, injection.'
+      },
+      {
+        name: 'system-unification-audit',
+        badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        desc: lang === 'ar' ? 'توحيد المسؤوليات داخل النظام: مسؤولية واحدة -> مالك واحد.' : 'System consolidation: One responsibility -> One owner -> One implementation.'
+      },
+      {
+        name: 'graft-architecture-intelligence',
+        badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        desc: lang === 'ar' ? 'استكشاف هيكل الكود ونطاق التأثير واستخراج المخطط بدون استهلاك توكنز.' : 'Zero-token repository orientation, symbol blast radius & skeleton.'
+      }
+    ]
+  };
+
+  const graftClusters = [
+    { name: 'Core Orchestrator', path: 'orchestrator/engines/core', files: 8, symbols: 42 },
+    { name: 'Graph Engine (DAG)', path: 'orchestrator/engines/graph', files: 6, symbols: 31 },
+    { name: 'Governance & Safety', path: 'orchestrator/engines/governance', files: 7, symbols: 29 },
+    { name: 'Verification & Evidence', path: 'orchestrator/engines/verification', files: 5, symbols: 24 },
+    { name: 'OmniRoute LLM Router', path: 'orchestrator/engines/models', files: 9, symbols: 38 }
   ];
 
-  const openspaceSkills = [
-    {
-      name: 'clean-python-architecture',
-      category: 'OpenSpace',
-      badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-      model: 'Gemini 2.5 Pro',
-      skill: 'Strict Type Hints',
-      domain: 'skills/developer/clean-python',
-      desc: lang === 'ar' ? 'معايير بايثون 3.12+ المتقدمة، حقن التبعيات، وصفر أكواد وهمية.' : 'Strict Python 3.12+ type hints, dependency injection, 0 stubs.'
-    },
-    {
-      name: 'pytest-rigorous-testing',
-      category: 'OpenSpace',
-      badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-      model: 'Claude 3.7 Sonnet',
-      skill: 'Edge-Case Suite',
-      domain: 'skills/tester/pytest-rigorous',
-      desc: lang === 'ar' ? 'بروتوكول الاختبارات الصارم: اختبار الحالات الحدية والحماية من التراجع.' : 'Senior testing protocol: edge cases, fixtures, regression guards.'
-    },
-    {
-      name: 'security-audit-hardening',
-      category: 'OpenSpace',
-      badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
-      model: 'GPT-4o',
-      skill: 'OWASP Top 10',
-      domain: 'skills/reviewer/security-audit',
-      desc: lang === 'ar' ? 'تحصين أمني شامل ضد حقن الأوامر وثغرات اختراق المسارات.' : 'Defensive hardening: path traversal, command injection, CVEs.'
-    },
-    {
-      name: 'system-unification-audit',
-      category: 'OpenSpace',
-      badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      model: 'Claude 3.7 Sonnet',
-      skill: 'Single Source of Truth',
-      domain: 'skills/auditor/system-unification',
-      desc: lang === 'ar' ? 'توحيد المسؤوليات داخل النظام: مسؤولية واحدة -> مالك واحد.' : 'System consolidation: One responsibility -> One owner.'
+  const getModeIcon = (modeId) => {
+    switch (modeId) {
+      case 'dev-test':
+        return <FlaskConical className="w-4 h-4 text-cyan-400" />;
+      case 'full':
+        return <Layers className="w-4 h-4 text-indigo-400" />;
+      case 'audit':
+        return <Search className="w-4 h-4 text-amber-400" />;
+      case 'audit-fix':
+        return <Wrench className="w-4 h-4 text-emerald-400" />;
+      default:
+        return <Cpu className="w-4 h-4" />;
     }
-  ];
+  };
 
-  const graftSymbols = [
-    {
-      name: 'graft-architecture-intelligence',
-      category: 'Graft',
-      badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-      model: 'Graft CLI',
-      skill: 'Zero-Token Orientation',
-      domain: 'graft/intelligence/map',
-      desc: lang === 'ar' ? 'استكشاف هيكل الكود ونطاق التأثير واستخراج المخطط بدون استهلاك توكنز.' : 'Zero-token repository orientation, symbol blast radius & skeleton.'
-    },
-    {
-      name: 'graft-to-obsidian',
-      category: 'Graft',
-      badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-      model: 'Obsidian Canvas Engine',
-      skill: 'JSON Canvas Spec',
-      domain: 'graft/obsidian/canvas',
-      desc: lang === 'ar' ? 'تحويل توصيلات الكود إلى مخططات JSON Canvas وملاحظات مترابطة.' : 'Transforms codebase wiring into JSON Canvas & linked MOCs.'
+  const getAgentIcon = (role) => {
+    switch (role) {
+      case 'architect':
+        return <Layers className="w-3.5 h-3.5 text-indigo-400" />;
+      case 'developer':
+        return <Laptop className="w-3.5 h-3.5 text-cyan-400" />;
+      case 'tester':
+        return <FlaskConical className="w-3.5 h-3.5 text-purple-400" />;
+      case 'reviewer':
+        return <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />;
+      case 'auditor':
+        return <Search className="w-3.5 h-3.5 text-amber-400" />;
+      default:
+        return <Cpu className="w-3.5 h-3.5 text-cyan-400" />;
     }
-  ];
+  };
+
+  // Get relevant skills for the currently selected agent
+  const currentRoleSkills = agentSkillsCatalog[selectedAgent.role] || [];
+  const boundSkillSet = new Set(selectedAgent.skills || []);
 
   return (
     <aside className="w-80 bg-surface border-e border-subtle flex flex-col z-20 overflow-hidden select-none">
-      {/* Tabs */}
-      <div className="flex border-b border-subtle bg-surface/80">
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-subtle bg-surface/90">
         <button
-          onClick={() => setActiveTab('engines')}
+          onClick={() => setActiveTab('modes')}
           className={`flex-1 py-2.5 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1.5 ${
-            activeTab === 'engines'
+            activeTab === 'modes'
               ? 'text-cyan-400 border-cyan-400 bg-card'
               : 'text-text-secondary border-transparent hover:text-white'
           }`}
         >
-          <Cpu className="w-3.5 h-3.5" />
-          <span>{lang === 'ar' ? '13 محرك' : '13 Engines'}</span>
+          <Layers className="w-3.5 h-3.5" />
+          <span>{lang === 'ar' ? 'الموادات والوكلاء' : 'Modes & Agents'}</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('openspace')}
+          onClick={() => setActiveTab('skills')}
           className={`flex-1 py-2.5 text-[11px] font-bold text-center border-b-2 transition flex items-center justify-center gap-1.5 ${
-            activeTab === 'openspace'
+            activeTab === 'skills'
               ? 'text-purple-400 border-purple-400 bg-card'
               : 'text-text-secondary border-transparent hover:text-white'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>OpenSpace</span>
+          <span>{lang === 'ar' ? 'مهارات الوكيل' : 'Agent Skills'}</span>
         </button>
 
         <button
@@ -158,109 +192,207 @@ export default function Sidebar({ onSpawnNode, lang }) {
           }`}
         >
           <Dna className="w-3.5 h-3.5" />
-          <span>Graft</span>
+          <span>{lang === 'ar' ? 'المعمارية' : 'Graft Intel'}</span>
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-3.5 flex flex-col gap-2.5">
-        {activeTab === 'engines' && (
-          <>
-            <div className="text-[10px] uppercase font-bold text-text-muted tracking-wider px-1">
-              {lang === 'ar' ? 'مصفوفة المحركات الأساسية' : 'Core Engine Matrix'}
+      {/* Tab 1: Modes & Pipeline Agents */}
+      {activeTab === 'modes' && (
+        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+          {/* Section: 4 Modes Selection */}
+          <div className="flex flex-col gap-1.5">
+            <div className="text-[10px] uppercase font-extrabold text-text-muted tracking-wider px-1">
+              {lang === 'ar' ? 'الموادات الأربعة المعتمدة للنظام' : '4 Concrete Pipeline Modes'}
             </div>
-            {engineItems.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => onSpawnNode(item)}
-                className="bg-card hover:bg-cardHover border border-subtle hover:border-cyan-500/50 rounded-lg p-2.5 cursor-pointer transition flex flex-col gap-1 group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white group-hover:text-cyan-300 transition">
-                    {item.title}
-                  </span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.badge}`}>
-                    {item.category}
-                  </span>
-                </div>
-                <p className="text-[11px] text-text-secondary line-clamp-2 leading-relaxed">
-                  {item.desc}
-                </p>
-              </div>
-            ))}
-          </>
-        )}
+            <div className="grid grid-cols-1 gap-1.5">
+              {Object.entries(modes).map(([key, mode]) => {
+                const isSelected = activeMode === key;
+                return (
+                  <div
+                    key={key}
+                    onClick={() => onSelectMode(key)}
+                    className={`p-2.5 rounded-lg border cursor-pointer transition flex flex-col gap-1 ${
+                      isSelected
+                        ? 'bg-card border-cyan-400 shadow-md shadow-cyan-950/30'
+                        : 'bg-card/50 hover:bg-card border-subtle hover:border-activeBorder'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getModeIcon(key)}
+                        <span className="text-xs font-bold text-white">
+                          {lang === 'ar' ? mode.titleAr : mode.title}
+                        </span>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${mode.badge}`}>
+                        {mode.tag}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary leading-snug">
+                      {lang === 'ar' ? mode.descriptionAr : mode.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-        {activeTab === 'openspace' && (
-          <>
-            <div className="text-[10px] uppercase font-bold text-text-muted tracking-wider px-1">
-              {lang === 'ar' ? 'مهارات أوبن سبيس الذاتية' : 'OpenSpace Autonomous Skills'}
+          {/* Section: Agents in Active Workflow */}
+          <div className="flex flex-col gap-1.5 pt-2 border-t border-subtle">
+            <div className="text-[10px] uppercase font-extrabold text-text-muted tracking-wider px-1 flex justify-between items-center">
+              <span>{lang === 'ar' ? 'وكلاء المود الحالي (اضغط للضبط)' : 'Active Mode Agents (Click to Inspect)'}</span>
+              <span className="text-cyan-400 font-mono text-[10px]">{pipelineAgents.length} Agents</span>
             </div>
-            {openspaceSkills.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => onSpawnNode({
-                  title: item.name,
-                  category: item.category,
-                  badge: item.badge,
-                  model: item.model,
-                  skill: item.name,
-                  domain: item.domain,
-                  desc: item.desc
-                })}
-                className="bg-card hover:bg-cardHover border border-subtle hover:border-purple-500/50 rounded-lg p-2.5 cursor-pointer transition flex flex-col gap-1 group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white font-mono group-hover:text-purple-300 transition">
-                    {item.name}
-                  </span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.badge}`}>
-                    Skill
-                  </span>
-                </div>
-                <p className="text-[11px] text-text-secondary line-clamp-2 leading-relaxed">
-                  {item.desc}
-                </p>
-              </div>
-            ))}
-          </>
-        )}
 
-        {activeTab === 'graft' && (
-          <>
-            <div className="text-[10px] uppercase font-bold text-text-muted tracking-wider px-1">
-              {lang === 'ar' ? 'ذكاء الكود واستكشاف الرموز' : 'Graft Intelligence & Blast'}
+            <div className="flex flex-col gap-1.5">
+              {pipelineAgents.map((agent, idx) => {
+                const isSelected = selectedAgentRole === agent.role;
+                return (
+                  <div
+                    key={agent.role}
+                    onClick={() => onSelectAgentRole(agent.role)}
+                    className={`p-2.5 rounded-lg border cursor-pointer transition flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-card border-cyan-400 shadow-sm shadow-cyan-500/20'
+                        : 'bg-card/40 hover:bg-card border-subtle hover:border-activeBorder'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 bg-surface rounded-md border border-subtle">
+                        {getAgentIcon(agent.role)}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>{lang === 'ar' ? agent.titleAr : agent.title}</span>
+                          <span className="text-[10px] text-text-muted">#{idx + 1}</span>
+                        </div>
+                        <div className="text-[10px] text-text-secondary font-mono">
+                          {agent.model} • {agent.skills?.length || 0} skills
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${agent.badge}`}>
+                      {agent.category}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            {graftSymbols.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => onSpawnNode({
-                  title: item.name,
-                  category: item.category,
-                  badge: item.badge,
-                  model: item.model,
-                  skill: item.skill,
-                  domain: item.domain,
-                  desc: item.desc
-                })}
-                className="bg-card hover:bg-cardHover border border-subtle hover:border-amber-500/50 rounded-lg p-2.5 cursor-pointer transition flex flex-col gap-1 group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white font-mono group-hover:text-amber-300 transition">
-                    {item.name}
-                  </span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${item.badge}`}>
-                    Graft
-                  </span>
-                </div>
-                <p className="text-[11px] text-text-secondary line-clamp-2 leading-relaxed">
-                  {item.desc}
-                </p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Agent-Specific Skills Hub with Toggle (Add / Remove) */}
+      {activeTab === 'skills' && (
+        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+          {/* Agent Context Header */}
+          <div className="bg-card border border-subtle rounded-lg p-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-surface rounded border border-subtle">
+                {getAgentIcon(selectedAgent.role)}
               </div>
-            ))}
-          </>
-        )}
-      </div>
+              <div>
+                <span className="text-xs font-bold text-white block">
+                  {lang === 'ar' ? selectedAgent.titleAr : selectedAgent.title}
+                </span>
+                <span className="text-[10px] text-text-muted font-mono">
+                  role: {selectedAgent.role}
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono text-purple-300 bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 rounded">
+              {boundSkillSet.size} {lang === 'ar' ? 'نشط' : 'Active'}
+            </span>
+          </div>
+
+          <div className="text-[10px] uppercase font-extrabold text-text-muted tracking-wider px-1">
+            {lang === 'ar' ? `المهارات المتوافقة مع هذا الوكيل:` : `Compatible Skills for this Agent:`}
+          </div>
+
+          {currentRoleSkills.length > 0 ? (
+            currentRoleSkills.map((skill, idx) => {
+              const isAttached = boundSkillSet.has(skill.name);
+              return (
+                <div
+                  key={idx}
+                  className={`border rounded-lg p-2.5 flex flex-col gap-1.5 transition ${
+                    isAttached
+                      ? 'bg-card border-purple-500/50 shadow-sm shadow-purple-950/40'
+                      : 'bg-card/40 hover:bg-card border-subtle'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold font-mono text-white">
+                      {skill.name}
+                    </span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${skill.badge}`}>
+                      {isAttached ? (lang === 'ar' ? 'مربوطة' : 'Bound') : (lang === 'ar' ? 'متاحة' : 'Available')}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-text-secondary leading-snug">
+                    {skill.desc}
+                  </p>
+
+                  <div className="flex justify-between items-center pt-1.5 border-t border-subtle/50 mt-0.5">
+                    <span className="text-[10px] text-text-muted">
+                      {isAttached ? '● Active in Agent' : '○ Standby'}
+                    </span>
+
+                    {isAttached ? (
+                      <button
+                        onClick={() => onRemoveSkill(selectedAgent.role, skill.name)}
+                        className="px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-[10px] font-bold text-rose-300 rounded flex items-center gap-1 transition"
+                        title="Remove skill"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>{lang === 'ar' ? 'حذف المهارة' : 'Remove Skill'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onBindSkill(selectedAgent.role, skill.name)}
+                        className="px-2.5 py-1 bg-purple-500/15 hover:bg-purple-500/30 border border-purple-500/40 text-[10px] font-bold text-purple-300 rounded flex items-center gap-1 transition"
+                        title="Add skill"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>{lang === 'ar' ? 'إضافة المهارة' : 'Add Skill'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center text-text-muted text-xs py-6">
+              {lang === 'ar' ? 'لا توجد مهارات مخصصة لهذا الدور' : 'No specialized skills for this role'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 3: Graft Intel */}
+      {activeTab === 'graft' && (
+        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+          <div className="text-[10px] uppercase font-extrabold text-text-muted tracking-wider px-1">
+            {lang === 'ar' ? 'عناقيد الكود واستكشاف المعمارية' : 'Codebase Architecture Clusters'}
+          </div>
+
+          {graftClusters.map((cluster, idx) => (
+            <div
+              key={idx}
+              className="bg-card border border-subtle hover:border-amber-500/40 rounded-lg p-2.5 flex flex-col gap-1 transition"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">{cluster.name}</span>
+                <span className="text-[10px] font-mono text-cyan-400">{cluster.files} files</span>
+              </div>
+              <span className="text-[10px] font-mono text-text-muted">{cluster.path}</span>
+              <span className="text-[10px] text-amber-300 font-semibold">{cluster.symbols} exported symbols</span>
+            </div>
+          ))}
+        </div>
+      )}
     </aside>
   );
 }

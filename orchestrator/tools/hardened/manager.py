@@ -75,6 +75,8 @@ class ToolSandboxManager:
             self.workspace_root, disallow_stubs=disallow_stubs
         )
         self.terminal_engine = TerminalSandboxEngine(self.workspace_root)
+        self._last_action_signature: Optional[str] = None
+        self._consecutive_duplicate_count: int = 0
 
     def is_tool_permitted(self, tool_name: str) -> bool:
         """Check whether a tool is permitted under current constriction rules."""
@@ -153,6 +155,28 @@ class ToolSandboxManager:
             return FileObservationResult(success=False, message=err, is_error=True)
 
         rel_posix = target_path.relative_to(self.workspace_root).as_posix()
+
+        # Check for consecutive identical redundant read actions to prevent endless loops
+        action_sig = f"file:{action.operation}:{rel_posix}:{action.offset_line}:{action.limit_lines}:{action.symbol}"
+        if action.operation in ("read", "outline", "symbol", "list"):
+            if self._last_action_signature == action_sig:
+                self._consecutive_duplicate_count += 1
+                if self._consecutive_duplicate_count >= 1:
+                    return FileObservationResult(
+                        success=False,
+                        message=(
+                            f"[CommandInterceptor Loop Guard] You performed the exact same operation '{action.operation}' "
+                            f"on '{rel_posix}' in the previous step. Repeating identical queries yields no new information. "
+                            "Please analyze what you observed, synthesize your findings, or proceed to write your output/fix."
+                        ),
+                        is_error=False,
+                    )
+            else:
+                self._last_action_signature = action_sig
+                self._consecutive_duplicate_count = 0
+        else:
+            self._last_action_signature = action_sig
+            self._consecutive_duplicate_count = 0
 
         # Human channel resolution
         channel = None
@@ -333,6 +357,26 @@ class ToolSandboxManager:
                 channel = get_active_channel()
             except Exception:
                 pass
+
+        # Check for consecutive identical redundant command executions
+        cmd_sig = f"terminal:{action.command.strip()}"
+        if self._last_action_signature == cmd_sig:
+            self._consecutive_duplicate_count += 1
+            if self._consecutive_duplicate_count >= 1:
+                return TerminalObservationResult(
+                    exit_code=0,
+                    stdout="",
+                    stderr=(
+                        f"[CommandInterceptor Loop Guard] You ran the exact same command '{action.command.strip()}' "
+                        "in the previous step. Repeating identical commands without code changes produces no new output. "
+                        "Please evaluate your previous result or modify the codebase before re-running."
+                    ),
+                    is_error=False,
+                    steering_directive="Avoid repeating identical commands consecutively without code edits.",
+                )
+        else:
+            self._last_action_signature = cmd_sig
+            self._consecutive_duplicate_count = 0
 
         if channel:
             cmd = action.command.strip()

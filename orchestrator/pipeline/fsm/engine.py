@@ -563,12 +563,12 @@ class GuardedFSMEngine:
         )
 
     def _handle_implementation(self) -> PipelineEvent:
-        """Execute Developer or Fixer agent turn within bounded turn envelope."""
+        """Execute Developer, Auditor, or Fixer agent turn within bounded turn envelope."""
         role_name = "developer"
         if self.profile.mode == PipelineMode.AUDIT:
-            role_name = "developer"  # Or auditor persona
+            role_name = "auditor"
         elif self.profile.mode == PipelineMode.DOCS:
-            role_name = "developer"  # Or documentation persona
+            role_name = "developer"
 
         # Select active milestone
         active_ms = None
@@ -584,7 +584,14 @@ class GuardedFSMEngine:
         prompt_lines = [
             f"# Task Objective:\n{self.context.task_description}\n",
         ]
-        if active_ms:
+        if self.profile.mode == PipelineMode.AUDIT:
+            prompt_lines.append(
+                "STRICT 2-PHASE AUDIT WORKFLOW:\n"
+                "1. Phase 1 (Inspection - Max 2-3 steps): Read key architectural files only.\n"
+                "2. Phase 2 (Report Synthesis - MANDATORY AT STEP 3-4): Write the full markdown report to `docs/AUDIT_REPORT.md` and structured findings to `docs/audit_findings.json` using `workspace_file` with operation='write'.\n"
+                "3. Conclude your turn immediately after writing both files. Do NOT get stuck in endless read loops."
+            )
+        elif active_ms:
             prompt_lines.append(
                 f"## Active Milestone ({active_ms.title}):\n{active_ms.content}\n"
             )

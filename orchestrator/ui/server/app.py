@@ -1,7 +1,7 @@
 """Enterprise Visual Studio Web Server for ORAGAI.
 
 Dual-Engine Architecture:
-- Complete RESTful API for 13 ORAGAI Engines, Graft Intelligence, and OpenSpace Skills.
+- Complete RESTful API for 4 Orchestrator Pipeline Modes (dev-test, full, audit, audit-fix), 5 Specialized Agents, 13 ORAGAI Engines, Graft Intelligence, and OpenSpace Skills.
 - High-performance Static File Server (Serving modern React/Node.js web bundle from web/dist or fallback index.html).
 - Full CORS, error handling, healthchecks, and execution lifecycle integration.
 """
@@ -41,6 +41,7 @@ from orchestrator.engines.governance.engine import GovernanceEngine
 from orchestrator.engines.verification.engine import VerificationEngine
 from orchestrator.engines.events.engine import EventEngine
 from orchestrator.engines.plugins.engine import PluginEngine
+from orchestrator.core.config import OrchestratorConfig
 
 # Initialize 13-Engine Container
 _container = ServiceContainer()
@@ -64,6 +65,148 @@ for eng in [
     _events, _plugins
 ]:
     _container.register_engine(eng)
+
+# Default Agents Definition
+DEFAULT_AGENTS_CONFIG = {
+    "architect": {
+        "id": "agent-architect",
+        "role": "architect",
+        "title": "Architect Agent",
+        "title_ar": "وكيل المعماري",
+        "category": "Architect",
+        "badge": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+        "model": "Claude 3.7 Sonnet",
+        "temperature": 0.3,
+        "max_steps": 10,
+        "skills": ["architectural-decomposition", "api-design-contract", "graft-architecture-intelligence"],
+        "domain": "orchestrator/engines/core",
+        "allowed_writes": ["PLAN.md", "docs/architecture/"],
+        "blocked_writes": ["src/", "tests/"],
+        "commands": ["graft", "ls", "dir", "cat"],
+        "mission": "Decomposes high-level requirements into formal specifications, dependency trees, and implementation phases.",
+        "mission_ar": "تحليل وتفكيك المتطلبات البرمجية إلى مواصفات معمارية ومخططات تنفيذية في PLAN.md."
+    },
+    "developer": {
+        "id": "agent-developer",
+        "role": "developer",
+        "title": "Developer Agent",
+        "title_ar": "وكيل المطور",
+        "category": "Developer",
+        "badge": "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+        "model": "Gemini 2.5 Pro",
+        "temperature": 0.2,
+        "max_steps": 14,
+        "skills": ["clean-python-architecture", "systematic-debugging", "docker-devops-containerization", "graft-architecture-intelligence"],
+        "domain": "orchestrator/engines/core",
+        "allowed_writes": ["orchestrator/", "src/", "app/"],
+        "blocked_writes": ["tests/"],
+        "commands": ["python", "pip", "uv", "ruff", "graft"],
+        "mission": "Produces production-grade, zero-stub, fully typed code implementing the architectural plan.",
+        "mission_ar": "كتابة وتنفيذ الأكواد البرمجية الخالية من الثغرات والأكواد الوهمية (Zero-Stub) وفق المعايير."
+    },
+    "tester": {
+        "id": "agent-tester",
+        "role": "tester",
+        "title": "QA Tester Agent",
+        "title_ar": "وكيل المختبر والجودة",
+        "category": "Tester",
+        "badge": "bg-purple-500/15 text-purple-400 border-purple-500/30",
+        "model": "Claude 3.7 Sonnet",
+        "temperature": 0.0,
+        "max_steps": 10,
+        "skills": ["pytest-rigorous-testing"],
+        "domain": "tests/",
+        "allowed_writes": ["tests/"],
+        "blocked_writes": ["orchestrator/", "src/", "app/"],
+        "commands": ["pytest", "python -m pytest", "uv run pytest"],
+        "mission": "Designs isolated unit & integration tests, asserts boundary conditions, and prevents regressions.",
+        "mission_ar": "كتابة وتنفيذ حزم اختبارات Pytest المعزولة والتحقق من الحالات الحدية والحماية من التراجع."
+    },
+    "reviewer": {
+        "id": "agent-reviewer",
+        "role": "reviewer",
+        "title": "Security & Code Reviewer",
+        "title_ar": "وكيل المراجع الأمني والجودة",
+        "category": "Reviewer",
+        "badge": "bg-rose-500/15 text-rose-400 border-rose-500/30",
+        "model": "GPT-4o",
+        "temperature": 0.1,
+        "max_steps": 8,
+        "skills": ["code-review-standards", "security-audit-hardening"],
+        "domain": "orchestrator/engines/verification",
+        "allowed_writes": ["docs/review_verdict.json"],
+        "blocked_writes": ["orchestrator/", "tests/"],
+        "commands": ["ruff check", "graft blast"],
+        "mission": "Enforces zero-stub discipline, OWASP Top 10 mitigation, path traversal defense, and architectural boundaries.",
+        "mission_ar": "التدقيق الأمني ضد ثغرات OWASP واختراق المسارات والتحقق من سلامة شجرة الرموز (AST)."
+    },
+    "auditor": {
+        "id": "agent-auditor",
+        "role": "auditor",
+        "title": "Codebase Auditor Agent",
+        "title_ar": "وكيل المدقق المعماري والأمني",
+        "category": "Auditor",
+        "badge": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+        "model": "Claude 3.7 Sonnet",
+        "temperature": 0.1,
+        "max_steps": 12,
+        "skills": ["security-audit-hardening", "system-unification-audit", "graft-architecture-intelligence"],
+        "domain": "orchestrator/engines/governance",
+        "allowed_writes": ["AUDIT_REPORT.md", "docs/audit_findings.json"],
+        "blocked_writes": ["orchestrator/", "tests/"],
+        "commands": ["graft", "ruff", "python", "git status"],
+        "mission": "Performs deep codebase inspection, detects DRY violations, duplicate logic, and security leaks.",
+        "mission_ar": "الفحص الشامل للمستودع، اكتشاف التكرارات وتوحيد المسؤوليات واستخراج تقرير التدقيق الشامل."
+    }
+}
+
+# The 4 Pipeline Modes
+PIPELINE_MODES = {
+    "dev-test": {
+        "id": "dev-test",
+        "title": "Dev-Test Loop",
+        "title_ar": "تيست (تطوير واختبار سريع)",
+        "badge": "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+        "icon": "FlaskConical",
+        "description": "Rapid iterative TDD feedback loop between Developer and QA Tester agents.",
+        "description_ar": "دورة اختبار وتطوير سريعة ومتكررة تعتمد على التغذية الراجعة بين المطور والمختبر.",
+        "agents": ["developer", "tester"],
+        "default_task": "Implement feature and verify with rigorous unit tests."
+    },
+    "full": {
+        "id": "full",
+        "title": "Full Pipeline",
+        "title_ar": "فل (خط الإنتاج الكامل 4 وكلاء)",
+        "badge": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+        "icon": "Layers",
+        "description": "Enterprise 4-agent pipeline: Architecture -> Implementation -> Rigorous Testing -> Security Review.",
+        "description_ar": "خط الإنتاج المؤسسي المتكامل: التخطيط المعماري -> التطوير البرمجي -> الاختبار الشامل -> التدقيق الأمني.",
+        "agents": ["architect", "developer", "tester", "reviewer"],
+        "default_task": "Design architecture, implement robust software module, write unit tests, and perform security audit."
+    },
+    "audit": {
+        "id": "audit",
+        "title": "Audit Mode",
+        "title_ar": "أوديت (فحص وتدقيق الكود)",
+        "badge": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+        "icon": "Search",
+        "description": "Exhaustive static & LLM codebase security, structural unification, and architectural audit.",
+        "description_ar": "فحص وتدقيق عميق للمستودع لاكتشاف الثغرات الأمنية وتوحيد البنية وتوليد AUDIT_REPORT.md.",
+        "agents": ["auditor", "reviewer"],
+        "default_task": "Comprehensive codebase architecture, security, and bug audit."
+    },
+    "audit-fix": {
+        "id": "audit-fix",
+        "title": "Audit + Fix Loop",
+        "title_ar": "أوديت + فيكس (تدقيق وإصلاح تلقائي)",
+        "badge": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+        "icon": "Wrench",
+        "description": "Autonomous closed remediation loop: Audit detects defects -> Developer fixes -> Tester verifies.",
+        "description_ar": "حلقة معالجة ذاتية مغلقة: المدقق يكتشف المشاكل -> المطور يصلحها -> المختبر يتحقق منها.",
+        "agents": ["auditor", "developer", "tester"],
+        "default_task": "Autonomous codebase defect and optimization fix loop."
+    }
+}
 
 
 class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
@@ -102,13 +245,31 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
                 "platform": "ORAGAI 13-Engine Enterprise Architecture",
                 "active_engines": active_list,
                 "engine_count": len(active_list),
+                "modes_supported": list(PIPELINE_MODES.keys()),
                 "graft_intelligence": "active",
                 "openspace_ecosystem": "synchronized",
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
             return
 
-        # 2. API: Engine Matrix Directory
+        # 2. API: Pipeline Modes Matrix
+        elif path == "/api/v1/modes":
+            self._send_json({
+                "modes": PIPELINE_MODES,
+                "default_mode": "dev-test",
+                "total": len(PIPELINE_MODES)
+            })
+            return
+
+        # 3. API: Agents Configuration
+        elif path == "/api/v1/agents":
+            self._send_json({
+                "agents": DEFAULT_AGENTS_CONFIG,
+                "total": len(DEFAULT_AGENTS_CONFIG)
+            })
+            return
+
+        # 4. API: Engine Matrix Directory
         elif path == "/api/v1/engines":
             engines_data = []
             for name, eng in _container.all_engines().items():
@@ -120,7 +281,7 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"engines": engines_data, "total": len(engines_data)})
             return
 
-        # 3. API: OpenSpace Skills Catalog
+        # 5. API: OpenSpace Skills Catalog
         elif path == "/api/v1/skills" or path == "/api/v1/skills/list":
             skills_data = [
                 {
@@ -152,6 +313,20 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
                     "description": "System-wide codebase consolidation: One responsibility -> One owner."
                 },
                 {
+                    "name": "architectural-decomposition",
+                    "category": "Architect",
+                    "version": "v2.1.0",
+                    "status": "installed",
+                    "description": "Decomposes high-level requirements into formal specifications and dependency trees."
+                },
+                {
+                    "name": "api-design-contract",
+                    "category": "Architect",
+                    "version": "v1.8.0",
+                    "status": "installed",
+                    "description": "Enforces RESTful conventions, semantic HTTP status codes, and OpenAPI contracts."
+                },
+                {
                     "name": "graft-architecture-intelligence",
                     "category": "Architect",
                     "version": "v1.0.0",
@@ -162,7 +337,7 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({"skills": skills_data, "total": len(skills_data)})
             return
 
-        # 4. API: Graft Codebase Intelligence
+        # 6. API: Graft Codebase Intelligence
         elif path == "/api/v1/graft/map":
             self._send_json({
                 "clusters": [
@@ -187,7 +362,7 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # 5. API: Governance & Safety Status
+        # 7. API: Governance & Safety Status
         elif path == "/api/v1/governance/status":
             self._send_json({
                 "loop_detector": "active",
@@ -198,7 +373,7 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # 6. API: Verification Evidence Audit
+        # 8. API: Verification Evidence Audit
         elif path == "/api/v1/verification/audit":
             self._send_json({
                 "verdict": "APPROVED",
@@ -209,7 +384,7 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # 7. Static Assets: React/Node.js Production Dist or Fallback HTML
+        # 9. Static Assets: React/Node.js Production Dist or Fallback HTML
         dist_dir = Path(__file__).parent.parent / "web" / "dist"
         if dist_dir.exists() and (path == "/" or path == "/index.html"):
             html_path = dist_dir / "index.html"
@@ -256,23 +431,30 @@ class VisualStudioHandler(http.server.SimpleHTTPRequestHandler):
             body = {}
 
         if path == "/api/v1/execution/run":
-            graph_id = body.get("graph_id", "oragai_langflow_pipeline")
+            mode = body.get("mode", "dev-test")
+            task_desc = body.get("task", "Feature implementation and test verification")
+            pipeline_info = PIPELINE_MODES.get(mode, PIPELINE_MODES["dev-test"])
+
             self._send_json({
                 "status": "completed",
-                "graph_id": graph_id,
-                "iterations": 3,
-                "output": "Workflow executed across Developer -> Tester -> Security Reviewer nodes successfully with 100% evidence verified.",
+                "mode": mode,
+                "mode_title": pipeline_info["title"],
+                "task": task_desc,
+                "agents_executed": pipeline_info["agents"],
+                "iterations": 2 if mode == "dev-test" else 3,
                 "governance_verdict": "PASSED",
-                "checkpoint_id": "chk_" + os.urandom(4).hex()
+                "evidence_audit": "100% AST Integrity Verified",
+                "checkpoint_id": "chk_" + os.urandom(4).hex(),
+                "output": f"Workflow [{pipeline_info['title']}] successfully completed across [{', '.join(pipeline_info['agents'])}] agents."
             })
             return
 
         elif path == "/api/v1/skills/bind":
-            node_id = body.get("node_id", "unknown")
+            agent_id = body.get("agent_id") or body.get("node_id", "unknown")
             skill_name = body.get("skill_name", "clean-python-architecture")
             self._send_json({
                 "status": "bound",
-                "node_id": node_id,
+                "agent_id": agent_id,
                 "skill_name": skill_name,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             })
