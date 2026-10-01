@@ -80,8 +80,14 @@ class LLMManager:
             if not role_config:
                 from orchestrator.config import AgentRoleConfig
 
+                default_model = (
+                    os.environ.get(f"{role.upper()}_MODEL")
+                    or os.environ.get("MODEL")
+                    or getattr(self._config, "model", None)
+                    or "openrouter/qwen/qwen3.8-27b:free"
+                )
                 role_config = AgentRoleConfig(
-                    role=role, model="openrouter/qwen/qwen3.8-27b:free"
+                    role=role, model=default_model
                 )
             self._pool[role] = create_llm_for_role(self._config, role_config)
         return self._pool[role]

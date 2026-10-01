@@ -80,6 +80,8 @@ def test_domain_profile_model():
     assert active_profile.test_command == "pytest -v"
 
 
+from openhands.sdk import LLM
+
 # ---------------------------------------------------------------------------
 # 2. BaseAgentFactory & DocumentationAgent
 # ---------------------------------------------------------------------------
@@ -91,7 +93,7 @@ def test_base_agent_factory_lifecycle(tmp_path: Path):
     sm = SkillManager(tmp_path)
 
     with patch("orchestrator.agents.base.create_llm_for_role") as mock_llm:
-        mock_llm.return_value = MagicMock()
+        mock_llm.return_value = LLM(model="openrouter/free", api_key="sk-test")
         agent = BaseAgentFactory.create(
             config=cfg,
             skill_manager=sm,
@@ -107,7 +109,7 @@ def test_documentation_agent_creation(tmp_path: Path):
     sm = SkillManager(tmp_path)
 
     with patch("orchestrator.agents.base.create_llm_for_role") as mock_llm:
-        mock_llm.return_value = MagicMock()
+        mock_llm.return_value = LLM(model="openrouter/free", api_key="sk-test")
         doc_agent = create_documentation_agent(
             config=cfg,
             skill_manager=sm,

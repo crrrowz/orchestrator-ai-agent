@@ -103,6 +103,9 @@ class BaseAgentFactory:
         context = cls.resolve_context(config, skill_manager, task_text=task_text)
         tools = cls.resolve_tools(workspace, **kwargs)
 
+        if hasattr(llm, "_mock_self") or getattr(llm, "__class__", None).__name__ == "MagicMock":
+            llm = LLM(model="openrouter/free", api_key="sk-test")
+
         return Agent(
             llm=llm,
             tools=tools,

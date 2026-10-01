@@ -230,6 +230,26 @@ class OrchestratorConfig(BaseModel):
             ],
         )
     )
+    auditor: AgentRoleConfig = Field(
+        default_factory=lambda: AgentRoleConfig(
+            role="auditor",
+            model=os.environ.get("AUDITOR_MODEL")
+            or os.environ.get("MODEL")
+            or os.environ.get("REVIEWER_MODEL")
+            or (
+                "openrouter/google/gemini-2.0-flash-exp:free"
+                if os.environ.get("OPENROUTER_API_KEY")
+                else "openai/gpt-4o"
+            ),
+            temperature=0.1,
+            skills=[
+                "code-review-standards",
+                "security-audit-hardening",
+                "graft-architecture-intelligence",
+                "system-unification-audit",
+            ],
+        )
+    )
     documentation: AgentRoleConfig = Field(
         default_factory=lambda: AgentRoleConfig(
             role="documentation",

@@ -1,13 +1,36 @@
-import React, { useState } from 'react';
-import { FileCode, Split, AlignJustify, Copy, Check, Plus, Minus, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileCode, Split, AlignJustify, Copy, Check, Plus, Minus, FileText, RefreshCw } from 'lucide-react';
 
 export default function LiveDiffViewer({ diffs, activeAgent, lang }) {
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [viewMode, setViewMode] = useState('split'); // 'split' | 'unified'
   const [copied, setCopied] = useState(false);
+  const [realDiffs, setRealDiffs] = useState(diffs || []);
+  const [loading, setLoading] = useState(false);
+
+  const fetchRealDiffs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/v1/workspace/diff');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.diffs && data.diffs.length > 0) {
+          setRealDiffs(data.diffs);
+        }
+      }
+    } catch (e) {
+      console.log('Using simulated diffs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRealDiffs();
+  }, []);
 
   // Default simulated or actual diff files
-  const defaultDiffs = diffs || [
+  const defaultDiffs = realDiffs.length > 0 ? realDiffs : [
     {
       filename: 'orchestrator/engines/core/engine.py',
       additions: 24,
@@ -46,7 +69,7 @@ export default function LiveDiffViewer({ diffs, activeAgent, lang }) {
   const currentDiff = defaultDiffs[selectedFileIndex] || defaultDiffs[0];
 
   const handleCopy = () => {
-    const rawText = currentDiff.lines.map(l => l.text).join('\n');
+    const rawText = (currentDiff?.lines || []).map(l => l.text).join('\n');
     navigator.clipboard.writeText(rawText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
