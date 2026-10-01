@@ -113,7 +113,10 @@ class GuardedFSMEngine:
         if governor is not None:
             self.governor: Optional[AdaptiveResourceGovernor] = governor
         elif self._is_adaptive_governance_enabled():
-            self.governor = AdaptiveResourceGovernor()
+            from orchestrator.control.adaptive.models import ResourceGovernorConfig
+            cfg_budget = getattr(self.config, "max_budget_usd", 15.00) or 15.00
+            gov_config = ResourceGovernorConfig(max_budget_usd=max(float(cfg_budget), 15.00))
+            self.governor = AdaptiveResourceGovernor(config=gov_config)
         else:
             self.governor = None
 
@@ -515,12 +518,20 @@ class GuardedFSMEngine:
                     error_message=f"Monetary/Resource circuit breaker tripped: {self.governor.status.trip_reason}",
                 )
 
+        # If in audit-fix mode and no PLAN.md or findings exist, prompt Architect to target actionable items
         if not plan_content and self.runtime_bridge and self.llm_manager:
-            prompt = (
-                f"Decompose the following task into discrete milestones and acceptance criteria:\n\n"
-                f"{self.context.task_description}\n\n"
-                f"Write your formal architectural breakdown to PLAN.md."
-            )
+            if self.profile.mode == PipelineMode.AUDIT_FIX:
+                prompt = (
+                    f"Perform architectural triage and construct a concrete fix plan for:\n\n"
+                    f"{self.context.task_description}\n\n"
+                    f"Identify key architectural files and codebase optimizations, and write your structured milestone plan to PLAN.md."
+                )
+            else:
+                prompt = (
+                    f"Decompose the following task into discrete milestones and acceptance criteria:\n\n"
+                    f"{self.context.task_description}\n\n"
+                    f"Write your formal architectural breakdown to PLAN.md."
+                )
             outcome = self.runtime_bridge.execute_bounded_turn(
                 role_name="architect",
                 workspace_path=self.workspace_path,
