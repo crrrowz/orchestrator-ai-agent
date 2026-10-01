@@ -99,15 +99,16 @@ class BaseAgentFactory:
     ) -> Agent:
         """Instantiate and return the configured Agent."""
         workspace = cls.resolve_workspace(config, workspace_path)
-        llm = cls.resolve_llm(config)
+        resolved_llm = cls.resolve_llm(config)
         context = cls.resolve_context(config, skill_manager, task_text=task_text)
         tools = cls.resolve_tools(workspace, **kwargs)
 
-        if hasattr(llm, "_mock_self") or getattr(llm, "__class__", None).__name__ == "MagicMock":
-            llm = LLM(model="openrouter/free", api_key="sk-test")
+        if hasattr(resolved_llm, "_mock_self") or getattr(resolved_llm, "__class__", None).__name__ == "MagicMock":
+            import openhands.sdk
+            resolved_llm = openhands.sdk.LLM(model="openrouter/free", api_key="sk-test")
 
         return Agent(
-            llm=llm,
+            llm=resolved_llm,
             tools=tools,
             agent_context=context,
             system_prompt=cls.system_prompt,
