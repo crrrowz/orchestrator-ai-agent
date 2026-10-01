@@ -35,6 +35,8 @@ export default function RightPanel({
   onClearLogs,
   selectedAgent,
   globalConfig,
+  providers,
+  activeProvider,
   onUpdateAgent,
   onBindSkill,
   onRemoveSkill,
@@ -270,22 +272,27 @@ export default function RightPanel({
                   <label className="text-[10px] uppercase font-bold text-gray-400">
                     {lang === 'ar' ? 'نموذج الذكاء الاصطناعي (LLM Model)' : 'LLM Model'}
                   </label>
-                  <span className="text-[9px] font-mono text-indigo-300">
+                  <span className="text-[9px] font-mono text-cyan-300">
                     {globalConfig?.model ? `Global: ${globalConfig.model.split('/').pop()}` : ''}
                   </span>
                 </div>
                 <select
                   value={selectedAgent.model}
                   onChange={(e) => onUpdateAgent(selectedAgent.role, { model: e.target.value })}
-                  className="bg-[#0f1523] border border-[#232f48] focus:border-cyan-400 rounded-lg px-3 py-1.5 text-xs text-white outline-none font-mono"
+                  className="bg-[#0f1523] border border-[#232f48] focus:border-cyan-400 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono"
                 >
-                  <option value="Claude 3.7 Sonnet">Claude 3.7 Sonnet (Anthropic)</option>
-                  <option value="Gemini 2.5 Pro">Google Gemini 2.5 Pro</option>
-                  <option value="GPT-4o">OpenAI GPT-4o</option>
-                  <option value="openrouter/qwen/qwen3.8-27b:free">Qwen 3.8 27B Free (OpenRouter)</option>
-                  <option value="openrouter/google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash Free (OpenRouter)</option>
-                  <option value="groq/llama-3.3-70b-versatile">Llama 3.3 70B (Groq)</option>
-                  <option value="OmniRoute Dynamic Router">OmniRoute Dynamic Fallback Router</option>
+                  {/* Render models from connected providers only */}
+                  {Object.entries(providers || {})
+                    .filter(([_, p]) => p.configured || p.api_key || p.id === activeProvider)
+                    .map(([provKey, prov]) => (
+                      <optgroup key={provKey} label={`--- ${prov.name || provKey.toUpperCase()} ---`}>
+                        {(prov.models || []).map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name || m.id} ({provKey})
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
                 </select>
               </div>
 

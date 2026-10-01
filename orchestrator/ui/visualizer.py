@@ -2,7 +2,7 @@
 
 import sys
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.live import Live
@@ -33,9 +33,44 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         self._target_file: str = ""
         self._last_status: str = ""
         self._tokens_str: str = ""
+        self._healed_count: int = 0
+        self._incidents_count: int = 0
         self._is_tty: bool = (
             sys.stdout.isatty() if hasattr(sys.stdout, "isatty") else False
         )
+        self._refresh_sentinel_stats()
+
+    def _refresh_sentinel_stats(self) -> None:
+        """Cache sentinel diagnostics stats without hammering SQLite per frame."""
+        try:
+            from orchestrator.sentinel.diagnostics_db import SentinelDiagnosticsDB
+
+            s_stats = SentinelDiagnosticsDB().get_stats()
+            self._healed_count = s_stats.get("auto_healed_count", 0)
+            self._incidents_count = s_stats.get("total_incidents", 0)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _extract_thought_text(thought: Any) -> str:
+        """Extract clean readable text from string, list of TextContent, or nested structure."""
+        if not thought:
+            return ""
+        if isinstance(thought, str):
+            return thought.strip()
+        if isinstance(thought, list):
+            parts = []
+            for item in thought:
+                if hasattr(item, "text"):
+                    parts.append(str(item.text))
+                elif isinstance(item, dict) and "text" in item:
+                    parts.append(str(item["text"]))
+                else:
+                    parts.append(str(item))
+            return " ".join(parts).strip()
+        if hasattr(thought, "text"):
+            return str(thought.text).strip()
+        return str(thought).strip()
 
     def _render_box(self) -> Panel:
         t_now = time.strftime("%H:%M:%S")
@@ -57,18 +92,6 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 )
             )
         )
-
-        # Query sentinel diagnostics stats
-        healed_count = 0
-        incidents_count = 0
-        try:
-            from orchestrator.sentinel.diagnostics_db import SentinelDiagnosticsDB
-
-            s_stats = SentinelDiagnosticsDB().get_stats()
-            healed_count = s_stats.get("auto_healed_count", 0)
-            incidents_count = s_stats.get("total_incidents", 0)
-        except Exception:
-            pass
 
         grid = Table.grid(padding=(0, 1), expand=True)
         grid.add_column(style="bold cyan", width=14)
@@ -99,7 +122,7 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
                 tp = tp[:92] + "..."
             grid.add_row("Plan / Thought:", f"[dim italic]{tp}[/dim italic]")
 
-        sentinel_info = f"[bold green]● ENFORCING[/bold green] [dim](AST Guard: Clean | {healed_count} Healed | {incidents_count} Events)[/dim]"
+        sentinel_info = f"[bold green]● ENFORCING[/bold green] [dim](AST Guard: Clean | {self._healed_count} Healed | {self._incidents_count} Events)[/dim]"
         grid.add_row("Sentinel Mesh:", sentinel_info)
 
         card_title = f"[bold cyan]⚡ {role.upper()} AGENT IN PROGRESS[/bold cyan]"
@@ -116,14 +139,15 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
         try:
             if self._live is None:
                 self._live = Live(
-                    self._render_box(),
+                    get_renderable=self._render_box,
                     console=self.console,
                     refresh_per_second=4,
+                    auto_refresh=True,
                     transient=True,
                 )
                 self._live.start()
             else:
-                self._live.update(self._render_box())
+                self._live.refresh()
         except Exception:
             self._live = None
 
@@ -174,35 +198,45 @@ class OrchestratorLiveVisualizer(ConversationVisualizerBase):
 
     def on_event(self, event: Event) -> None:
         """Process conversation events, log to store, and display real-time progress."""
+        self._refresh_sentinel_stats()
         event_name = type(event).__name__
 
         # 1. Capture Agent Actions & Thoughts
         if event_name == "ActionEvent":
             action_obj = getattr(event, "action", None)
-            thought = getattr(event, "thought", None) or getattr(
+            raw_thought = getattr(event, "thought", None) or getattr(
                 action_obj, "thought", None
             )
-            if thought:
-                self._last_thought = str(thought).strip()
+            extracted_thought = self._extract_thought_text(raw_thought)
+            if extracted_thought:
+                self._last_thought = extracted_thought
 
-            action_kind = getattr(action_obj, "__class__", type(action_obj)).__name__
+            action_kind = (
+                getattr(action_obj, "__class__", type(action_obj)).__name__
+                if action_obj is not None
+                else "AgentThought"
+            )
             args = {}
             summary = "Performing action"
 
-            if hasattr(action_obj, "model_dump"):
-                args = action_obj.model_dump()
-            elif hasattr(action_obj, "__dict__"):
-                args = action_obj.__dict__
+            if action_obj is not None:
+                if hasattr(action_obj, "model_dump"):
+                    args = action_obj.model_dump()
+                elif hasattr(action_obj, "__dict__"):
+                    args = action_obj.__dict__
 
-            op = args.get("operation") or args.get("command") or action_kind
-            path = args.get("path", "")
-            if path:
-                summary = f"{action_kind} ({op} {path})"
-            elif "command" in args:
-                cmd_preview = str(args.get("command", ""))[:50]
-                summary = f"terminal ({cmd_preview})"
+                op = args.get("operation") or args.get("command") or action_kind
+                path = args.get("path", "")
+                if path:
+                    summary = f"{action_kind} ({op} {path})"
+                elif "command" in args:
+                    cmd_preview = str(args.get("command", ""))[:50]
+                    summary = f"terminal ({cmd_preview})"
+                else:
+                    summary = f"{action_kind} ({op})"
             else:
-                summary = f"{action_kind} ({op})"
+                summary = "Agent Reasoning / Synthesis"
+                path = ""
 
             self.store.add_step(
                 summary=summary,

@@ -260,7 +260,7 @@ export default function Canvas({
                 {/* Agent Node Box */}
                 <div
                   onClick={() => onSelectAgentRole(agent.role)}
-                  className={`agent-node-card ${isCompact ? 'w-56' : 'w-76'} bg-[#0f1523]/95 backdrop-blur-xl border rounded-2xl shadow-2xl overflow-hidden cursor-pointer transition-all duration-300 relative ${
+                  className={`agent-node-card ${isCompact ? 'w-64 min-w-[256px] max-w-[256px]' : 'w-80 min-w-[320px] max-w-[320px]'} shrink-0 bg-[#0f1523]/95 backdrop-blur-xl border rounded-2xl shadow-2xl overflow-hidden cursor-pointer transition-all duration-300 relative ${
                     isExecuting
                       ? 'border-emerald-400 ring-4 ring-emerald-500/30 shadow-[0_0_36px_rgba(16,185,129,0.4)] -translate-y-2'
                       : isSelected

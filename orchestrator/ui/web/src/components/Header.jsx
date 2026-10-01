@@ -16,7 +16,8 @@ import {
   Square,
   Cpu,
   Flame,
-  Zap
+  Zap,
+  Server
 } from 'lucide-react';
 
 export default function Header({
@@ -26,7 +27,7 @@ export default function Header({
   isRunning,
   loopConfig,
   onOpenLoopModal,
-  onOpenGlobalModelModal,
+  onOpenAIProvidersModal,
   onRunWorkflow,
   onStopLoop,
   taskPrompt,
@@ -35,6 +36,8 @@ export default function Header({
   onOpenGraft,
   onOpenOpenSpace,
   onReset,
+  activeProvider,
+  globalModel,
   lang,
   setLang,
   isRTL
@@ -70,7 +73,7 @@ export default function Header({
             <span>{lang === 'ar' ? 'استوديو الوكلاء وسلاسل التنفيذ' : 'Multi-Agent Workflow Studio'}</span>
           </h1>
           <span className="text-[10px] text-gray-400 font-mono">
-            {lang === 'ar' ? '4 موادات • حلقة تطوير مستمرة • مودل عام' : '4 Concrete Pipeline Modes • Continuous Loop'}
+            {lang === 'ar' ? `المزود: ${activeProvider || 'OmniRoute'} • ${globalModel || 'Auto'}` : `Provider: ${activeProvider || 'OmniRoute'} • ${globalModel || 'Auto'}`}
           </span>
         </div>
       </div>
@@ -99,14 +102,15 @@ export default function Header({
 
       {/* Action Controls & Utilities */}
       <div className="flex items-center gap-1.5 shrink-0">
-        {/* Global Model Button */}
+        {/* AI Providers Button */}
         <button
-          onClick={onOpenGlobalModelModal}
-          className="btn px-2.5 py-1.5 bg-[#0f1523] hover:bg-[#182136] border border-[#232f48] hover:border-indigo-400/60 text-xs text-indigo-300 rounded-lg flex items-center gap-1.5 transition shadow-sm"
-          title={lang === 'ar' ? 'تحديد المودل والمزود العام للوكلاء' : 'Configure Universal Global Model & Fallback'}
+          onClick={onOpenAIProvidersModal}
+          className="btn px-2.5 py-1.5 bg-[#0f1523] hover:bg-[#182136] border border-[#232f48] hover:border-cyan-400/60 text-xs text-cyan-300 rounded-lg flex items-center gap-1.5 transition shadow-sm"
+          title={lang === 'ar' ? 'إدارة مزودي الذكاء الاصطناعي والمودل العام' : 'Configure AI Providers & Global Models'}
         >
-          <Globe2 className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="hidden sm:inline">{lang === 'ar' ? 'المودل العام' : 'Global Model'}</span>
+          <Zap className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="font-bold">{lang === 'ar' ? 'AI برافيدر' : 'AI Providers'}</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
         </button>
 
         {/* Continuous Loop Button */}
