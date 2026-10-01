@@ -8,7 +8,7 @@
 
 ### *Orchestrated Resilient Autonomous Generative AI*
 
-**Production-Grade Multi-Agent Software Engineering Framework with Guarded FSM Lifecycle, Zero-Token Architecture Intelligence & Self-Healing SRE Mesh.**
+**Experimental Multi-Agent Software Engineering Framework for governed, state-driven, and verifiable AI-assisted software development.**
 
 <br />
 
@@ -16,92 +16,155 @@
   <img src="imgs/oragai_hero_image.svg" alt="ORAGAI Deterministic Multi-Agent Engineering Architecture" width="100%" />
 </p>
 
-> **Hero Architecture Diagram:** The ORAGAI Deterministic Multi-Agent Control Plane orchestrating 5 specialized agent personas (*Architect*, *Developer*, *Tester*, *Reviewer*, *Auditor*) with centralized state machines, in-memory AST guards, and dynamic token governance.
+---
 
-<br />
+## ⚠️ IMPORTANT — PROJECT STATUS
 
-[![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Architecture: Hexagonal](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange.svg)](#️-architecture--hexagonal-design)
-[![Test Suite](https://img.shields.io/badge/Tests-530%2B%20Passing-brightgreen.svg?logo=pytest&logoColor=white)](#-testing--verification)
-[![Docker Support](https://img.shields.io/badge/Docker-Multi--Stage%20Ready-2496ED.svg?logo=docker&logoColor=white)](docs/guides/DOCKER_GUIDE.md)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+> **ORAGAI is currently an unstable and actively evolving project.**
+>
+> The architecture, orchestration engine, agent workflows, APIs, and internal components are still under development and may change significantly.
+>
+> **The project currently contains known architectural, implementation, integration, and reliability issues. Some documented features may be incomplete, experimental, partially implemented, or not yet validated in real-world production workloads.**
+>
+> **Do not consider the current version production-ready.**
+>
+> The repository should currently be treated as an **experimental engineering project and architectural research platform**, not as a stable production framework.
+>
+> The goal of the current development phase is to identify architectural weaknesses, simplify the system where necessary, improve reliability, eliminate unnecessary complexity, strengthen verification, and gradually move toward a stable release.
+>
+> If you use ORAGAI, expect breaking changes, incomplete functionality, failed workflows, and architectural refactoring.
 
-[Features](#-key-innovations) •
-[Quickstart](#-quickstart-in-60-seconds) •
-[Architecture](#️-architecture--hexagonal-design) •
-[Execution Modes](#-execution-modes) •
-[Why ORAGAI?](#️-why-oragai-vs-alternatives) •
-[Documentation](#-documentation-index)
+### Current Development Priorities
 
-</div>
+* 🧱 Stabilizing the core architecture
+* 🔍 Identifying and removing architectural weaknesses
+* 🐛 Fixing existing implementation and integration problems
+* 🔄 Improving orchestration reliability and failure recovery
+* 🧪 Strengthening automated verification and test coverage
+* 🧠 Improving codebase intelligence and context management
+* 💰 Reducing unnecessary LLM/token consumption
+* 🔌 Improving provider and tool integrations
+* 📐 Simplifying overly complex components
+* 📚 Synchronizing documentation with the actual implementation
+* 🚀 Establishing a reliable foundation before declaring production readiness
+
+> **The architecture described in this README represents the intended direction of ORAGAI and should not automatically be interpreted as proof that every component is currently complete or production-ready.**
+
+---
+
+## 🏷️ Project Maturity
+
+| Area                       | Current Status              |
+| -------------------------- | --------------------------- |
+| Core Architecture          | 🟡 Under Active Development |
+| Multi-Agent Orchestration  | 🟡 Experimental             |
+| FSM / Workflow Engine      | 🟡 Under Development        |
+| Codebase Intelligence      | 🟡 Experimental             |
+| AST Guard / Self-Healing   | 🟠 Experimental             |
+| Multi-Provider LLM Support | 🟡 Under Development        |
+| Token Governance           | 🟡 Under Development        |
+| Automated Verification     | 🟡 Under Development        |
+| Docker Support             | 🟡 Available / Evolving     |
+| Documentation              | 🟡 Continuously Updating    |
+| Production Readiness       | 🔴 **Not Ready**            |
 
 ---
 
 ## 💡 What is ORAGAI?
 
-**ORAGAI** is an autonomous multi-agent software engineering framework engineered to bridge the gap between toy AI prototypes and deterministic, production-grade software development.
+**ORAGAI** is an experimental multi-agent software engineering framework designed to explore how multiple specialized AI agents can work together under a controlled orchestration layer.
 
-Unlike standard conversational agents that loop unpredictably and burn tokens, ORAGAI enforces **strict mathematical governance**, **hexagonal boundaries**, **zero-token static analysis**, and an **in-memory AST Guard** that intercepts and auto-heals code defects before they ever touch your disk.
+Instead of treating AI agents as independent conversational workers, ORAGAI explores a more structured approach based on:
 
-```
-                                  USER TASK / SPECIFICATION
-                                             │
-                                             ▼
- ┌───────────────────────────────────────────────────────────────────────────────────────┐
- │                           ORAGAI DETERMINISTIC CONTROL PLANE                          │
- │     Guarded FSM Engine  │  Dynamic Token Governor  │  Context Handoff Synthesizer     │
- └───────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────────────┘
-         │              │              │              │              │
-         ▼              ▼              ▼              ▼              ▼
-   ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐
-   │ ARCHITECT │  │ DEVELOPER │  │  TESTER   │  │ REVIEWER  │  │  AUDITOR  │
-   │   Agent   │  │   Agent   │  │   Agent   │  │   Agent   │  │   Agent   │
-   └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘
-         │              │              │              │              │
-         ▼              ▼              ▼              ▼              ▼
-   ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐
-   │  PLAN.md  │  │ Clean TDD │  │ Pytest QA │  │ Security  │  │ Forensic  │
-   │  DAG Spec │  │ Codebase  │  │ Isolation │  │ Audit Gate│  │ Health DB │
-   └───────────┘  └───────────┘  └───────────┘  └───────────┘  └───────────┘
-                                       │
-                                       ▼
- ┌───────────────────────────────────────────────────────────────────────────────────────┐
- │                             COGNITIVE SENTINEL & SRE MESH                             │
- │   ASTGuard Auto-Heal  │  Terminal Translator  │  Cloud Fallback  │  SQLite WAL SRE    │
- └───────────────────────────────────────────────────────────────────────────────────────┘
-```
+* State-driven execution
+* Specialized agent roles
+* Explicit workflow transitions
+* Codebase intelligence
+* Context handoff
+* Resource and token governance
+* Automated verification
+* Failure detection and recovery
+* Multi-provider LLM support
+* Architectural boundaries between orchestration, execution, and infrastructure
+
+The long-term goal is to build a reliable control plane for AI-assisted software engineering.
+
+However, **the current implementation should be considered experimental**. The architecture is still being evaluated and several parts of the system require further development, simplification, testing, and validation.
 
 ---
 
-## ✨ Key Innovations
+## 🧭 Design Direction
 
-| Feature | Description |
-|---|---|
-| 🧩 **13-Engine Modular Platform** | Composable Langflow-style architecture featuring discrete Core, Graph, Agent, Model, Tool, Skill, Memory, Task, Execution, Governance, Verification, Event, and Plugin engines. |
-| 🛡️ **Guarded FSM & Graph Engine** | Deterministic state execution supporting DAG and cyclic workflows, formal guard predicates, and visual canvas compatibility. |
-| 🔍 **Zero-Token Codebase Intelligence** | Ingests full-repo dependency graphs, call trees, and API skeletons via Graft integration without consuming a single LLM token. |
-| 🩹 **Self-Healing AST Guard** | Intercepts all file writes in-memory, auto-repairs missing imports, unclosed colons, and syntax defects before disk commit. |
-| 💰 **Dynamic Token & Adaptive Governor** | Multi-dimensional governance combining deterministic token ceilings, stagnation velocity detection, chaos mitigation, and circuit breakers. |
-| 🔄 **Multi-Tier Cloud Resilience** | Seamless real-time failover across OpenRouter, Google Gemini, OpenAI, Anthropic, and Groq with zero session disruption. |
-| 🏗️ **Universal Component Contracts** | Standardized `IComponent` interface with typed input/output ports for visual drag-and-drop workflow assembly. |
-| 📊 **Autonomous Verification Engine** | Independent evidence-based completion gates measuring test execution, security scans, and code diff integrity. |
+ORAGAI is being developed around the following architectural idea:
+
+```text
+                         USER TASK / SPECIFICATION
+                                    │
+                                    ▼
+              ┌───────────────────────────────────────┐
+              │       ORAGAI CONTROL PLANE             │
+              │                                       │
+              │  Workflow / FSM / Governance          │
+              │  Context / Budget / Verification      │
+              └───────────────┬───────────────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+     ARCHITECT            DEVELOPER             TESTER
+          │                   │                   │
+          └───────────────────┼───────────────────┘
+                              │
+                              ▼
+                         REVIEWER
+                              │
+                              ▼
+                           AUDITOR
+                              │
+                              ▼
+                  ┌───────────────────────┐
+                  │ Verification / SRE    │
+                  │ Recovery / Diagnostics│
+                  └───────────────────────┘
+```
+
+The objective is not simply to add more agents.
+
+The objective is to create **controlled interaction between agents**, with explicit evidence, state transitions, and verification rather than relying entirely on free-form agent conversations.
 
 ---
 
-## ⚡ Quickstart in 60 Seconds
+## ✨ Core Concepts
+
+| Concept                            | Purpose                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 🧩 **Modular Architecture**        | Separate orchestration, agents, models, tools, memory, execution, governance, and verification. |
+| 🛡️ **Guarded Workflows**          | Control how execution moves between different stages and failure states.                        |
+| 🔍 **Codebase Intelligence**       | Build structural understanding of a repository before asking LLMs to reason about it.           |
+| 🧠 **Context Handoff**             | Transfer relevant information between specialized agents without repeatedly rebuilding context. |
+| 💰 **Token Governance**            | Track and constrain LLM usage to reduce unnecessary consumption.                                |
+| 🧪 **Evidence-Based Verification** | Use tests, diagnostics, diffs, and other evidence before considering work complete.             |
+| 🔄 **Failure Recovery**            | Detect failures and attempt controlled recovery rather than endlessly retrying.                 |
+| 🔌 **Provider Abstraction**        | Allow different LLM providers to participate in the orchestration system.                       |
+
+> These capabilities are part of the project's current architecture and development direction. Their implementation maturity varies across the repository.
+
+---
+
+## ⚡ Quickstart
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/crrrowz/orchestrator-ai-agent.git
 cd orchestrator-ai-agent
 
-# Install dependencies with uv (recommended)
 uv sync
+```
 
-# Or with pip
+Or:
+
+```bash
 uv pip install -e .
 ```
 
@@ -109,217 +172,280 @@ uv pip install -e .
 
 ```bash
 cp .env.example .env
-# Edit .env and insert your preferred provider API key (OpenRouter, Gemini, OpenAI, etc.)
 ```
 
-### Python CLI Direct (Native Python Environment)
+Edit `.env` and configure the provider credentials required by your environment.
+
+### Verify the Environment
 
 ```bash
-# Verify environment and model connectivity (0 tokens)
 uv run python -m orchestrator.main --check-config
-
-# Execute a TDD development task
-uv run python -m orchestrator.main "Build a Sliding Window RateLimiter class with unit tests" --mode dev-test
-
-# Run full 4-agent architectural pipeline
-uv run python -m orchestrator.main "Design and implement an OAuth2 token validation service" --mode full
-
-# Run deep codebase security & architecture audit
-uv run python -m orchestrator.main --mode audit
-
-# Run automated audit and fix remediation loop
-uv run python -m orchestrator.main --mode audit-fix
 ```
 
-### Python Programmatic API
+### Run Tests
 
-```python
-from orchestrator import Orchestrator, OrchestratorConfig
-
-config = OrchestratorConfig(
-    workspace_path="./workspace",
-    max_budget_usd=1.50,
-    max_iterations=6,
-)
-
-orchestrator = Orchestrator(config)
-result = orchestrator.run_task(
-    task="Implement an LRU Cache with TTL expiration and comprehensive pytest suite",
-    mode="dev-test"
-)
-
-print(f"Status: {result['status']}")  # SUCCESS | FAILED | BUDGET_EXHAUSTED
+```bash
+uv run pytest tests/ -v
 ```
+
+> **Note:** Passing tests do not currently imply production readiness. The project is still undergoing architectural and integration changes.
 
 ---
 
-## 🐳 Docker Deployment
+## 🐳 Docker
 
-ORAGAI provides production-ready Docker containers with volume isolation:
+Docker support is available for isolated development and execution.
 
 ```bash
-# Build development image
 docker build --target development -t oragai:dev .
 
-# Run test suite inside isolated Linux container
 docker run --rm --entrypoint pytest oragai:dev tests/ -v
-
-# Run an orchestration task inside Docker (ENTRYPOINT is already python -m orchestrator.main)
-docker run --rm -it --env-file .env oragai:dev "Build rate limiter" --mode dev-test
 ```
 
-> 📖 For full Docker Compose and remote VM SSH workflows, see the **[Docker Architecture & Operations Guide](docs/guides/DOCKER_GUIDE.md)**.
+For orchestration:
+
+```bash
+docker run --rm -it \
+  --env-file .env \
+  oragai:dev \
+  "Build rate limiter" \
+  --mode dev-test
+```
+
+For detailed Docker workflows:
+
+[Docker Architecture & Operations Guide](docs/guides/DOCKER_GUIDE.md)
 
 ---
 
 ## 🎯 Execution Modes
 
-ORAGAI provides 5 specialized orchestration modes:
+ORAGAI currently explores several orchestration modes:
 
-| Mode | Flag | Description | Active Personas |
-|---|---|---|---|
-| **Dev-Test Loop** | `--mode dev-test` *(Default)* | Rapid iterative TDD loop: Code ➔ Preflight ➔ Test ➔ Fix. Bypasses Tester LLM on fix iterations to save 65% tokens. | Developer, Tester |
-| **Full Pipeline** | `--mode full` | Full enterprise lifecycle: Formal Spec ➔ Milestone DAG ➔ Implementation ➔ QA ➔ Review Verdict ➔ Git Commit. | Architect, Developer, Tester, Reviewer |
-| **Codebase Audit** | `--mode audit` | Zero-token static analysis + Deep Auditor inspection generating structured findings. | Auditor |
-| **Audit & Auto-Fix** | `--mode audit-fix` | Continuous scan-remediate-verify self-healing loop directly on working tree without Git overhead. | Auditor, Developer |
-| **Documentation** | `--mode docs` | Automated technical authoring keeping README, API reference, and architecture specs in sync. | Documentation |
+| Mode               | Flag               | Purpose                                                       |
+| ------------------ | ------------------ | ------------------------------------------------------------- |
+| **Dev-Test Loop**  | `--mode dev-test`  | Developer → verification → testing → iterative fixing         |
+| **Full Pipeline**  | `--mode full`      | Architectural planning → implementation → testing → review    |
+| **Codebase Audit** | `--mode audit`     | Repository analysis and architectural/implementation findings |
+| **Audit & Fix**    | `--mode audit-fix` | Audit findings followed by attempted remediation              |
+| **Documentation**  | `--mode docs`      | Automated documentation workflows                             |
 
----
-
-## ⚖️ Why ORAGAI vs. Alternatives?
-
-### Execution Paradigm Comparison
-
-<p align="center">
-  <img src="imgs/manual_agent_vs_oragai.svg" alt="Manual Agent Calls vs ORAGAI Governed Execution" width="100%" />
-</p>
-
-> **Figure 3: Isolated Agent Calls vs. ORAGAI Governed Execution.** Comparing fragile, blind repository scans and runaway retry loops against ORAGAI's shared context spine, dynamic budget quotas, and pre-commit AST guards.
-
-<br />
-
-| Capability | ORAGAI | CrewAI | AutoGen | LangGraph |
-|---|:---:|:---:|:---:|:---:|
-| **Deterministic Guarded FSM** | ✅ **11-State Guarded** | ❌ Heuristic | ❌ Freeform Conversational | ⚠️ Manual Graph |
-| **Zero-Token Graph Ingestion** | ✅ **Graft Integration** | ❌ Context Dump | ❌ Context Dump | ❌ Context Dump |
-| **In-Memory AST Auto-Healing** | ✅ **ASTGuard** | ❌ | ❌ | ❌ |
-| **Token Phase Partitioning** | ✅ **Dynamic 4-Phase** | ❌ | ❌ | ❌ |
-| **Multi-Provider Cloud Mesh** | ✅ **Auto-Failover** | ⚠️ Custom | ⚠️ Custom | ⚠️ Custom |
-| **Role-Based Workspace RBAC** | ✅ **Strict Write Scopes** | ❌ Shared FS | ❌ Shared FS | ❌ Shared FS |
-| **Cross-Platform UNIX Translation** | ✅ **Windows/Linux Native** | ❌ | ❌ | ❌ |
+> Some modes and components are still experimental and may change as the architecture evolves.
 
 ---
 
-### Architectural Divergence in Practice
+## 🏛️ Architecture
 
-<p align="center">
-  <img src="imgs/oragai_comparison.svg" alt="Architectural Comparison: Fragmented vs Governed" width="100%" />
-</p>
-
-> **Figure 4: Detailed Structural Comparison.** Left: fragmented workflow with cold starts, blind repository parsing, and context loss. Right: ORAGAI unified control plane with zero-token intelligence, specialized personas, and clean AST validation.
-
-<br />
-
----
-
-## 🏛️ Architecture & Hexagonal Design
-
-The codebase strictly adheres to **Hexagonal (Ports & Adapters) Architecture** governed by an 8-stage deterministic state pipeline:
-
-<p align="center">
-  <img src="imgs/oragai_architecture.svg" alt="ORAGAI 8-Stage Lifecycle & Control Plane Architecture" width="100%" />
-</p>
-
-> **Figure 1: ORAGAI 8-Stage Lifecycle Architecture.** Visualizes the flow from Task Ingestion (01) through Zero-Token Analysis (02), Formal Planning (03), Governance (04), Role-Specialized Dispatch (05), In-Memory Validation (06), SRE Mesh Recovery (07), to Verifiable Cryptographic Completion (08).
-
-<br />
-
-### Comprehensive Multi-Agent Constellation Mesh
-
-<p align="center">
-  <img src="imgs/oragai_hero_constellation.svg" alt="ORAGAI Multi-Agent Orbit Constellation" width="100%" />
-</p>
-
-> **Figure 2: Multi-Agent Orbital Constellation.** 6-tier hierarchical view detailing active orchestration paths between Governance (L1), Zero-Token Intelligence (L2), Specialized Agents (L3), Execution Spine (L4), AST Protection (L5), and the Cloud Resilience Provider Mesh (L6).
-
-<br />
+ORAGAI is currently organized around a modular / hexagonal-inspired architecture.
 
 ```text
 .
 ├── orchestrator/
-│   ├── core/                # Core domain abstractions, invariants, and protocols
-│   ├── domain/              # Pure Pydantic models (TaskTruth, Evidence, Audit, Recovery)
-│   ├── ports/               # Driving (CLI, FSM) & Driven (VCS, Tools, Storage, Runtime) ports
-│   ├── governance/          # Guarded FSM, Completion Gates, Resource Governor, Stagnation Detector
-│   ├── workstreams/         # Micro-TDD Loop, Milestone DAG, Context Synthesis, Review Parsing
-│   ├── pipeline/            # Execution engines (DevTest, Full, Audit, AuditFix, Docs, Strangler Guard)
-│   ├── sentinel/            # SRE Mesh: ASTGuard, Self-Healing, Cloud Governor, Diagnostics DB
-│   ├── adapters/            # Language & Runtime Adapters (Python, Node, VCS, Polyglot Driver Mesh)
-│   ├── tools/               # Hardened Sandbox, Parameterized Terminal & RBAC File Tools
-│   ├── llm/                 # Unified Multi-Provider LLM Factory, Pricing & Resilience Mesh
-│   ├── context/             # Dynamic Prompt Builders, Graft Injectors, Context Handoff Mesh
-│   ├── diagnostics/         # Telemetry aggregation, Full-text Search, SQLite WAL Store
-│   └── cli/                 # Interactive CLI, Wizard, Diagnostics Dashboard
-├── tests/                   # 50 test modules (538 automated tests)
-├── docs/                    # Deep-dive architecture and operational guides
-├── Dockerfile               # Multi-stage container specification
-├── docker-compose.yml       # Composable dev, cli, and test services
-└── pyproject.toml           # Package definition (Python >=3.12)
+│   ├── core/                # Core domain abstractions
+│   ├── domain/              # Domain models
+│   ├── ports/               # Architectural interfaces
+│   ├── governance/          # Workflow and resource governance
+│   ├── workstreams/         # Development workflows
+│   ├── pipeline/            # Execution pipelines
+│   ├── sentinel/            # Recovery and protection systems
+│   ├── adapters/            # Runtime and language adapters
+│   ├── tools/               # Tooling and sandbox infrastructure
+│   ├── llm/                 # LLM providers and routing
+│   ├── context/             # Context construction and handoff
+│   ├── diagnostics/         # Diagnostics and telemetry
+│   └── cli/                 # CLI interface
+├── tests/
+├── docs/
+├── Dockerfile
+├── docker-compose.yml
+└── pyproject.toml
 ```
+
+### Architectural Direction
+
+The intended architecture separates:
+
+```text
+Domain
+   ↓
+Governance
+   ↓
+Orchestration
+   ↓
+Agents
+   ↓
+Execution
+   ↓
+Verification
+   ↓
+Recovery / Diagnostics
+```
+
+This separation is intended to make the system easier to reason about, test, replace, and evolve.
 
 ---
 
 ## 🧪 Testing & Verification
 
-ORAGAI enforces strict **continuous self-verification**:
+The project contains an automated test suite covering multiple architectural layers.
+
+Run:
 
 ```bash
-# Run the entire test suite
 uv run pytest tests/ -v
+```
 
-# Run with concise progress
+or:
+
+```bash
 uv run pytest tests/ -q
 ```
 
-- **50 Test Modules** covering all architectural layers.
-- **~458 Test Functions** running deterministically on both Windows and Linux.
-- **100% Zero Regression Guarantee** enforced on every milestone.
+### Important
+
+Test count alone should **not** be interpreted as a guarantee of correctness.
+
+ORAGAI is currently undergoing active architectural changes, and tests may themselves require refinement as the implementation evolves.
+
+The project therefore treats testing as one part of a larger verification process involving:
+
+* Unit tests
+* Integration tests
+* Workflow validation
+* Failure-path testing
+* Repository analysis
+* Runtime diagnostics
+* Architecture review
+* Real-world task validation
 
 ---
 
-## 📚 Documentation Index
+## 🔬 Current Engineering Challenges
 
-The complete documentation suite is organized in the **[`docs/`](docs/INDEX.md)** directory:
+The project is intentionally being developed with a strong focus on identifying failure modes.
 
-- 📖 **[Documentation Hub & Index](docs/INDEX.md)** — Central navigation table of contents.
-- 🚀 **Guides (`docs/guides/`)**:
-  - 🐳 **[Docker Architecture & Operations Guide](docs/guides/DOCKER_GUIDE.md)** — Dual-architecture container deployment manual.
-  - ⚙️ **[Configuration Reference Manual](docs/guides/CONFIG_REFERENCE.md)** — Complete 47-parameter configuration matrix.
-- 🏛️ **Architecture (`docs/architecture/`)**:
-  - 📖 **[API & Architecture Contract](docs/architecture/API_REFERENCE.md)** — Full programmatic Python API reference.
-  - 🔍 **[360° Architectural Assessment](docs/architecture/ARCHITECTURAL_ASSESSMENT.md)** — Deep-dive system boundaries & invariants.
-  - ⚡ **[Native Code Intelligence](docs/architecture/CODE_INTELLIGENCE_REVIEW.md)** — Zero-token Graft AST indexing & review system.
-  - 🔬 **[Orchestration Failure Analysis](docs/architecture/FAILURE_ANALYSIS.md)** — Forensic performance & bottleneck investigation.
-- 📐 **Implementation Plans (`docs/plans/`)**:
-  - 🗺️ **[P0 through P14 Engineering Blueprints](docs/plans/)** — 15 comprehensive architectural specifications.
-- 📊 **Progress & Reports (`docs/execution/` & `docs/reports/`)**:
-  - 📈 **[Milestone Progress Log](docs/execution/progress.md)** — Verifiable BITE milestones & PER metrics.
-  - 📋 **[Documentation Drift Report](docs/reports/DOCUMENTATION_DRIFT_REPORT.md)** — Forensic documentation synchronization audit.
+Some of the areas currently requiring attention include:
+
+### Architecture Complexity
+
+As ORAGAI evolved, multiple abstractions and subsystems were introduced. Some may need to be simplified, merged, redesigned, or removed.
+
+### Agent Reliability
+
+Multi-agent workflows introduce failure modes such as:
+
+* Incorrect assumptions
+* Incomplete context
+* Repeated work
+* Incorrect state transitions
+* Endless repair loops
+* False completion
+* Inconsistent outputs between agents
+
+### Verification
+
+A successful agent response does not necessarily mean that the resulting software is correct.
+
+ORAGAI therefore continues to evolve toward stronger evidence-based completion criteria.
+
+### Token Efficiency
+
+Complex orchestration can introduce significant LLM overhead.
+
+One of the project's goals is to determine where deterministic tooling can replace unnecessary LLM reasoning.
+
+### Documentation Drift
+
+Because the architecture changes rapidly, documentation can temporarily describe intended architecture rather than the exact state of the implementation.
+
+This is an active area of improvement.
+
+---
+
+## 🗺️ Development Philosophy
+
+ORAGAI is not being developed around the assumption that the current architecture is correct.
+
+Instead:
+
+```text
+Build
+  ↓
+Measure
+  ↓
+Find Failure
+  ↓
+Understand Root Cause
+  ↓
+Simplify / Redesign
+  ↓
+Implement
+  ↓
+Verify
+  ↓
+Repeat
+```
+
+Existing code is therefore **not automatically considered correct simply because it already exists**.
+
+Architectural decisions are expected to be revisited when evidence shows that they introduce unnecessary complexity, poor reliability, excessive token usage, or maintenance problems.
+
+---
+
+## 📚 Documentation
+
+The documentation is available under [`docs/`](docs/INDEX.md).
+
+Key sections include:
+
+* [Documentation Hub](docs/INDEX.md)
+* [Docker Guide](docs/guides/DOCKER_GUIDE.md)
+* [Configuration Reference](docs/guides/CONFIG_REFERENCE.md)
+* [API & Architecture Reference](docs/architecture/API_REFERENCE.md)
+* [Architectural Assessment](docs/architecture/ARCHITECTURAL_ASSESSMENT.md)
+* [Code Intelligence Review](docs/architecture/CODE_INTELLIGENCE_REVIEW.md)
+* [Failure Analysis](docs/architecture/FAILURE_ANALYSIS.md)
+* [Engineering Plans](docs/plans/)
+* [Progress Reports](docs/execution/)
+* [Documentation Drift Report](docs/reports/DOCUMENTATION_DRIFT_REPORT.md)
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** and our **[Code of Conduct](CODE_OF_CONDUCT.md)** before submitting pull requests.
+Contributions, experiments, architectural reviews, bug reports, and constructive criticism are welcome.
+
+Before contributing, please read:
+
+* [CONTRIBUTING.md](CONTRIBUTING.md)
+* [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 ---
 
 ## 🛡️ Security
 
-For vulnerability reporting guidelines, please see **[SECURITY.md](SECURITY.md)**.
+For vulnerability reporting guidelines, see:
+
+[SECURITY.md](SECURITY.md)
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
+
+See [LICENSE](LICENSE) for the full license text.
+
+---
+
+## ⚠️ Final Note
+
+**ORAGAI is a work in progress.**
+
+The project has ambitious architectural goals, but the current implementation does not yet represent the final system.
+
+If you are evaluating ORAGAI, evaluate the **code, tests, implementation status, and documented limitations**, not only the architecture diagrams or feature descriptions.
+
+The project is currently focused on turning the existing experimental foundation into a **simpler, more reliable, better-tested, and genuinely production-capable system**.
+
+</div>
