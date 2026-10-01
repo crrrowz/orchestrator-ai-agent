@@ -598,6 +598,41 @@ class GuardedFSMEngine:
                 f"## Active Milestone ({active_ms.title}):\n{active_ms.content}\n"
             )
 
+        # In audit-fix mode or when audit findings exist, inject findings into prompt
+        if self.profile.mode == PipelineMode.AUDIT_FIX or (self.workspace_path / "docs" / "audit_findings.json").exists():
+            findings_path = self.workspace_path / "docs" / "audit_findings.json"
+            if findings_path.exists():
+                try:
+                    import json
+                    findings_raw = json.loads(findings_path.read_text(encoding="utf-8"))
+                    if isinstance(findings_raw, list) and findings_raw:
+                        preview = json.dumps(findings_raw[:10], indent=2)
+                        prompt_lines.append(
+                            f"## Specific Audit Findings To Fix (from docs/audit_findings.json):\n```json\n{preview}\n```\n"
+                            f"Target and resolve the defects specified above.\n"
+                        )
+                except Exception:
+                    pass
+
+        # Carry forward context from previous milestones and modified files
+        if self.context.mutated_files:
+            prompt_lines.append(
+                f"## Modified Workspace Files (from previous turns):\n"
+                + "\n".join(f"- {f}" for f in sorted(self.context.mutated_files))
+                + "\n"
+            )
+        if self.context.milestone_dag and self.context.active_milestone_index > 0:
+            completed_titles = [
+                m.title for m in self.context.milestone_dag[:self.context.active_milestone_index]
+                if getattr(m, "is_completed", False)
+            ]
+            if completed_titles:
+                prompt_lines.append(
+                    f"## Completed Milestones:\n"
+                    + "\n".join(f"- {t}" for t in completed_titles)
+                    + "\n"
+                )
+
         # If recovering from failure, inject failure diagnostics
         if self.context.last_verification_decision:
             d = self.context.last_verification_decision
@@ -623,12 +658,30 @@ class GuardedFSMEngine:
 
         compiled_prompt = "\n".join(prompt_lines)
 
-        allocated_turns = self.iteration_governor.allocate_initial_budget(
+        # Calculate baseline and applied budget extension from governance
+        baseline_turns = self.iteration_governor.allocate_initial_budget(
             task_description=self.context.task_description,
             role=role_name,
             mode=self.profile.mode.value if hasattr(self.profile.mode, "value") else str(self.profile.mode),
             workspace_path=self.workspace_path,
         )
+        allocated_turns = baseline_turns
+
+        # Check if governance granted a turn extension in previous decision
+        gov_meta = self.context.metadata.get("governance_decision")
+        if gov_meta and isinstance(gov_meta, dict):
+            ext = gov_meta.get("allocated_turns_extension", 0)
+            if ext > 0 and gov_meta.get("action") == "EXTEND_BUDGET":
+                allocated_turns += ext
+                logger.info(f"Applying governance turn extension: +{ext} turns (Total: {allocated_turns})")
+
+        # Handle CHANGE_STRATEGY or specific directives
+        if gov_meta and isinstance(gov_meta, dict) and gov_meta.get("action") == "CHANGE_STRATEGY":
+            directive = self.context.metadata.get("governance_directive") or "Switch strategy: target specific files and avoid repetitive exploration."
+            prompt_lines.append(
+                f"\n## MANDATORY GOVERNANCE DIRECTIVE (STRATEGY CHANGE REQUIRED):\n{directive}\n"
+                f"You MUST immediately commit concrete file modifications rather than inspecting files."
+            )
         if self.governor:
             ac_count = len(self.context.milestone_dag) if self.context.milestone_dag else 1
             if self.context.task_truth_graph and hasattr(self.context.task_truth_graph, "acceptance_criteria"):
@@ -812,10 +865,17 @@ class GuardedFSMEngine:
                     blocking_reasons=[f"Milestone {active_ms_label} completed; subsequent milestones pending"],
                 )
             elif test_res and test_res.passed:
-                decision = CompletionDecision(
-                    status=CompletionStatus.COMPLETE,
-                    satisfied_requirements=["Task Execution", "All Tests Passed"],
-                )
+                # In audit-fix mode, passing tests without mutations indicates the fix was not applied
+                if self.profile.mode == PipelineMode.AUDIT_FIX and not self.context.mutated_files:
+                    decision = CompletionDecision(
+                        status=CompletionStatus.INCOMPLETE,
+                        blocking_reasons=["Audit-fix mode requires verified code modifications, but no files were mutated."],
+                    )
+                else:
+                    decision = CompletionDecision(
+                        status=CompletionStatus.COMPLETE,
+                        satisfied_requirements=["Task Execution", "All Tests Passed"],
+                    )
             elif self.profile.mode in (PipelineMode.AUDIT, PipelineMode.DOCS) and self.context.mutated_files:
                 # Require that AUDIT_REPORT.md was explicitly written by the agent
                 report_md = self.workspace_path / "docs" / "AUDIT_REPORT.md"
@@ -1041,16 +1101,63 @@ class GuardedFSMEngine:
     def _resume_from_checkpoint(self, checkpoint: Any) -> None:
         """Restore FSMContext from a serialized FSMCheckpoint."""
         self.context.run_id = checkpoint.run_id
+        if not self.context.task_description and getattr(checkpoint, "task_description", None):
+            self.context.task_description = checkpoint.task_description
         self.context.iteration_count = checkpoint.iteration_count
         self.context.total_iterations = getattr(checkpoint, "total_iterations", checkpoint.iteration_count)
         self.context.total_tokens_consumed = checkpoint.total_tokens_consumed
         self.context.total_cost_usd = checkpoint.total_cost_usd
         self.context.metadata = checkpoint.metadata or {}
+        self.context.stagnation_counter = getattr(checkpoint, "stagnation_counter", 0)
+        self.context.last_workspace_hash = getattr(checkpoint, "last_workspace_hash", None)
+
+        if getattr(checkpoint, "mutated_files", None):
+            self.context.mutated_files = set(checkpoint.mutated_files)
+
+        self.context.active_milestone_id = getattr(checkpoint, "active_milestone_id", None)
+        self.context.active_milestone_index = getattr(checkpoint, "active_milestone_index", 0)
+
+        # Restore Milestone DAG
+        if getattr(checkpoint, "milestones", None):
+            reconstructed_dag = []
+            for m in checkpoint.milestones:
+                idx = int(m.milestone_id) if str(m.milestone_id).isdigit() else (len(reconstructed_dag) + 1)
+                reconstructed_dag.append(
+                    SubtaskMilestone(
+                        index=idx,
+                        title=m.title,
+                        content=getattr(m, "content", "") or m.title,
+                        target_files=list(getattr(m, "target_files", [])),
+                        dependencies=list(getattr(m, "dependencies", [])),
+                        is_completed=m.is_completed,
+                    )
+                )
+            self.context.milestone_dag = reconstructed_dag
+
+        # Restore TaskTruthGraph
+        if getattr(checkpoint, "task_truth_graph_json", None):
+            try:
+                from orchestrator.domain.task_truth import TaskTruthGraph
+                self.context.task_truth_graph = TaskTruthGraph.model_validate_json(checkpoint.task_truth_graph_json)
+            except Exception as ex:
+                logger.warning(f"Could not deserialize task_truth_graph from checkpoint: {ex}")
+
+        # Ensure adapter and git_ops are initialized
+        if self.context.adapter is None:
+            try:
+                self.context.adapter = detect_adapter(self.workspace_path)
+            except Exception:
+                pass
+        if self.context.git_ops is None and getattr(self.profile, "enable_git_commit", False):
+            try:
+                self.context.git_ops = GitOps(self.workspace_path)
+            except Exception:
+                pass
 
         try:
             target_st = FSMState(checkpoint.current_state)
-            if target_st in (FSMState.FAILED, FSMState.ABORTED):
-                # When resuming after failure or abort, reset to a runnable state for retry/recovery
+            if target_st in (FSMState.FAILED, FSMState.ABORTED, FSMState.BLOCKED):
+                # When resuming after failure, abort, or blocked, reset to a runnable state for retry/recovery
                 if checkpoint.milestones:
                     target_st = FSMState.IMPLEMENTATION
                 elif getattr(self.profile, "enable_planning", False):
@@ -1058,7 +1165,7 @@ class GuardedFSMEngine:
                 else:
                     target_st = FSMState.PREFLIGHT
                 logger.info(
-                    f"Resuming failed/aborted checkpoint: resetting state from {checkpoint.current_state} to {target_st.value} for recovery attempt."
+                    f"Resuming failed/aborted/blocked checkpoint: resetting state from {checkpoint.current_state} to {target_st.value} for recovery attempt."
                 )
             self.context.current_state = target_st
             self.context.state_history = [

@@ -90,6 +90,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
             FSMState.VERIFICATION,  # Finding schema validation
             FSMState.COMPLETED,
             FSMState.FAILED,
+            FSMState.BLOCKED,
             FSMState.ABORTED,
         },
         enable_planning=False,
@@ -110,6 +111,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
             FSMState.RESOLUTION,
             FSMState.COMPLETED,
             FSMState.FAILED,
+            FSMState.BLOCKED,
             FSMState.ABORTED,
         },
         enable_planning=True,
@@ -128,6 +130,7 @@ PROFILES: Dict[PipelineMode, LifecycleProfile] = {
             FSMState.VERIFICATION,  # Markdown validation
             FSMState.COMPLETED,
             FSMState.FAILED,
+            FSMState.BLOCKED,
             FSMState.ABORTED,
         },
         enable_planning=False,

@@ -1036,13 +1036,25 @@ class ExitStatusClassifier:
         status = getattr(state, "execution_status", None) if state else None
         events = list(getattr(state, "events", [])) if state else []
 
-        # 1. Extract Token Usage
+        # 1. Extract Token Usage & Cost
         tu = getattr(getattr(getattr(conv, "agent", None), "llm", None), "metrics", None)
         pt, ct = 0, 0
+        extracted_cost = 0.0
         if tu and hasattr(tu, "accumulated_token_usage"):
             pt = getattr(tu.accumulated_token_usage, "prompt_tokens", 0) or 0
             ct = getattr(tu.accumulated_token_usage, "completion_tokens", 0) or 0
+        if tu and hasattr(tu, "accumulated_cost"):
+            extracted_cost = float(getattr(tu, "accumulated_cost", 0.0) or 0.0)
         total_tokens = max(0, (pt + ct) - initial_tokens)
+
+        calculated_cost = extracted_cost
+        if calculated_cost == 0.0 and total_tokens > 0:
+            delta_pt = max(0, pt)
+            delta_ct = max(0, ct)
+            if delta_pt + delta_ct > 0:
+                calculated_cost = round((delta_pt * 0.000003) + (delta_ct * 0.000015), 6)
+            else:
+                calculated_cost = round(total_tokens * 0.000005, 6)
 
         # 2. Extract Final Thought
         final_thought = None
@@ -1069,7 +1081,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message=f"Runtime crash in agent execution: {execution_exception}",
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1109,7 +1121,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message=None,
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1126,7 +1138,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message=f"Turn step limit reached ({max_turns} turns).",
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1143,7 +1155,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message=f"Turn token budget exhausted ({total_tokens:,} >= {token_ceiling:,}).",
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1160,7 +1172,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message=tool_rejection_msg or "Tool execution rejected by security policy.",
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1177,7 +1189,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message="Agent loop repetition detected by SDK stuck detector.",
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1199,7 +1211,7 @@ class ExitStatusClassifier:
                 prompt_tokens=pt,
                 completion_tokens=ct,
                 total_tokens=total_tokens,
-                cost_usd=0.0,
+                cost_usd=calculated_cost,
                 error_message=str(err_msg),
                 mutated_files=tuple(mutated_files),
                 final_thought=final_thought,
@@ -1215,7 +1227,7 @@ class ExitStatusClassifier:
             prompt_tokens=pt,
             completion_tokens=ct,
             total_tokens=total_tokens,
-            cost_usd=0.0,
+            cost_usd=calculated_cost,
             error_message="Turn completed without explicit FINISHED state.",
             mutated_files=tuple(mutated_files),
             final_thought=final_thought,

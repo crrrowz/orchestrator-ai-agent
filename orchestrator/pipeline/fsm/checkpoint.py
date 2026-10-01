@@ -18,6 +18,9 @@ class MilestoneStateSnapshot(BaseModel):
 
     milestone_id: str
     title: str
+    content: str = ""
+    target_files: List[str] = Field(default_factory=list)
+    dependencies: List[int] = Field(default_factory=list)
     is_completed: bool = False
     verified_criteria_ids: List[str] = Field(default_factory=list)
     output_hash: Optional[str] = None
@@ -32,11 +35,15 @@ class FSMCheckpoint(BaseModel):
     current_state: str
     state_history: List[str] = Field(default_factory=list)
     active_milestone_id: Optional[str] = None
+    active_milestone_index: int = 0
     milestones: List[MilestoneStateSnapshot] = Field(default_factory=list)
     task_truth_graph_json: Optional[str] = None
     workspace_root_hash: str
     iteration_count: int = 1
     total_iterations: int = 0
+    stagnation_counter: int = 0
+    last_workspace_hash: Optional[str] = None
+    mutated_files: List[str] = Field(default_factory=list)
     total_cost_usd: float = 0.0
     total_tokens_consumed: int = 0
     saved_at: datetime = Field(
@@ -137,11 +144,17 @@ class FSMCheckpointManager:
         for ms in context.milestone_dag:
             ms_id = str(getattr(ms, "index", getattr(ms, "id", "MS-01")))
             ms_title = str(getattr(ms, "title", f"Milestone {ms_id}"))
+            ms_content = str(getattr(ms, "content", ""))
+            ms_targets = list(getattr(ms, "target_files", []))
+            ms_deps = list(getattr(ms, "dependencies", []))
             ms_completed = bool(getattr(ms, "is_completed", False))
             milestone_snapshots.append(
                 MilestoneStateSnapshot(
                     milestone_id=ms_id,
                     title=ms_title,
+                    content=ms_content,
+                    target_files=ms_targets,
+                    dependencies=ms_deps,
                     is_completed=ms_completed,
                 )
             )
@@ -160,11 +173,15 @@ class FSMCheckpointManager:
                 for s in context.state_history
             ],
             active_milestone_id=context.active_milestone_id,
+            active_milestone_index=getattr(context, "active_milestone_index", 0),
             milestones=milestone_snapshots,
             task_truth_graph_json=graph_json,
             workspace_root_hash=ws_hash,
             iteration_count=context.iteration_count,
             total_iterations=getattr(context, "total_iterations", context.iteration_count),
+            stagnation_counter=getattr(context, "stagnation_counter", 0),
+            last_workspace_hash=getattr(context, "last_workspace_hash", None),
+            mutated_files=sorted(list(getattr(context, "mutated_files", []))),
             total_cost_usd=context.total_cost_usd,
             total_tokens_consumed=context.total_tokens_consumed,
             metadata=dict(context.metadata),
