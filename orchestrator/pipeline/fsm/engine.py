@@ -588,8 +588,10 @@ class GuardedFSMEngine:
             prompt_lines.append(
                 "STRICT 2-PHASE AUDIT WORKFLOW:\n"
                 "1. Phase 1 (Inspection - Max 2-3 steps): Read key architectural files only.\n"
-                "2. Phase 2 (Report Synthesis - MANDATORY): First, write the comprehensive, multi-section Markdown report to `docs/AUDIT_REPORT.md` (MUST include detailed findings, line numbers, and architectural analysis). Then write the structured JSON findings to `docs/audit_findings.json` using `workspace_file` with operation='write'.\n"
-                "3. Conclude your turn immediately after writing both files. Do NOT get stuck in endless read loops."
+                "2. Phase 2 (Report Generation - MUST WRITE BOTH FILES):\n"
+                "   Step A: Write the comprehensive Markdown report with full architecture analysis, sections, and tables to `docs/AUDIT_REPORT.md` using `workspace_file` with operation='write'.\n"
+                "   Step B: Write the structured JSON findings list to `docs/audit_findings.json` using `workspace_file` with operation='write'.\n"
+                "3. Conclude your turn only after writing BOTH `docs/AUDIT_REPORT.md` and `docs/audit_findings.json`."
             )
         elif active_ms:
             prompt_lines.append(
@@ -815,44 +817,25 @@ class GuardedFSMEngine:
                     satisfied_requirements=["Task Execution", "All Tests Passed"],
                 )
             elif self.profile.mode in (PipelineMode.AUDIT, PipelineMode.DOCS) and self.context.mutated_files:
-                # If audit mode wrote audit_findings.json but AUDIT_REPORT.md is missing/empty, auto-render report from findings
+                # Require that AUDIT_REPORT.md was explicitly written by the agent
+                report_md = self.workspace_path / "docs" / "AUDIT_REPORT.md"
+                findings_json = self.workspace_path / "docs" / "audit_findings.json"
                 if self.profile.mode == PipelineMode.AUDIT:
-                    findings_json = self.workspace_path / "docs" / "audit_findings.json"
-                    report_md = self.workspace_path / "docs" / "AUDIT_REPORT.md"
-                    if findings_json.exists() and (not report_md.exists() or report_md.stat().st_size == 0):
-                        try:
-                            from orchestrator.analysis.schemas import AuditResult
-                            loaded = AuditResult.load_json(findings_json)
-                            if loaded and loaded.findings:
-                                lines = [
-                                    "# ORAGAI Codebase Architecture & Security Audit Report",
-                                    "",
-                                    "## 1. Executive Summary",
-                                    f"- **Status:** {loaded.status}",
-                                    f"- **Total Findings:** {len(loaded.findings)}",
-                                    "",
-                                    "## 2. Actionable Findings & Defects",
-                                    "",
-                                    "| ID | Severity | Type | Target File | Problem Statement | Recommended Fix |",
-                                    "| :--- | :--- | :--- | :--- | :--- | :--- |",
-                                ]
-                                for f in loaded.findings:
-                                    f_id = getattr(f, "id", "") or "AUD"
-                                    f_sev = getattr(f, "severity", "") or "MEDIUM"
-                                    f_type = getattr(f, "type", "") or "DEFECT"
-                                    f_file = getattr(f, "file", "") or "unknown"
-                                    f_prob = str(getattr(f, "problem", "")).replace("|", "\\|")
-                                    f_fix = str(getattr(f, "recommended_fix", "")).replace("|", "\\|")
-                                    lines.append(f"| **{f_id}** | {f_sev} | {f_type} | `{f_file}` | {f_prob} | {f_fix} |")
-                                lines.append("")
-                                report_md.write_text("\n".join(lines), encoding="utf-8")
-                        except Exception as e:
-                            logger.warning(f"Could not synthesize markdown report from findings: {e}")
-
-                decision = CompletionDecision(
-                    status=CompletionStatus.COMPLETE,
-                    satisfied_requirements=["Syntax clean", f"{self.profile.mode.value} execution verified"],
-                )
+                    if not report_md.exists() or report_md.stat().st_size == 0:
+                        decision = CompletionDecision(
+                            status=CompletionStatus.INCOMPLETE,
+                            blocking_reasons=["Auditor agent must write the full markdown report to `docs/AUDIT_REPORT.md`."],
+                        )
+                    else:
+                        decision = CompletionDecision(
+                            status=CompletionStatus.COMPLETE,
+                            satisfied_requirements=["Syntax clean", "Auditor report and findings verified"],
+                        )
+                else:
+                    decision = CompletionDecision(
+                        status=CompletionStatus.COMPLETE,
+                        satisfied_requirements=["Syntax clean", f"{self.profile.mode.value} execution verified"],
+                    )
             else:
                 decision = CompletionDecision(
                     status=CompletionStatus.INCOMPLETE,
